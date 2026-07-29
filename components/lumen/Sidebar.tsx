@@ -12,7 +12,7 @@ export function Sidebar({ v }: { v: UseLumen }) {
   const {
     state, patch, bible, list, chipBase, tabStyle, ref, passage, vnum, idx,
     bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel,
-    allSongs, deleteLineup,
+    allSongs, deleteLineup, toggleFavorite,
   } = v;
   const [transLang, setTransLang] = useState<(typeof BIBLE_LANGUAGES)[number]>("English");
   const [viewingLineupId, setViewingLineupId] = useState<string | null>(null);
@@ -283,7 +283,7 @@ export function Sidebar({ v }: { v: UseLumen }) {
                       </div>
                     </div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); patch((p) => ({ favs: { ...p.favs, [s.id]: !p.favs[s.id] } })); }}
+                      onClick={(e) => { e.stopPropagation(); toggleFavorite(s.id); }}
                       style={{ border: "none", background: "none", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 2, color: fav ? "var(--warn)" : "var(--faint)" }}
                     >
                       ★

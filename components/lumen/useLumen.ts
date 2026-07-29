@@ -1,6 +1,7 @@
 "use client";
 
 import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getRepository } from "@/lib/repository";
 import {
   DEFAULT_TRANSLATION, LOADING_PASSAGE, LOOKS, MISSING_PASSAGE, SONGS,
   type BibleMeta, type BibleTranslation, type Lineup, type Section, type Song,
@@ -73,6 +74,30 @@ export function useLumen(props: LumenProps = {}) {
   const theme = state.theme || props.theme || "dark";
   const accent = props.accent || "#8b5cf6";
 
+  useEffect(() => {
+    let cancelled = false;
+    getRepository().loadAll().then((data) => {
+      if (cancelled) return;
+      patch({
+        customSongs: data.customSongs,
+        lineups: data.lineups,
+        songOverrides: data.songOverrides,
+        ...data.prefs,
+      });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [patch]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      getRepository().setPrefs({
+        favs: state.favs, look: state.look, scale: state.scale, theme: state.theme,
+        font: state.font, chords: state.chords, setIds: state.setIds, setName: state.setName,
+      });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [state.favs, state.look, state.scale, state.theme, state.font, state.chords, state.setIds, state.setName]);
+
   const [bibleManifest, setBibleManifest] = useState<BibleMeta[]>([]);
   const [bibleCache, setBibleCache] = useState<Record<string, BibleTranslation>>({});
   const bibleCacheRef = useRef(bibleCache);
@@ -141,6 +166,7 @@ export function useLumen(props: LumenProps = {}) {
   const createLineup = useCallback((name: string, songIds: string[]) => {
     const id = "lineup-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const lineup: Lineup = { id, name, songIds };
+    getRepository().upsertLineup(lineup);
     patch((s) => ({
       lineups: [...s.lineups, lineup],
       setIds: songIds, setName: name,
@@ -149,6 +175,7 @@ export function useLumen(props: LumenProps = {}) {
   }, [patch]);
 
   const updateLineup = useCallback((id: string, name: string, songIds: string[]) => {
+    getRepository().upsertLineup({ id, name, songIds });
     patch((s) => ({
       lineups: s.lineups.map((l) => (l.id === id ? { ...l, name, songIds } : l)),
       lineupModalOpen: false, editingLineupId: null,
@@ -156,6 +183,7 @@ export function useLumen(props: LumenProps = {}) {
   }, [patch]);
 
   const deleteLineup = useCallback((id: string) => {
+    getRepository().deleteLineup(id);
     patch((s) => ({ lineups: s.lineups.filter((l) => l.id !== id) }));
   }, [patch]);
 
@@ -167,16 +195,22 @@ export function useLumen(props: LumenProps = {}) {
   }, [patch]);
 
   const saveLyrics = useCallback((sections: Section[]) => {
+    getRepository().setSongOverride(song.id, sections);
     patch((s) => ({ songOverrides: { ...s.songOverrides, [song.id]: sections } }));
   }, [patch, song.id]);
 
   const addSong = useCallback((parsed: ParsedSong) => {
     const id = "custom-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const newSong: Song = { ...parsed, id, fav: false, when: "Just added" };
+    getRepository().upsertSong(newSong);
     patch((s) => ({
       customSongs: [...s.customSongs, newSong],
       songId: id, idx: 0, mode: "songs", uploadOpen: false,
     }));
+  }, [patch]);
+
+  const toggleFavorite = useCallback((id: string) => {
+    patch((s) => ({ favs: { ...s.favs, [id]: !s.favs[id] } }));
   }, [patch]);
 
   const slides = useMemo<Slide[]>(() => {
@@ -280,7 +314,7 @@ export function useLumen(props: LumenProps = {}) {
   return {
     state, patch, theme, accent, ref, passage, vnum, song, look, slides, go, idx, cur, nxt, prv, hidden,
     bible, list, chipBase, tabStyle, pill, toolBtn, canvas, lyricFamily, fit, bigLine,
-    setSongs, inSet, toggleSetSong, saveLyrics, addSong, allSongs,
+    setSongs, inSet, toggleSetSong, saveLyrics, addSong, allSongs, toggleFavorite,
     createLineup, updateLineup, deleteLineup, activateLineup,
     bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel,
   };
