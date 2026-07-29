@@ -22,7 +22,7 @@ export function Header({ lumen }: { lumen: UseLumen }) {
           />
         </div>
         <div className="text-[15px] font-semibold tracking-[-0.01em]">Lumen</div>
-        <div className="font-mono text-[10px] text-faint border border-border p-[2px_5px] rounded-[5px]">v2.4</div>
+        <div className="font-mono text-[10px] text-faint border border-border p-[2px_5px] rounded-[5px]">v{process.env.NEXT_PUBLIC_APP_VERSION}</div>
       </div>
 
       <div className="relative flex items-center gap-2 text-[13px] text-muted">
