@@ -4,7 +4,7 @@ import { InteractiveButton } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
 export function Header({ v }: { v: UseLumen }) {
-  const { state, patch, theme, hidden, setSongs } = v;
+  const { state, patch, theme, hidden, setSongs, activateLineup } = v;
   const themeLabel = theme === "dark" ? "☾ Dark" : "☀ Light";
   const outputDot = hidden ? "var(--warn)" : "var(--ok)";
   const setCountLabel = setSongs.length === 1 ? "1 song" : setSongs.length + " songs";
@@ -38,7 +38,7 @@ export function Header({ v }: { v: UseLumen }) {
           base={{ background: "none", border: "none", padding: "2px 4px", margin: "-2px -4px", cursor: "pointer", fontSize: 13, color: "var(--muted)", borderRadius: 6 }}
           hover={{ color: "var(--text)", background: "var(--panel2)" }}
         >
-          Set 1 — {setCountLabel}
+          {state.setName} — {setCountLabel}
         </InteractiveButton>
         <span style={{ color: "var(--faint)" }}>·</span>
         <span style={{ fontFamily: "var(--font-mono)" }}>10:00 AM</span>
@@ -55,7 +55,7 @@ export function Header({ v }: { v: UseLumen }) {
               }}
             >
               <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>
-                Set 1 · {setCountLabel}
+                {state.setName} · {setCountLabel}
               </div>
               {setSongs.length === 0 ? (
                 <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>
@@ -81,6 +81,30 @@ export function Header({ v }: { v: UseLumen }) {
                     </button>
                   ))}
                 </div>
+              )}
+              {state.lineups.length > 0 && (
+                <>
+                  <div style={{ padding: "8px 14px", borderTop: "1px solid var(--border)", fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>
+                    Saved lineups
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", padding: "0 6px 6px", maxHeight: 160, overflowY: "auto" }}>
+                    {state.lineups.map((lu) => (
+                      <button
+                        key={lu.id}
+                        onClick={() => activateLineup(lu.id)}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "8px 8px", borderRadius: 8,
+                          border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", textAlign: "left",
+                        }}
+                      >
+                        <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lu.name}</span>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>
+                          {lu.songIds.length === 1 ? "1 song" : lu.songIds.length + " songs"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           </>

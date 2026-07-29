@@ -85,7 +85,7 @@ export function LyricsEditorModal({ v }: { v: UseLumen }) {
 
           <InteractiveButton
             onClick={addSection}
-            base={{ height: 36, borderRadius: 9, border: "1px dashed var(--border2)", background: "transparent", fontSize: 12.5, color: "var(--muted)", cursor: "pointer" }}
+            base={{ height: 36, borderRadius: 9, borderWidth: 1, borderStyle: "dashed", borderColor: "var(--border2)", background: "transparent", fontSize: 12.5, color: "var(--muted)", cursor: "pointer" }}
             hover={{ borderColor: "var(--accent)", color: "var(--accent)" }}
           >
             + Add section

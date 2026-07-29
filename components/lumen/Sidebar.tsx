@@ -1,15 +1,32 @@
 "use client";
 
-import { BOOKS, CHAPTER_COUNTS, CHIPS, SONGS, SORTS, TRANSLATIONS } from "./data";
+import { useEffect, useState } from "react";
+import { CHIPS, SONGS, SORTS } from "./data";
 import { InteractiveButton, InteractiveInput } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
 const RECENT = SONGS.slice(0, 3);
+const BIBLE_LANGUAGES = ["English", "Cebuano"] as const;
 
 export function Sidebar({ v }: { v: UseLumen }) {
-  const { state, patch, bible, list, chipBase, tabStyle, ref, passage, vnum, idx } = v;
+  const {
+    state, patch, bible, list, chipBase, tabStyle, ref, passage, vnum, idx,
+    bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel,
+    allSongs, deleteLineup,
+  } = v;
+  const [transLang, setTransLang] = useState<(typeof BIBLE_LANGUAGES)[number]>("English");
+  const [viewingLineupId, setViewingLineupId] = useState<string | null>(null);
+  const lineupsMode = state.mode === "lineups";
 
-  const chips = bible ? TRANSLATIONS : CHIPS;
+  useEffect(() => {
+    if (!lineupsMode) setViewingLineupId(null);
+  }, [lineupsMode]);
+
+  const viewingLineup = state.lineups.find((l) => l.id === viewingLineupId) || null;
+  const lineupSongs = (viewingLineup?.songIds ?? [])
+    .map((id) => allSongs.find((s) => s.id === id))
+    .filter((s): s is (typeof allSongs)[number] => !!s);
+
   const resultCount = bible ? passage.length + " verses" : list.length + " songs";
   const showRecent = state.chip === "All" && !state.query;
 
@@ -22,15 +39,18 @@ export function Sidebar({ v }: { v: UseLumen }) {
         <div style={{ display: "flex", padding: 3, gap: 3, borderRadius: 10, background: "var(--panel2)", border: "1px solid var(--border)" }}>
           <button onClick={() => patch({ mode: "songs", idx: 0, black: false, blank: false })} style={tabStyle(state.mode === "songs")}>Songs</button>
           <button onClick={() => patch({ mode: "bible", idx: 0, black: false, blank: false })} style={tabStyle(state.mode === "bible")}>Bible</button>
+          <button onClick={() => patch({ mode: "lineups", idx: 0, black: false, blank: false })} style={tabStyle(lineupsMode)}>Lineups</button>
         </div>
 
+        {!lineupsMode && (
+        <>
         <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
           <span style={{ position: "absolute", left: 11, fontSize: 13, color: "var(--faint)" }}>⌕</span>
           <InteractiveInput
             value={state.query}
             onChange={(e) => patch({ query: e.target.value })}
             placeholder={bible ? "Go to reference — e.g. John 3:16" : "Search songs, lyrics, tags"}
-            base={{ width: "100%", height: 36, padding: "0 44px 0 28px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--panel2)", fontSize: 13, outline: "none" }}
+            base={{ width: "100%", height: 36, padding: "0 44px 0 28px", borderRadius: 10, borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--panel2)", fontSize: 13, outline: "none" }}
             focusStyle={{ borderColor: "var(--accent)", boxShadow: "0 0 0 3px var(--accent-soft)" }}
           />
           <span style={{
@@ -39,16 +59,35 @@ export function Sidebar({ v }: { v: UseLumen }) {
           }}>⌘K</span>
         </div>
 
+        {bible && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {BIBLE_LANGUAGES.map((lang) => (
+              <button key={lang} onClick={() => setTransLang(lang)} style={chipBase(transLang === lang)}>
+                {lang}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {chips.map((c) => (
-            <button
-              key={c}
-              onClick={() => patch(bible ? { trans: c } : { chip: c })}
-              style={chipBase(bible ? state.trans === c : state.chip === c)}
-            >
-              {c}
-            </button>
-          ))}
+          {bible
+            ? bibleManifest
+                .filter((m) => m.language === transLang)
+                .map((m) => (
+                  <button
+                    key={m.code}
+                    onClick={() => patch({ trans: m.code })}
+                    style={chipBase(state.trans === m.code)}
+                    title={m.name}
+                  >
+                    {shortTransLabel(m.code)}
+                  </button>
+                ))
+            : CHIPS.map((c) => (
+                <button key={c} onClick={() => patch({ chip: c })} style={chipBase(state.chip === c)}>
+                  {c}
+                </button>
+              ))}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -74,25 +113,27 @@ export function Sidebar({ v }: { v: UseLumen }) {
             </InteractiveButton>
           )}
         </div>
+        </>
+        )}
       </div>
 
       {bible && (
         <>
           <div style={{ flex: "none", display: "flex", borderBottom: "1px solid var(--border)", height: 172 }}>
             <div style={{ width: 118, flex: "none", borderRight: "1px solid var(--border)", overflowY: "auto", padding: 6 }}>
-              {BOOKS.map((b) => (
+              {bibleBooks.map((b) => (
                 <button
-                  key={b}
-                  onClick={() => patch({ book: b, chapter: 1, idx: 0 })}
+                  key={b.number}
+                  onClick={() => patch({ book: b.name, chapter: 1, idx: 0 })}
                   style={{
                     display: "block", width: "100%", textAlign: "left", padding: "6px 8px", borderRadius: 7,
                     border: "none", cursor: "pointer", fontSize: 12,
-                    background: b === state.book ? "var(--accent-soft)" : "transparent",
-                    color: b === state.book ? "var(--text)" : "var(--muted)",
-                    fontWeight: b === state.book ? 600 : 400,
+                    background: b.name === state.book ? "var(--accent-soft)" : "transparent",
+                    color: b.name === state.book ? "var(--text)" : "var(--muted)",
+                    fontWeight: b.name === state.book ? 600 : 400,
                   }}
                 >
-                  {b}
+                  {b.name}
                 </button>
               ))}
             </div>
@@ -101,7 +142,7 @@ export function Sidebar({ v }: { v: UseLumen }) {
                 Chapter
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5 }}>
-                {Array.from({ length: CHAPTER_COUNTS[state.book] || 1 }, (_, i) => i + 1).map((n) => (
+                {Array.from({ length: currentBook?.chapters.length || 1 }, (_, i) => i + 1).map((n) => (
                   <button
                     key={n}
                     onClick={() => patch({ chapter: n, idx: 0 })}
@@ -120,9 +161,18 @@ export function Sidebar({ v }: { v: UseLumen }) {
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px 20px" }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "4px 6px 9px" }}>
-              <div style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em" }}>{ref}</div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>{state.trans}</div>
+            <div style={{ padding: "4px 6px 9px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em" }}>{ref}</div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>
+                  {currentTransMeta?.name || state.trans}
+                </div>
+              </div>
+              {currentTransMeta && (
+                <div style={{ fontSize: 10, color: "var(--faint)", marginTop: 3, lineHeight: 1.4 }}>
+                  {currentTransMeta.license}
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {passage.map((t, i) => (
@@ -146,7 +196,7 @@ export function Sidebar({ v }: { v: UseLumen }) {
         </>
       )}
 
-      {!bible && (
+      {state.mode === "songs" && (
         <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px 20px" }}>
           {showRecent && (
             <>
@@ -173,8 +223,26 @@ export function Sidebar({ v }: { v: UseLumen }) {
             </>
           )}
 
-          <div style={{ padding: "8px 6px 6px", fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>
-            Library
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 6px 6px" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>
+              Library
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <InteractiveButton
+                onClick={() => patch({ lineupModalOpen: true, editingLineupId: null })}
+                base={{ fontSize: 11.5, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}
+                hover={{ color: "var(--text)" }}
+              >
+                + New lineup
+              </InteractiveButton>
+              <InteractiveButton
+                onClick={() => patch({ uploadOpen: true })}
+                base={{ fontSize: 11.5, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}
+                hover={{ color: "var(--text)" }}
+              >
+                + Upload song
+              </InteractiveButton>
+            </div>
           </div>
           {list.length === 0 ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textAlign: "center", padding: "40px 18px", color: "var(--muted)" }}>
@@ -237,6 +305,138 @@ export function Sidebar({ v }: { v: UseLumen }) {
               );
             })}
           </div>
+          )}
+        </div>
+      )}
+
+      {lineupsMode && !viewingLineup && (
+        <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 6px 6px" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>
+              Lineups
+            </div>
+            <InteractiveButton
+              onClick={() => patch({ lineupModalOpen: true, editingLineupId: null })}
+              base={{ fontSize: 11.5, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}
+              hover={{ color: "var(--text)" }}
+            >
+              + New lineup
+            </InteractiveButton>
+          </div>
+
+          {state.lineups.length === 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textAlign: "center", padding: "40px 18px", color: "var(--muted)" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>No lineups yet</div>
+              <div style={{ fontSize: 12, lineHeight: 1.5 }}>Create one to group songs for a service or event.</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {state.lineups.map((lu) => (
+                <div
+                  key={lu.id}
+                  onClick={() => setViewingLineupId(lu.id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 12, cursor: "pointer",
+                    border: "1px solid var(--border)", background: "var(--panel2)",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {lu.name}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                      {lu.songIds.length === 1 ? "1 song" : lu.songIds.length + " songs"}
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); patch({ lineupModalOpen: true, editingLineupId: lu.id }); }}
+                    style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12.5, color: "var(--muted)", padding: 4 }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteLineup(lu.id); }}
+                    style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12.5, color: "var(--faint)", padding: 4 }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {lineupsMode && viewingLineup && (
+        <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px 20px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px 12px" }}>
+            <button
+              onClick={() => setViewingLineupId(null)}
+              style={{ border: "none", background: "none", cursor: "pointer", fontSize: 16, color: "var(--muted)", padding: 2, lineHeight: 1 }}
+              title="Back to lineups"
+            >
+              ←
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {viewingLineup.name}
+              </div>
+              <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 2 }}>
+                {viewingLineup.songIds.length === 1 ? "1 song" : viewingLineup.songIds.length + " songs"}
+              </div>
+            </div>
+            <InteractiveButton
+              onClick={() => patch({ lineupModalOpen: true, editingLineupId: viewingLineup.id })}
+              base={{ fontSize: 12, color: "var(--muted)", background: "none", border: "1px solid var(--border)", borderRadius: 7, padding: "5px 9px", cursor: "pointer" }}
+              hover={{ color: "var(--text)", background: "var(--raise)" }}
+            >
+              Edit
+            </InteractiveButton>
+            <InteractiveButton
+              onClick={() => { deleteLineup(viewingLineup.id); setViewingLineupId(null); }}
+              base={{ fontSize: 12, color: "var(--danger)", background: "none", border: "1px solid var(--border)", borderRadius: 7, padding: "5px 9px", cursor: "pointer" }}
+              hover={{ color: "#fff", background: "var(--danger)" }}
+            >
+              Delete
+            </InteractiveButton>
+          </div>
+
+          {lineupSongs.length === 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textAlign: "center", padding: "40px 18px", color: "var(--muted)" }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>No songs in this lineup</div>
+              <div style={{ fontSize: 12, lineHeight: 1.5 }}>Click Edit to add some.</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {lineupSongs.map((s) => {
+                const on = s.id === state.songId;
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => patch({ songId: s.id, idx: 0, black: false, blank: false })}
+                    style={{
+                      padding: "11px 12px 10px", borderRadius: 12, cursor: "pointer",
+                      border: "1px solid " + (on ? "var(--accent)" : "var(--border)"),
+                      background: on ? "var(--accent-soft)" : "var(--panel2)",
+                      boxShadow: on ? "0 0 0 3px var(--accent-soft)" : "none",
+                    }}
+                  >
+                    <div style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {s.title}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {s.artist}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text)", background: "var(--raise)", border: "1px solid var(--border)", padding: "2px 6px", borderRadius: 5 }}>
+                        {s.key}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>{s.bpm}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}

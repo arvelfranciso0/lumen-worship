@@ -1,0 +1,258 @@
+[
+  {
+    "code": "Cebuano1999",
+    "language": "Cebuano",
+    "name": "Cebuano 1999 (Maayong Balita Biblia)",
+    "license": "Maayong Balita Biblia © Philippine Bible Society, 1999",
+    "link": "https://www.bible.com/bible/2188/EPH.3.MBBCEB99",
+    "path": "json/Cebuano1999.json"
+  },
+  {
+    "code": "Cebuano2011",
+    "language": "Cebuano",
+    "name": "Cebuano 2011 (Ang Biblia, 2011)",
+    "license": "© Philippine Bible Society, 2011",
+    "link": "https://www.bible.com/bible/2187/EPH.3.ABCEB",
+    "path": "json/Cebuano2011.json"
+  },
+  {
+    "code": "CebuanoAPSD",
+    "language": "Cebuano",
+    "name": "Cebuano APSD (Ang Pulong sa Dios)",
+    "license": "Ang Pulong sa Dios™, APD™ Katungod sa pagmantala © 2009, 2010, 2014, 2024 Biblica, Inc",
+    "link": "https://www.bible.com/bible/9/EPH.3.APD",
+    "path": "json/CebuanoAPSD.json"
+  },
+  {
+    "code": "Cebuano",
+    "language": "Cebuano",
+    "name": "Cebuano CBV - Unknown",
+    "license": "No Data",
+    "link": "https://www.ccel.org/ccel/bible/c1.Rom.14.html",
+    "path": "json/Cebuano.json"
+  },
+  {
+    "code": "CebuanoRCPV",
+    "language": "Cebuano",
+    "name": "Cebuano RCPV 1999 (Ang Bag-ong Maayong Balita Biblia)",
+    "license": "© 1999 Philippine Bible Society",
+    "link": "https://www.bible.com/bible/562/GEN.1.RCPV",
+    "path": "json/CebuanoRCPV.json"
+  },
+  {
+    "code": "EnglishAmplified",
+    "language": "English",
+    "name": "English Amplified - Copyright © 2015 by The Lockman Foundation, La Habra, CA 90631. All rights reserved.",
+    "license": "Unknown",
+    "link": null,
+    "path": "json/EnglishAmplified.json"
+  },
+  {
+    "code": "EnglishAmplifiedClassic",
+    "language": "English",
+    "name": "English Amplified Classic Bible 1987",
+    "license": "1954, 1958, 1962, 1964, 1965, 1987 by The Lockman Foundation",
+    "link": "https://www.bible.com/bible/8/JHN.3.AMPC",
+    "path": "json/EnglishAmplifiedClassic.json"
+  },
+  {
+    "code": "EnglishASV",
+    "language": "English",
+    "name": "English ASV",
+    "license": "Public Domain",
+    "link": null,
+    "path": "json/EnglishASV.json"
+  },
+  {
+    "code": "EnglishCSB",
+    "language": "English",
+    "name": "English CSB 2017 - Christian Standard Bible",
+    "license": "Copyright © 2017 by Holman Bible Publishers. Used by permission.",
+    "link": null,
+    "path": "json/EnglishCSB.json"
+  },
+  {
+    "code": "EnglishESV",
+    "language": "English",
+    "name": "English ESV 2016 == The Holy Bible, English Standard Version. ESV® Text Edition: 2016. Copyright © 2001 by Crossway Bibles",
+    "license": "Unknown",
+    "link": null,
+    "path": "json/EnglishESV.json"
+  },
+  {
+    "code": "EnglishGNT",
+    "language": "English",
+    "name": "English GNT (Good News Translation)",
+    "license": "Good News Translation® (Today’s English Version, Second Edition) © 1992 American Bible Society.",
+    "link": "https://www.bible.com/bible/68/MAL.1.GNT",
+    "path": "json/EnglishGNT.json"
+  },
+  {
+    "code": "EnglishGW",
+    "language": "English",
+    "name": "English God's Word - GW 1995",
+    "license": "© 1995 God's Word Translation",
+    "link": null,
+    "path": "json/EnglishGW.json"
+  },
+  {
+    "code": "EnglishHCSB",
+    "language": "English",
+    "name": "English HCSB 2004 - Copyrighted Only For Website",
+    "license": "Copyright 2004 Holman Bible Publishers",
+    "link": null,
+    "path": "json/EnglishHCSB.json"
+  },
+  {
+    "code": "EnglishKJ",
+    "language": "English",
+    "name": "English KJV",
+    "license": "Public Domain",
+    "link": null,
+    "path": "json/EnglishKJ.json"
+  },
+  {
+    "code": "EnglishLSB",
+    "language": "English",
+    "name": "Legacy Standard Bible (LSB)",
+    "license": "Legacy Standard Bible - LSB Copyright © 2021 by The Lockman Foundation A Corporation Not for Profit, La Habra, California All Rights Reserved",
+    "link": "https://read.lsbible.org/?q=Matthew+1",
+    "path": "json/EnglishLSB.json"
+  },
+  {
+    "code": "EnglishNET",
+    "language": "English",
+    "name": "English NET Bible - 2005 (New English Translation)",
+    "license": "NET Bible copyright © 1996-2006 by Biblical Studies Press",
+    "link": null,
+    "path": "json/EnglishNET.json"
+  },
+  {
+    "code": "EnglishNIRV",
+    "language": "English",
+    "name": "English NIRV 1996 - Copyrighted only for Website",
+    "license": "Copyright © 1995, 1996, 1998, 2014 by Biblica, Inc.®. Used by permission. All rights reserved worldwide.",
+    "link": null,
+    "path": "json/EnglishNIRV.json"
+  },
+  {
+    "code": "EnglishNIV",
+    "language": "English",
+    "name": "English NIV",
+    "license": "Unknown",
+    "link": null,
+    "path": "json/EnglishNIV.json"
+  },
+  {
+    "code": "EnglishNKJ",
+    "language": "English",
+    "name": "English NKJ 1982",
+    "license": "The Holy Bible, New King James Version, Copyright © 1982 Thomas Nelson",
+    "link": "https://www.bible.com/bible/114/REV.22.NKJV",
+    "path": "json/EnglishNKJ.json"
+  },
+  {
+    "code": "EnglishNLT",
+    "language": "English",
+    "name": "English NLT",
+    "license": "Unknown",
+    "link": null,
+    "path": "json/EnglishNLT.json"
+  },
+  {
+    "code": "EnglishNRSV",
+    "language": "English",
+    "name": "English NRSV 1989 - Only for website",
+    "license": "Copyright © 1989 the Division of Christian Education of the National Council of the Churches of Christ in the United States of America. Used by permission. All rights reserved.",
+    "link": null,
+    "path": "json/EnglishNRSV.json"
+  },
+  {
+    "code": "EnglishPassion",
+    "language": "English",
+    "name": "English Passion Translation Bible 2020",
+    "license": "The Passion Translation® is a registered trademark of Passion and Fire Ministries, Inc",
+    "link": "https://www.bible.com/bible/1849/ROM.1.TPT",
+    "path": "json/EnglishPassion.json"
+  },
+  {
+    "code": "EnglishRSV",
+    "language": "English",
+    "name": "English RSV (Revised Standard Version)",
+    "license": "Division of Christian Education of the National Council of the Churches of Christ in the United States of America",
+    "link": "https://www.bible.com/bible/2020/HEB.10.RSV",
+    "path": "json/EnglishRSV.json"
+  },
+  {
+    "code": "EnglishTL",
+    "language": "English",
+    "name": "English TL (The Living Bible) (1971)",
+    "license": "The Living Bible copyright © 1971 by Tyndale House Foundation",
+    "link": "https://www.biblegateway.com/versions/The-Living-Bible-TLB/",
+    "path": "json/EnglishTL.json"
+  },
+  {
+    "code": "EnglishYLT",
+    "language": "English",
+    "name": "English (YLT) 1898 Young's Literal Translation by Robert Young",
+    "license": "Public Domain",
+    "link": null,
+    "path": "json/EnglishYLT.json"
+  },
+  {
+    "code": "Tagalog2001",
+    "language": "English",
+    "name": "Tagalog (Ang Biblia 2001)",
+    "license": "© Philippine Bible Society, 2001",
+    "link": "https://www.bible.com/bible/2195/GEN.1.ABTAG01",
+    "path": "json/Tagalog2001.json"
+  },
+  {
+    "code": "Tagalog2005",
+    "language": "English",
+    "name": "Tagalog 2005 (Magandang Balita Biblia (2005))",
+    "license": "© 2005 Philippine Bible Society",
+    "link": "https://www.bible.com/bible/144/DEU.7.MBB05",
+    "path": "json/Tagalog2005.json"
+  },
+  {
+    "code": "Tagalog2012",
+    "language": "English",
+    "name": "Tagalog 2012 (Magandang Balita Biblia)",
+    "license": "New Testament © 2012 Philippine Bible Society Old Testament © 2005 Philippine Bible Society",
+    "link": "https://www.bible.com/bible/2197/MRK.16.MBBTAG12",
+    "path": "json/Tagalog2012.json"
+  },
+  {
+    "code": "Tagalog2015",
+    "language": "English",
+    "name": "Tagalog (Ang Salita ng Dios)",
+    "license": "Ang Salita ng Dios (Tagalog Contemporary Bible) Copyright © 2009, 2011, 2014, 2015 by Biblica, Inc",
+    "link": "https://www.bible.com/bible/1264/DEU.7.ASD",
+    "path": "json/Tagalog2015.json"
+  },
+  {
+    "code": "Tagalog",
+    "language": "English",
+    "name": "Tagalog (TLAB) 1905 (Ang Biblia (1905/1982))",
+    "license": "Ang Biblia © Philippine Bible Society, 1982",
+    "link": "https://www.bible.com/bible/2196/GEN.1.ABTAG",
+    "path": "json/Tagalog.json"
+  },
+  {
+    "code": "TagalogRevised2005",
+    "language": "English",
+    "name": "Tagalog 2005 Revised (Magandang Balita Bible (Revised))",
+    "license": "© 2005 Philippine Bible Society",
+    "link": "https://www.bible.com/bible/399/MRK.16.RTPV05",
+    "path": "json/TagalogRevised2005.json"
+  },
+  {
+    "code": "TagalogTLBA",
+    "language": "English",
+    "name": "Tagalog TLBA (Ang Biblia)",
+    "license": "None",
+    "link": "https://www.bible.com/bible/177/MRK.16.TLAB",
+    "path": "json/TagalogTLBA.json"
+  }
+]

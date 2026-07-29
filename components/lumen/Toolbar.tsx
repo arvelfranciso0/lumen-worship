@@ -15,7 +15,7 @@ export function Toolbar({ v }: { v: UseLumen }) {
     <div style={{ flex: "none", height: 84, display: "flex", alignItems: "center", gap: 12, padding: "0 22px", borderTop: "1px solid var(--border)", background: "var(--panel)", overflowX: "auto" }}>
       <InteractiveButton
         onClick={() => go(-1)}
-        base={{ height: 52, padding: "0 22px", borderRadius: 12, border: "1px solid var(--border2)", background: "var(--raise)", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+        base={{ height: 52, padding: "0 22px", borderRadius: 12, borderWidth: 1, borderStyle: "solid", borderColor: "var(--border2)", background: "var(--raise)", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
         hover={{ borderColor: "var(--accent)", background: "var(--panel2)" }}
         active={{ transform: "translateY(1px)" }}
       >
@@ -79,7 +79,7 @@ export function Toolbar({ v }: { v: UseLumen }) {
 
       <InteractiveButton
         onClick={() => patch({ presenting: true })}
-        base={{ height: 52, padding: "0 22px", borderRadius: 12, border: "1px solid var(--border2)", background: "var(--panel2)", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+        base={{ height: 52, padding: "0 22px", borderRadius: 12, borderWidth: 1, borderStyle: "solid", borderColor: "var(--border2)", background: "var(--panel2)", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
         hover={{ borderColor: "var(--accent)", color: "var(--accent)" }}
       >
         ⛶ Fullscreen presentation

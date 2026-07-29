@@ -1,7 +1,13 @@
 "use client";
 
-import { CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
-import { FALLBACK, LOOKS, PASSAGES, SONGS, VNUMS, type Section } from "./data";
+import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  DEFAULT_TRANSLATION, LOADING_PASSAGE, LOOKS, MISSING_PASSAGE, SONGS,
+  type BibleMeta, type BibleTranslation, type Lineup, type Section, type Song,
+} from "./data";
+import type { ParsedSong } from "./songImport";
+
+const shortTransLabel = (code: string) => code.replace(/^(English|Cebuano)/, "") || code;
 
 export type LumenProps = {
   accent?: string;
@@ -9,7 +15,7 @@ export type LumenProps = {
   lyricFont?: "sans" | "serif";
 };
 
-type Mode = "songs" | "bible";
+type Mode = "songs" | "bible" | "lineups";
 
 type LumenState = {
   query: string;
@@ -32,9 +38,15 @@ type LumenState = {
   chapter: number;
   trans: string;
   setIds: string[];
+  setName: string;
   setPanelOpen: boolean;
   songOverrides: Record<string, Section[]>;
   lyricsEditorOpen: boolean;
+  customSongs: Song[];
+  uploadOpen: boolean;
+  lineups: Lineup[];
+  lineupModalOpen: boolean;
+  editingLineupId: string | null;
 };
 
 type Slide = { label: string; lines: string[]; n: number; caption: string };
@@ -44,9 +56,11 @@ const INITIAL_STATE: LumenState = {
   favs: { s1: true, s3: true, s6: true },
   look: "aurora", scale: 1, presenting: false, blank: false, black: false,
   settingsOpen: false, font: "sans", chords: false, theme: null,
-  mode: "songs", book: "Psalms", chapter: 23, trans: "KJV",
-  setIds: ["s1", "s3", "s4", "s6"], setPanelOpen: false,
+  mode: "songs", book: "Psalms", chapter: 23, trans: DEFAULT_TRANSLATION,
+  setIds: ["s1", "s3", "s4", "s6"], setName: "Set 1", setPanelOpen: false,
   songOverrides: {}, lyricsEditorOpen: false,
+  customSongs: [], uploadOpen: false,
+  lineups: [], lineupModalOpen: false, editingLineupId: null,
 };
 
 export function useLumen(props: LumenProps = {}) {
@@ -59,23 +73,63 @@ export function useLumen(props: LumenProps = {}) {
   const theme = state.theme || props.theme || "dark";
   const accent = props.accent || "#8b5cf6";
 
+  const [bibleManifest, setBibleManifest] = useState<BibleMeta[]>([]);
+  const [bibleCache, setBibleCache] = useState<Record<string, BibleTranslation>>({});
+  const bibleCacheRef = useRef(bibleCache);
+  bibleCacheRef.current = bibleCache;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/bible/json/manifest.json")
+      .then((r) => r.json())
+      .then((data: BibleMeta[]) => { if (!cancelled) setBibleManifest(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (bibleCacheRef.current[state.trans]) return;
+    let cancelled = false;
+    fetch("/bible/json/" + state.trans + ".json")
+      .then((r) => r.json())
+      .then((data: BibleTranslation) => {
+        if (!cancelled) setBibleCache((prev) => ({ ...prev, [state.trans]: data }));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [state.trans]);
+
+  const translation = bibleCache[state.trans];
+  const bibleBooks = useMemo(() => translation?.books ?? [], [translation]);
+  const currentTransMeta = useMemo(
+    () => bibleManifest.find((m) => m.code === state.trans),
+    [bibleManifest, state.trans]
+  );
+
   const ref = state.book + " " + state.chapter;
-  const passage = useMemo(() => PASSAGES[ref] || FALLBACK, [ref]);
-  const vnum = useCallback((i: number) => {
-    const m = VNUMS[ref];
-    return m ? m[i] : i + 1;
-  }, [ref]);
+  const currentBook = useMemo(() => bibleBooks.find((b) => b.name === state.book), [bibleBooks, state.book]);
+  const currentChapter = useMemo(
+    () => currentBook?.chapters.find((c) => c.number === state.chapter),
+    [currentBook, state.chapter]
+  );
+  const passage = useMemo(() => {
+    if (!translation) return LOADING_PASSAGE;
+    return currentChapter ? currentChapter.verses.map((v) => v.text) : MISSING_PASSAGE;
+  }, [translation, currentChapter]);
+  const vnum = useCallback((i: number) => currentChapter?.verses[i]?.number ?? i + 1, [currentChapter]);
+
+  const allSongs = useMemo(() => [...SONGS, ...state.customSongs], [state.customSongs]);
 
   const song = useMemo(() => {
-    const base = SONGS.find((s) => s.id === state.songId) || SONGS[0];
+    const base = allSongs.find((s) => s.id === state.songId) || allSongs[0];
     const override = state.songOverrides[base.id];
     return override ? { ...base, sections: override } : base;
-  }, [state.songId, state.songOverrides]);
+  }, [state.songId, state.songOverrides, allSongs]);
   const look = useMemo(() => LOOKS.find((l) => l.id === state.look) || LOOKS[0], [state.look]);
 
   const setSongs = useMemo(
-    () => state.setIds.map((id) => SONGS.find((s) => s.id === id)).filter((s): s is typeof SONGS[number] => !!s),
-    [state.setIds]
+    () => state.setIds.map((id) => allSongs.find((s) => s.id === id)).filter((s): s is Song => !!s),
+    [state.setIds, allSongs]
   );
   const inSet = state.mode === "songs" && state.setIds.includes(song.id);
   const toggleSetSong = useCallback((id: string) => {
@@ -84,15 +138,52 @@ export function useLumen(props: LumenProps = {}) {
     }));
   }, [patch]);
 
+  const createLineup = useCallback((name: string, songIds: string[]) => {
+    const id = "lineup-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const lineup: Lineup = { id, name, songIds };
+    patch((s) => ({
+      lineups: [...s.lineups, lineup],
+      setIds: songIds, setName: name,
+      lineupModalOpen: false, editingLineupId: null,
+    }));
+  }, [patch]);
+
+  const updateLineup = useCallback((id: string, name: string, songIds: string[]) => {
+    patch((s) => ({
+      lineups: s.lineups.map((l) => (l.id === id ? { ...l, name, songIds } : l)),
+      lineupModalOpen: false, editingLineupId: null,
+    }));
+  }, [patch]);
+
+  const deleteLineup = useCallback((id: string) => {
+    patch((s) => ({ lineups: s.lineups.filter((l) => l.id !== id) }));
+  }, [patch]);
+
+  const activateLineup = useCallback((id: string) => {
+    patch((s) => {
+      const lineup = s.lineups.find((l) => l.id === id);
+      return lineup ? { setIds: lineup.songIds, setName: lineup.name, setPanelOpen: false } : {};
+    });
+  }, [patch]);
+
   const saveLyrics = useCallback((sections: Section[]) => {
     patch((s) => ({ songOverrides: { ...s.songOverrides, [song.id]: sections } }));
   }, [patch, song.id]);
+
+  const addSong = useCallback((parsed: ParsedSong) => {
+    const id = "custom-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const newSong: Song = { ...parsed, id, fav: false, when: "Just added" };
+    patch((s) => ({
+      customSongs: [...s.customSongs, newSong],
+      songId: id, idx: 0, mode: "songs", uploadOpen: false,
+    }));
+  }, [patch]);
 
   const slides = useMemo<Slide[]>(() => {
     if (state.mode === "bible") {
       return passage.map((t, i) => ({
         label: "v" + vnum(i), lines: [t], n: i + 1,
-        caption: ref + ":" + vnum(i) + "  ·  " + state.trans,
+        caption: ref + ":" + vnum(i) + "  ·  " + shortTransLabel(state.trans),
       }));
     }
     return song.sections.map((sec, i) => ({ label: sec.label, lines: sec.lines, n: i + 1, caption: "" }));
@@ -108,12 +199,18 @@ export function useLumen(props: LumenProps = {}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const k = e.key;
+      if (k === "F5") { e.preventDefault(); patch({ presenting: true }); return; }
+      if (k === "Escape") {
+        patch({ presenting: false, settingsOpen: false, setPanelOpen: false, lyricsEditorOpen: false, uploadOpen: false, lineupModalOpen: false, editingLineupId: null });
+        return;
+      }
+      const target = e.target as HTMLElement | null;
+      const isTyping = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (isTyping) return;
       if (k === "ArrowRight" || k === " " || k === "PageDown") { e.preventDefault(); go(1); }
       else if (k === "ArrowLeft" || k === "PageUp") { e.preventDefault(); go(-1); }
       else if (k === "b" || k === "B") { patch((s) => ({ black: !s.black, blank: false })); }
       else if (k === "w" || k === "W") { patch((s) => ({ blank: !s.blank, black: false })); }
-      else if (k === "F5") { e.preventDefault(); patch({ presenting: true }); }
-      else if (k === "Escape") { patch({ presenting: false, settingsOpen: false, setPanelOpen: false, lyricsEditorOpen: false }); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -164,7 +261,7 @@ export function useLumen(props: LumenProps = {}) {
     color: on ? (tone === "#000" ? "#fff" : "#0a0a0c") : "var(--muted)",
   });
 
-  let list = SONGS.filter((s) => {
+  let list = allSongs.filter((s) => {
     const q = state.query.trim().toLowerCase();
     const okQ = !q || (s.title + " " + s.artist + " " + s.tags.join(" ")).toLowerCase().includes(q);
     const okC = state.chip === "All" || (state.chip === "Favorites" ? !!state.favs[s.id] : s.cat === state.chip);
@@ -183,7 +280,9 @@ export function useLumen(props: LumenProps = {}) {
   return {
     state, patch, theme, accent, ref, passage, vnum, song, look, slides, go, idx, cur, nxt, prv, hidden,
     bible, list, chipBase, tabStyle, pill, toolBtn, canvas, lyricFamily, fit, bigLine,
-    setSongs, inSet, toggleSetSong, saveLyrics,
+    setSongs, inSet, toggleSetSong, saveLyrics, addSong, allSongs,
+    createLineup, updateLineup, deleteLineup, activateLineup,
+    bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel,
   };
 }
 

@@ -16,6 +16,12 @@ export type Song = {
   sections: Section[];
 };
 
+export type Lineup = {
+  id: string;
+  name: string;
+  songIds: string[];
+};
+
 export type Look = {
   id: string;
   name: string;
@@ -120,59 +126,24 @@ export const LOOKS: Look[] = [
   },
 ];
 
-export const BOOKS = [
-  "Genesis", "Exodus", "Psalms", "Proverbs", "Isaiah", "Matthew", "Mark", "Luke",
-  "John", "Acts", "Romans", "1 Corinthians", "Ephesians", "Philippians", "Hebrews",
-  "James", "1 John", "Revelation",
-];
-
-export const CHAPTER_COUNTS: Record<string, number> = {
-  Genesis: 50, Exodus: 40, Psalms: 150, Proverbs: 31, Isaiah: 66, Matthew: 28, Mark: 16,
-  Luke: 24, John: 21, Acts: 28, Romans: 16, "1 Corinthians": 16, Ephesians: 6,
-  Philippians: 4, Hebrews: 13, James: 5, "1 John": 5, Revelation: 22,
+export type BibleMeta = {
+  code: string;
+  language: string;
+  name: string;
+  license: string;
+  link: string | null;
+  path: string;
 };
 
-export const TRANSLATIONS = ["KJV", "ASV", "WEB", "RVR"];
+export type BibleVerse = { number: number; text: string };
+export type BibleChapter = { number: number; verses: BibleVerse[] };
+export type BibleBook = { number: number; name: string; testament: "Old" | "New"; chapters: BibleChapter[] };
+export type BibleTranslation = { meta: BibleMeta; books: BibleBook[] };
 
-export const PASSAGES: Record<string, string[]> = {
-  "Psalms 23": [
-    "The LORD is my shepherd; I shall not want.",
-    "He maketh me to lie down in green pastures: he leadeth me beside the still waters.",
-    "He restoreth my soul: he leadeth me in the paths of righteousness for his name’s sake.",
-    "Yea, though I walk through the valley of the shadow of death, I will fear no evil: for thou art with me.",
-    "Thou preparest a table before me in the presence of mine enemies: my cup runneth over.",
-    "Surely goodness and mercy shall follow me all the days of my life.",
-  ],
-  "John 1": [
-    "In the beginning was the Word, and the Word was with God, and the Word was God.",
-    "The same was in the beginning with God.",
-    "All things were made by him; and without him was not any thing made that was made.",
-    "In him was life; and the life was the light of men.",
-    "And the light shineth in darkness; and the darkness comprehended it not.",
-  ],
-  "Isaiah 40": [
-    "Hast thou not known? hast thou not heard, that the everlasting God fainteth not, neither is weary?",
-    "He giveth power to the faint; and to them that have no might he increaseth strength.",
-    "Even the youths shall faint and be weary, and the young men shall utterly fall:",
-    "But they that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles.",
-  ],
-  "Romans 8": [
-    "And we know that all things work together for good to them that love God.",
-    "If God be for us, who can be against us?",
-    "Who shall separate us from the love of Christ?",
-    "Nay, in all these things we are more than conquerors through him that loved us.",
-  ],
-};
+export const DEFAULT_TRANSLATION = "EnglishKJ";
 
-export const FALLBACK = [
-  "Verse text for this chapter is not downloaded yet.",
-  "Tap Sync library to fetch the full translation.",
-];
-
-export const VNUMS: Record<string, number[]> = {
-  "Isaiah 40": [28, 29, 30, 31],
-  "Romans 8": [28, 31, 35, 37],
-};
+export const LOADING_PASSAGE = ["Loading translation…"];
+export const MISSING_PASSAGE = ["This chapter isn't available in this translation."];
 
 export const CHIPS = ["All", "Favorites", "Hymn", "Contemporary", "Español"];
 export const SORTS = ["Recent", "A–Z", "Key"];

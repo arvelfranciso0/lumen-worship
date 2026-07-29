@@ -2,12 +2,14 @@
 
 import { CSSProperties } from "react";
 import { Header } from "./Header";
+import { LineupModal } from "./LineupModal";
 import { LyricsEditorModal } from "./LyricsEditorModal";
 import { MainPanel } from "./MainPanel";
 import { PresentationOverlay } from "./PresentationOverlay";
 import { Sidebar } from "./Sidebar";
 import { SettingsModal } from "./SettingsModal";
 import { SlidesStrip } from "./SlidesStrip";
+import { SongUploadModal } from "./SongUploadModal";
 import { Toolbar } from "./Toolbar";
 import { useLumen, type LumenProps } from "./useLumen";
 
@@ -34,6 +36,8 @@ export function LumenApp(props: LumenProps) {
       </div>
       <SettingsModal v={v} />
       <LyricsEditorModal v={v} />
+      <LineupModal v={v} />
+      <SongUploadModal v={v} />
       <PresentationOverlay v={v} />
     </div>
   );

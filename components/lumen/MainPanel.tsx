@@ -4,13 +4,18 @@ import { InteractiveButton } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
 export function MainPanel({ v }: { v: UseLumen }) {
-  const { state, patch, bible, song, cur, nxt, prv, idx, slides, hidden, look, canvas, pill, bigLine, lyricFamily, vnum, ref, inSet, toggleSetSong } = v;
+  const {
+    state, patch, bible, song, cur, nxt, prv, idx, slides, hidden, look, canvas, pill, bigLine, lyricFamily,
+    vnum, ref, inSet, toggleSetSong, currentTransMeta, shortTransLabel,
+  } = v;
 
   const loadedLabel = bible ? "Scripture" : "Now loaded";
   const editLabel = bible ? "Edit passage" : "Edit lyrics";
   const setLabel = inSet ? "In set ✓" : "Add to set";
   const curTitle = bible ? ref : song.title;
-  const curArtist = bible ? state.trans + " · King James, public domain" : song.artist;
+  const curArtist = bible
+    ? shortTransLabel(state.trans) + " · " + (currentTransMeta?.license || "Loading…")
+    : song.artist;
   const curMetaA = bible ? "v" + vnum(idx) : "Key " + song.key;
   const curBpm = bible ? v.passage.length + " verses" : song.bpm;
   const slideCounter = idx + 1 + " / " + slides.length;
