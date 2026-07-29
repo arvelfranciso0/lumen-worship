@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
 import type { UseLumen } from "./useLumen";
@@ -12,7 +13,14 @@ export function Header({ v }: { v: UseLumen }) {
   return (
     <header className="h-14 flex-none flex items-center gap-5 p-[0_16px_0_18px] border-b border-border bg-panel">
       <div className="flex items-center gap-2.5 w-73.5 flex-none">
-        <div className="w-6.5 h-6.5 rounded-2 bg-accent shadow-[0_0_0_1px_rgba(255,255,255,.08)_inset]" />
+        <div className="w-6.5 h-6.5 rounded-2">
+          <Image 
+          src={"/lumen.png"}
+          width={200}
+          height={200}
+          alt="Lume"
+          />
+        </div>
         <div className="text-[15px] font-semibold tracking-[-0.01em]">Lumen</div>
         <div className="font-mono text-[10px] text-faint border border-border p-[2px_5px] rounded-[5px]">v2.4</div>
       </div>
