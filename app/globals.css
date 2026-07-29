@@ -1,5 +1,30 @@
 @import "tailwindcss";
 
+/* Static font-stack utilities (font-inter, font-poppins, ...) — not runtime
+   theme-dependent, so a plain @theme block (not @theme inline) is correct
+   here; font-sans/font-serif/font-mono are Tailwind's own built-in theme
+   keys and stay wired via the :root custom properties below instead. */
+@theme {
+  --font-inter: var(--font-inter-raw), system-ui, sans-serif;
+  --font-poppins: var(--font-poppins-raw), system-ui, sans-serif;
+  --font-playfair: var(--font-playfair-raw), Georgia, serif;
+  --font-merriweather: var(--font-merriweather-raw), Georgia, serif;
+
+  /* Standard OS-installed fonts — plain font stacks, nothing downloaded. */
+  --font-arial: Arial, Helvetica, sans-serif;
+  --font-helvetica: Helvetica, Arial, sans-serif;
+  --font-times: "Times New Roman", Times, serif;
+  --font-georgia: Georgia, serif;
+  --font-courier: "Courier New", Courier, monospace;
+  --font-verdana: Verdana, Geneva, sans-serif;
+  --font-tahoma: Tahoma, Geneva, sans-serif;
+  --font-trebuchet: "Trebuchet MS", sans-serif;
+  --font-garamond: Garamond, serif;
+  --font-palatino: "Palatino Linotype", Palatino, serif;
+  --font-comicsans: "Comic Sans MS", "Comic Sans", cursive;
+  --font-impact: Impact, Haettenschweiler, sans-serif;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-panel: var(--panel);

@@ -99,49 +99,24 @@ export function SettingsModal({ lumen }: { lumen: UseLumen }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3.5">
-            <div>
-              <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint mb-2.25">Typeface</div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => patch({ font: "sans" })}
-                  className={cx(
-                    "flex-1 h-9 rounded-2.25 cursor-pointer text-[13px] text-text border",
-                    state.font === "sans" ? "border-accent bg-accent-soft" : "border-border bg-panel2"
-                  )}
-                >
-                  Sans
-                </button>
-                <button
-                  onClick={() => patch({ font: "serif" })}
-                  className={cx(
-                    "flex-1 h-9 rounded-2.25 cursor-pointer text-[15px] font-serif text-text border",
-                    state.font === "serif" ? "border-accent bg-accent-soft" : "border-border bg-panel2"
-                  )}
-                >
-                  Serif
-                </button>
+          <div>
+            <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint mb-2.25">Lyric size</div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => patch((previousState) => ({ scale: Math.max(0.7, +(previousState.scale - 0.1).toFixed(2)) }))}
+                className="w-8.5 h-8.5 rounded-2.25 border border-border bg-panel2 cursor-pointer text-muted text-[12px]"
+              >
+                A−
+              </button>
+              <div className="flex-1 h-1.5 rounded-md bg-raise overflow-hidden">
+                <div className="h-full bg-accent" style={{ width: sizePct + "%" }} />
               </div>
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint mb-2.25">Lyric size</div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => patch((previousState) => ({ scale: Math.max(0.7, +(previousState.scale - 0.1).toFixed(2)) }))}
-                  className="w-8.5 h-8.5 rounded-2.25 border border-border bg-panel2 cursor-pointer text-muted text-[12px]"
-                >
-                  A−
-                </button>
-                <div className="flex-1 h-1.5 rounded-md bg-raise overflow-hidden">
-                  <div className="h-full bg-accent" style={{ width: sizePct + "%" }} />
-                </div>
-                <button
-                  onClick={() => patch((previousState) => ({ scale: Math.min(1.5, +(previousState.scale + 0.1).toFixed(2)) }))}
-                  className="w-8.5 h-8.5 rounded-2.25 border border-border bg-panel2 cursor-pointer text-muted text-[15px]"
-                >
-                  A+
-                </button>
-              </div>
+              <button
+                onClick={() => patch((previousState) => ({ scale: Math.min(1.5, +(previousState.scale + 0.1).toFixed(2)) }))}
+                className="w-8.5 h-8.5 rounded-2.25 border border-border bg-panel2 cursor-pointer text-muted text-[15px]"
+              >
+                A+
+              </button>
             </div>
           </div>
 

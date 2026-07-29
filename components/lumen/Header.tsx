@@ -1,14 +1,30 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useState } from "react";
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
+function formatClock(date: Date) {
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
 export function Header({ lumen }: { lumen: UseLumen }) {
-  const { state, patch, theme, hidden, setSongs, activateLineup } = lumen;
+  const { state, patch, theme, hidden, setSongs } = lumen;
   const themeLabel = theme === "dark" ? "☾ Dark" : "☀ Light";
   const setCountLabel = setSongs.length === 1 ? "1 song" : setSongs.length + " songs";
+  const hasActiveLineup = !!state.activeLineupId;
+
+  // Starts empty and fills in after mount so the server-prerendered markup
+  // (static export, built at a fixed time) and the first client render match
+  // — avoiding a hydration mismatch — then ticks for real from there on.
+  const [clock, setClock] = useState("");
+  useEffect(() => {
+    setClock(formatClock(new Date()));
+    const interval = setInterval(() => setClock(formatClock(new Date())), 15_000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <header className="h-14 flex-none flex items-center gap-5 p-[0_16px_0_18px] border-b border-border bg-panel">
@@ -28,17 +44,21 @@ export function Header({ lumen }: { lumen: UseLumen }) {
       <div className="relative flex items-center gap-2 text-[13px] text-muted">
         <span className="w-1.75 h-1.75 rounded-full bg-ok shadow-[0_0_0_3px_rgba(52,211,153,.16)]" />
         <span className="text-text font-medium">Sunday Gathering</span>
+        {hasActiveLineup && (
+          <>
+            <span className="text-faint">·</span>
+            <InteractiveButton
+              onClick={() => patch((s) => ({ setPanelOpen: !s.setPanelOpen }))}
+              className="border-none px-1 py-0.5 -my-0.5 -mx-1 cursor-pointer text-[13px] text-muted rounded-1.5 hover:text-text hover:bg-panel2"
+            >
+              {state.setName} — {setCountLabel}
+            </InteractiveButton>
+          </>
+        )}
         <span className="text-faint">·</span>
-        <InteractiveButton
-          onClick={() => patch((s) => ({ setPanelOpen: !s.setPanelOpen }))}
-          className="border-none px-1 py-0.5 -my-0.5 -mx-1 cursor-pointer text-[13px] text-muted rounded-1.5 hover:text-text hover:bg-panel2"
-        >
-          {state.setName} — {setCountLabel}
-        </InteractiveButton>
-        <span className="text-faint">·</span>
-        <span className="font-mono">10:00 AM</span>
+        <span className="font-mono">{clock}</span>
 
-        {state.setPanelOpen && (
+        {hasActiveLineup && state.setPanelOpen && (
           <>
             <div onClick={() => patch({ setPanelOpen: false })} className="fixed inset-0 z-90" />
             <div
@@ -69,27 +89,6 @@ export function Header({ lumen }: { lumen: UseLumen }) {
                     </button>
                   ))}
                 </div>
-              )}
-              {state.lineups.length > 0 && (
-                <>
-                  <div className="p-[8px_14px] border-t border-border text-[11px] font-semibold tracking-[.06em] uppercase text-faint">
-                    Saved lineups
-                  </div>
-                  <div className="flex flex-col p-[0_6px_6px] max-h-40 overflow-y-auto">
-                    {state.lineups.map((lu) => (
-                      <button
-                        key={lu.id}
-                        onClick={() => activateLineup(lu.id)}
-                        className="flex items-center gap-2.25 w-full p-2 rounded-2 border-none bg-transparent text-text cursor-pointer text-left"
-                      >
-                        <span className="flex-1 text-[13px] truncate">{lu.name}</span>
-                        <span className="font-mono text-[10px] text-faint">
-                          {lu.songIds.length === 1 ? "1 song" : lu.songIds.length + " songs"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </>
               )}
             </div>
           </>

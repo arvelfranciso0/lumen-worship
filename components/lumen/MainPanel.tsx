@@ -1,16 +1,109 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { cx } from "./cx";
+import { DEFAULT_LYRIC_STYLE, LYRIC_FONT_GROUPS, LYRIC_FONTS, lyricStyleCss } from "./data";
+import { HighlightedLine } from "./HighlightedLine";
 import { InteractiveButton } from "./Interactive";
 import { LookBackground } from "./LookBackground";
 import { ResizeHandle } from "./ResizeHandle";
 import type { UseLumen } from "./useLumen";
 
+const TEXT_COLOR_DEBOUNCE_MS = 250;
+const DEFAULT_HIGHLIGHT_COLOR = "#fde047";
+
+type LiveSelection = { startLineIndex: number; startOffset: number; endLineIndex: number; endOffset: number };
+
+// Walks up from `node` to find the nearest ancestor line <div> (tagged with
+// data-line-index), stopping at `container` so a selection outside the
+// Live output box is never mistaken for one inside it.
+function findLineElement(node: Node | null, container: HTMLElement): HTMLElement | null {
+  let current: Node | null = node;
+  while (current && current !== container) {
+    if (current instanceof HTMLElement && current.dataset.lineIndex !== undefined) return current;
+    current = current.parentNode;
+  }
+  return null;
+}
+
+// Measures how many characters into `lineElement`'s flattened text content
+// (node, offset) falls at — works across however many <span> segments
+// HighlightedLine rendered, not just within one text node.
+function measureTextOffset(lineElement: HTMLElement, node: Node, offset: number): number {
+  const measuringRange = document.createRange();
+  measuringRange.selectNodeContents(lineElement);
+  measuringRange.setEnd(node, offset);
+  return measuringRange.toString().length;
+}
+
 export function MainPanel({ lumen }: { lumen: UseLumen }) {
   const {
     state, patch, bible, song, cur, nxt, prv, idx, slides, hidden, look, canvas, pill, bigLine, lyricFamily,
     vnum, ref, inSet, toggleSetSong, currentTransMeta, shortTransLabel, adjustLayoutSize,
+    applyLiveHighlight, removeLiveHighlight,
   } = lumen;
+
+  // Lets the operator highlight text by selecting it directly on the Live
+  // output box (with the mouse/cursor), instead of through a separate
+  // editor — works the same way for song lyrics and Bible verses, since
+  // both render through this one box.
+  const liveOutputRef = useRef<HTMLDivElement>(null);
+  const [liveSelection, setLiveSelection] = useState<LiveSelection | null>(null);
+  const [highlightColor, setHighlightColor] = useState(DEFAULT_HIGHLIGHT_COLOR);
+
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+      const container = liveOutputRef.current;
+      if (!selection || !container || selection.isCollapsed || selection.rangeCount === 0) {
+        setLiveSelection(null);
+        return;
+      }
+      // Use the Range's start/end (always in document order), not
+      // anchor/focus (which flip depending on which direction the user
+      // dragged) — that way a bottom-to-top drag still resolves the same.
+      const range = selection.getRangeAt(0);
+      if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) {
+        setLiveSelection(null);
+        return;
+      }
+      const startLine = findLineElement(range.startContainer, container);
+      const endLine = findLineElement(range.endContainer, container);
+      if (!startLine || !endLine) {
+        setLiveSelection(null);
+        return;
+      }
+      const startOffset = measureTextOffset(startLine, range.startContainer, range.startOffset);
+      const endOffset = measureTextOffset(endLine, range.endContainer, range.endOffset);
+      const startLineIndex = Number(startLine.dataset.lineIndex);
+      const endLineIndex = Number(endLine.dataset.lineIndex);
+      if (startLineIndex === endLineIndex && startOffset === endOffset) { setLiveSelection(null); return; }
+      setLiveSelection({ startLineIndex, startOffset, endLineIndex, endOffset });
+    };
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => document.removeEventListener("selectionchange", handleSelectionChange);
+  }, []);
+
+  // Old selection offsets don't mean anything once the live slide changes.
+  useEffect(() => setLiveSelection(null), [idx]);
+
+  // The native color input fires onChange continuously while dragging —
+  // this keeps the swatch responsive instantly while debouncing the actual
+  // state patch (and therefore the persistence + slide re-render) so
+  // dragging across the picker doesn't spam updates.
+  const [textColorDraft, setTextColorDraft] = useState(state.lyricStyle.color || "#ffffff");
+  const textColorDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => setTextColorDraft(state.lyricStyle.color || "#ffffff"), [state.lyricStyle.color]);
+  useEffect(() => () => {
+    if (textColorDebounceRef.current) clearTimeout(textColorDebounceRef.current);
+  }, []);
+  const onTextColorChange = (value: string) => {
+    setTextColorDraft(value);
+    if (textColorDebounceRef.current) clearTimeout(textColorDebounceRef.current);
+    textColorDebounceRef.current = setTimeout(() => {
+      patch((previousState) => ({ lyricStyle: { ...previousState.lyricStyle, color: value } }));
+    }, TEXT_COLOR_DEBOUNCE_MS);
+  };
 
   const loadedLabel = bible ? "Scripture" : "Now loaded";
   const editLabel = bible ? "Edit passage" : "Edit lyrics";
@@ -72,6 +165,107 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
         </div>
       </div>
 
+      <div className="flex-none flex items-center gap-2 p-[10px_22px] border-b border-border">
+        <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint mr-1">Text style</span>
+        <select
+          value={state.font}
+          onChange={(changeEvent) => patch({ font: changeEvent.target.value as typeof state.font })}
+          className="h-7.5 px-2.5 rounded-2 border border-border bg-panel2 text-text text-[12px] cursor-pointer outline-none"
+        >
+          {LYRIC_FONT_GROUPS.map((group) => (
+            <optgroup key={group} label={group}>
+              {LYRIC_FONTS.filter((fontOption) => fontOption.group === group).map((fontOption) => (
+                <option key={fontOption.id} value={fontOption.id} className={fontOption.className}>
+                  {fontOption.name}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <div className="w-px h-6 bg-border mx-1" />
+        <button
+          title="Bold"
+          onClick={() => patch((previousState) => ({ lyricStyle: { ...previousState.lyricStyle, bold: !previousState.lyricStyle.bold } }))}
+          className={cx(
+            "w-7.5 h-7.5 rounded-2 border text-[12px] font-bold cursor-pointer",
+            state.lyricStyle.bold ? "border-accent bg-accent-soft text-accent" : "border-border bg-panel2 text-muted"
+          )}
+        >
+          B
+        </button>
+        <button
+          title="Italic"
+          onClick={() => patch((previousState) => ({ lyricStyle: { ...previousState.lyricStyle, italic: !previousState.lyricStyle.italic } }))}
+          className={cx(
+            "w-7.5 h-7.5 rounded-2 border text-[12px] italic cursor-pointer",
+            state.lyricStyle.italic ? "border-accent bg-accent-soft text-accent" : "border-border bg-panel2 text-muted"
+          )}
+        >
+          I
+        </button>
+        <div className="w-px h-6 bg-border mx-1" />
+        <label
+          title="Text color"
+          className="relative flex-none w-7.5 h-7.5 rounded-2 border border-border cursor-pointer overflow-hidden"
+          style={{ background: textColorDraft }}
+        >
+          <input
+            type="color"
+            value={textColorDraft}
+            onChange={(changeEvent) => onTextColorChange(changeEvent.target.value)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+        </label>
+        <button
+          title="Outline"
+          onClick={() => patch((previousState) => ({ lyricStyle: { ...previousState.lyricStyle, outline: !previousState.lyricStyle.outline } }))}
+          className={cx(
+            "w-7.5 h-7.5 rounded-2 border text-[12px] cursor-pointer",
+            state.lyricStyle.outline ? "border-accent bg-accent-soft text-accent" : "border-border bg-panel2 text-muted"
+          )}
+        >
+          ◇
+        </button>
+        <div className="w-px h-6 bg-border mx-1" />
+        <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Highlight</span>
+        <label
+          title="Highlight color"
+          className="relative flex-none w-7.5 h-7.5 rounded-2 border border-border cursor-pointer overflow-hidden"
+          style={{ background: highlightColor }}
+        >
+          <input
+            type="color"
+            value={highlightColor}
+            onChange={(changeEvent) => setHighlightColor(changeEvent.target.value)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+        </label>
+        <InteractiveButton
+          onClick={() => { if (liveSelection) applyLiveHighlight(liveSelection, highlightColor); }}
+          disabled={!liveSelection}
+          className="h-7.5 px-3 rounded-2 border border-border bg-panel2 text-[12px] text-muted disabled:cursor-not-allowed disabled:opacity-50 not-disabled:cursor-pointer not-disabled:hover:bg-raise not-disabled:hover:text-text"
+        >
+          Apply
+        </InteractiveButton>
+        <InteractiveButton
+          onClick={() => { if (liveSelection) removeLiveHighlight(liveSelection); }}
+          disabled={!liveSelection}
+          className="h-7.5 px-3 rounded-2 border border-border bg-panel2 text-[12px] text-muted disabled:cursor-not-allowed disabled:opacity-50 not-disabled:cursor-pointer not-disabled:hover:bg-raise not-disabled:hover:text-text"
+        >
+          Remove
+        </InteractiveButton>
+        <span className="text-[11.5px] text-faint">
+          {liveSelection ? "Selection ready" : "Select text below to highlight it"}
+        </span>
+        <div className="flex-1" />
+        <button
+          onClick={() => patch({ lyricStyle: DEFAULT_LYRIC_STYLE })}
+          className="text-[12px] text-muted border-none bg-transparent cursor-pointer px-1 py-0.5 hover:text-text"
+        >
+          Reset
+        </button>
+      </div>
+
       <div className="flex-1 flex gap-4.5 p-[18px_22px] min-h-0 overflow-y-auto">
         <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-80">
           <div className="flex-none flex items-center gap-2.5">
@@ -82,9 +276,11 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
           </div>
           <div className="relative flex-none w-full aspect-video min-h-60 rounded-2xl overflow-hidden border border-border2 bg-black shadow-app">
             <LookBackground look={look} black={state.black} />
-            <div className={cx(canvas, "gap-2.5 transition-opacity duration-180 ease-in-out", hidden ? "opacity-0" : "opacity-100")}>
+            <div ref={liveOutputRef} className={cx(canvas, "gap-2.5 transition-opacity duration-180 ease-in-out", hidden ? "opacity-0" : "opacity-100")}>
               {cur.lines.map((line, lineIndex) => (
-                <div key={lineIndex} className={lyricFamily} style={bigLine}>{line}</div>
+                <div key={lineIndex} data-line-index={lineIndex} className={lyricFamily} style={bigLine}>
+                  <HighlightedLine line={line} highlights={cur.lineHighlights?.[lineIndex]} />
+                </div>
               ))}
               {hasCaption && (
                 <div className="font-mono tracking-[.08em] mt-2.5 text-[rgba(255,255,255,.62)]" style={{ fontSize: 11 * state.scale + "px" }}>
@@ -114,7 +310,13 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
                 <div className="relative w-full aspect-video rounded-[10px] overflow-hidden border border-border bg-panel2 opacity-60">
                   <div className={cx(canvas, "gap-1")}>
                     {(prv ? prv.lines : ["— start of song —"]).map((line, lineIndex) => (
-                      <div key={lineIndex} className={cx(lyricFamily, "text-[11px] leading-[1.4] text-muted font-medium")}>{line}</div>
+                      <div
+                        key={lineIndex}
+                        className={cx(lyricFamily, "text-[11px] leading-[1.4] text-muted font-medium")}
+                        style={lyricStyleCss(state.lyricStyle)}
+                      >
+                        <HighlightedLine line={line} highlights={prv?.lineHighlights?.[lineIndex]} />
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -132,7 +334,13 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
                   <LookBackground look={look} black={state.black} preview />
                   <div className={cx(canvas, "gap-1.25")}>
                     {(nxt ? nxt.lines : ["— end of song —"]).map((line, lineIndex) => (
-                      <div key={lineIndex} className={cx(lyricFamily, "text-[13px] leading-[1.4] font-semibold text-white")}>{line}</div>
+                      <div
+                        key={lineIndex}
+                        className={cx(lyricFamily, "text-[13px] leading-[1.4] font-semibold text-white")}
+                        style={lyricStyleCss(state.lyricStyle)}
+                      >
+                        <HighlightedLine line={line} highlights={nxt?.lineHighlights?.[lineIndex]} />
+                      </div>
                     ))}
                   </div>
                 </div>

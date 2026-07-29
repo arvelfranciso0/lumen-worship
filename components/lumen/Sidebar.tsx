@@ -13,7 +13,7 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
   const {
     state, patch, bible, list, chipBase, tabStyle, ref, passage, vnum, idx,
     bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel,
-    allSongs, deleteLineup, toggleFavorite, reorderLineupSongs,
+    allSongs, deleteLineup, activateLineup, toggleFavorite, reorderLineupSongs,
   } = lumen;
   const [transLang, setTransLang] = useState<(typeof BIBLE_LANGUAGES)[number]>("English");
   const [viewingLineupId, setViewingLineupId] = useState<string | null>(null);
@@ -330,6 +330,18 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
                       {lineup.songIds.length === 1 ? "1 song" : lineup.songIds.length + " songs"}
                     </div>
                   </div>
+                  {lineup.id === state.activeLineupId ? (
+                    <span className="text-[11.5px] font-semibold text-accent px-1.5 py-0.5 rounded-1.5 bg-accent-soft">
+                      Active
+                    </span>
+                  ) : (
+                    <button
+                      onClick={(clickEvent) => { clickEvent.stopPropagation(); activateLineup(lineup.id); }}
+                      className="border-none cursor-pointer text-[12.5px] text-accent p-1"
+                    >
+                      Activate
+                    </button>
+                  )}
                   <button
                     onClick={(clickEvent) => { clickEvent.stopPropagation(); patch({ lineupModalOpen: true, editingLineupId: lineup.id }); }}
                     className="border-none cursor-pointer text-[12.5px] text-muted p-1"
@@ -368,6 +380,18 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
                 {viewingLineup.songIds.length > 1 && " · drag ⠿ to reorder"}
               </div>
             </div>
+            {viewingLineup.id === state.activeLineupId ? (
+              <span className="text-[12px] font-semibold text-accent border border-accent rounded-[7px] p-[5px_9px] bg-accent-soft">
+                Active
+              </span>
+            ) : (
+              <InteractiveButton
+                onClick={() => activateLineup(viewingLineup.id)}
+                className="text-[12px] text-white bg-accent border-none rounded-[7px] p-[5px_9px] cursor-pointer hover:brightness-110"
+              >
+                Activate
+              </InteractiveButton>
+            )}
             <InteractiveButton
               onClick={() => patch({ lineupModalOpen: true, editingLineupId: viewingLineup.id })}
               className="text-[12px] text-muted border border-border rounded-[7px] p-[5px_9px] cursor-pointer hover:text-text hover:bg-raise"

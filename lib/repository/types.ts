@@ -1,16 +1,18 @@
-import type { CustomBackground, Lineup, LayoutSizes, LayoutVisibility, Section, Song } from "@/components/lumen/data";
+import type { BibleHighlights, CustomBackground, Lineup, LayoutSizes, LayoutVisibility, LyricFontId, LyricStyle, Section, Song } from "@/components/lumen/data";
 
 export type PersistedPrefs = Partial<{
   favs: Record<string, boolean>;
   look: string;
   scale: number;
   theme: "dark" | "light" | null;
-  font: "sans" | "serif";
+  font: LyricFontId;
   chords: boolean;
   setIds: string[];
   setName: string;
   layoutSizes: LayoutSizes;
   layoutVisibility: LayoutVisibility;
+  lyricStyle: LyricStyle;
+  bibleHighlights: BibleHighlights;
 }>;
 
 export type PersistedData = {

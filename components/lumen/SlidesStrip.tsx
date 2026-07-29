@@ -1,6 +1,8 @@
 "use client";
 
 import { cx } from "./cx";
+import { lyricStyleCss } from "./data";
+import { HighlightedLine } from "./HighlightedLine";
 import { LookBackground } from "./LookBackground";
 import { ResizeHandle } from "./ResizeHandle";
 import type { UseLumen } from "./useLumen";
@@ -42,8 +44,12 @@ export function SlidesStrip({ lumen }: { lumen: UseLumen }) {
                 <LookBackground look={look} preview />
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 p-[6px_8px]">
                   {slide.lines.map((line, lineIndex) => (
-                    <div key={lineIndex} className="text-[6.5px] leading-normal font-medium text-center text-white opacity-[.92]">
-                      {line}
+                    <div
+                      key={lineIndex}
+                      className="text-[6.5px] leading-normal font-medium text-center text-white opacity-[.92]"
+                      style={lyricStyleCss(lumen.state.lyricStyle)}
+                    >
+                      <HighlightedLine line={line} highlights={slide.lineHighlights?.[lineIndex]} />
                     </div>
                   ))}
                 </div>

@@ -1,6 +1,8 @@
 "use client";
 
 import { cx } from "./cx";
+import { lyricStyleCss } from "./data";
+import { HighlightedLine } from "./HighlightedLine";
 import { LookBackground } from "./LookBackground";
 import type { UseLumen } from "./useLumen";
 
@@ -21,9 +23,9 @@ export function PresentationOverlay({ lumen }: { lumen: UseLumen }) {
           <div
             key={lineIndex}
             className={cx(lumen.lyricFamily, "font-semibold tracking-[-0.02em] text-white leading-[1.24] [text-shadow:0_4px_60px_rgba(0,0,0,.55)]")}
-            style={{ fontSize: 4.4 * state.scale * fit + "vw" }}
+            style={{ fontSize: 4.4 * state.scale * fit + "vw", ...lyricStyleCss(state.lyricStyle) }}
           >
-            {line}
+            <HighlightedLine line={line} highlights={cur.lineHighlights?.[lineIndex]} />
           </div>
         ))}
         {hasStageCaption && (

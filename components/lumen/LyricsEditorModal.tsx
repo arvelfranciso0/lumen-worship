@@ -25,6 +25,10 @@ export function LyricsEditorModal({ lumen }: { lumen: UseLumen }) {
   const updateLabel = (i: number, label: string) => {
     setDraft((d) => d.map((sec, j) => (j === i ? { ...sec, label } : sec)));
   };
+  // Line highlights (see HighlightedLine/data.ts) are set by selecting text
+  // directly on the Live output box, not here — editing text keeps whatever
+  // highlight ranges the section already had (they just carry over via the
+  // object spread below, since this editor doesn't touch that field).
   const updateLines = (i: number, text: string) => {
     setDraft((d) => d.map((sec, j) => (j === i ? { ...sec, lines: text.split("\n") } : sec)));
   };
@@ -59,7 +63,7 @@ export function LyricsEditorModal({ lumen }: { lumen: UseLumen }) {
 
         <div className="p-[18px_20px] flex flex-col gap-3.5 overflow-y-auto flex-1">
           {draft.map((sec, i) => (
-            <div key={i} className="border border-border rounded-[12px] bg-panel2 p-3 flex flex-col gap-2">
+            <div key={i} className="border border-border rounded-xl bg-panel2 p-3 flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <input
                   value={sec.label}

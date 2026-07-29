@@ -4,10 +4,12 @@ import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from
 import { getRepository } from "@/lib/repository";
 import { cx } from "./cx";
 import {
-  DEFAULT_LAYOUT_SIZES, DEFAULT_LAYOUT_VISIBILITY, DEFAULT_TRANSLATION, LAYOUT_SIZE_LIMITS,
-  LOADING_PASSAGE, LOOKS, MISSING_PASSAGE, SONGS,
-  type BibleMeta, type BibleTranslation, type CustomBackground, type LayoutPanelId, type LayoutSizes,
-  type LayoutVisibility, type Lineup, type Section, type Song,
+  addHighlightRange, bibleHighlightKey, DEFAULT_LAYOUT_SIZES, DEFAULT_LAYOUT_VISIBILITY, DEFAULT_LYRIC_FONT,
+  DEFAULT_LYRIC_STYLE, DEFAULT_TRANSLATION, LAYOUT_SIZE_LIMITS, LOADING_PASSAGE, LOOKS, LYRIC_FONTS, MISSING_PASSAGE,
+  SONGS, subtractHighlightRange,
+  type BibleHighlights, type BibleMeta, type BibleTranslation, type CustomBackground, type HighlightRange,
+  type LayoutPanelId, type LayoutSizes, type LayoutVisibility, type Lineup, type LyricFontId, type LyricStyle,
+  type Section, type Song,
 } from "./data";
 import type { ParsedSong } from "./songImport";
 
@@ -69,7 +71,7 @@ function downscaleImage(file: File, maxDimension: number): Promise<{ blob: Blob;
 export type LumenProps = {
   accent?: string;
   theme?: "dark" | "light";
-  lyricFont?: "sans" | "serif";
+  lyricFont?: LyricFontId;
 };
 
 type Mode = "songs" | "bible" | "lineups";
@@ -87,7 +89,7 @@ type LumenState = {
   blank: boolean;
   black: boolean;
   settingsOpen: boolean;
-  font: "sans" | "serif";
+  font: LyricFontId;
   chords: boolean;
   theme: "dark" | "light" | null;
   mode: Mode;
@@ -96,6 +98,7 @@ type LumenState = {
   trans: string;
   setIds: string[];
   setName: string;
+  activeLineupId: string | null;
   setPanelOpen: boolean;
   songOverrides: Record<string, Section[]>;
   lyricsEditorOpen: boolean;
@@ -107,22 +110,26 @@ type LumenState = {
   layoutSizes: LayoutSizes;
   layoutVisibility: LayoutVisibility;
   customBackgrounds: CustomBackground[];
+  lyricStyle: LyricStyle;
+  bibleHighlights: BibleHighlights;
 };
 
-type Slide = { label: string; lines: string[]; slideNumber: number; caption: string };
+type Slide = { label: string; lines: string[]; lineHighlights?: HighlightRange[][]; slideNumber: number; caption: string };
 
 const INITIAL_STATE: LumenState = {
   query: "", chip: "All", sort: "Recent", songId: "s3", idx: 2,
   favs: { s1: true, s3: true, s6: true },
   look: "aurora", scale: 1, presenting: false, blank: false, black: false,
-  settingsOpen: false, font: "sans", chords: false, theme: null,
+  settingsOpen: false, font: DEFAULT_LYRIC_FONT, chords: false, theme: null,
   mode: "songs", book: "Genesis", chapter: 1, trans: DEFAULT_TRANSLATION,
-  setIds: ["s1", "s3", "s4", "s6"], setName: "Set 1", setPanelOpen: false,
+  setIds: ["s1", "s3", "s4", "s6"], setName: "Set 1", activeLineupId: null, setPanelOpen: false,
   songOverrides: {}, lyricsEditorOpen: false,
   customSongs: [], uploadOpen: false,
   lineups: [], lineupModalOpen: false, editingLineupId: null,
   layoutSizes: DEFAULT_LAYOUT_SIZES, layoutVisibility: DEFAULT_LAYOUT_VISIBILITY,
   customBackgrounds: [],
+  lyricStyle: DEFAULT_LYRIC_STYLE,
+  bibleHighlights: {},
 };
 
 export function useLumen(props: LumenProps = {}) {
@@ -167,13 +174,14 @@ export function useLumen(props: LumenProps = {}) {
       getRepository().setPrefs({
         favs: state.favs, look: state.look, scale: state.scale, theme: state.theme,
         font: state.font, chords: state.chords, setIds: state.setIds, setName: state.setName,
-        layoutSizes: state.layoutSizes, layoutVisibility: state.layoutVisibility,
+        layoutSizes: state.layoutSizes, layoutVisibility: state.layoutVisibility, lyricStyle: state.lyricStyle,
+        bibleHighlights: state.bibleHighlights,
       });
     }, 400);
     return () => clearTimeout(persistTimeout);
   }, [
     state.favs, state.look, state.scale, state.theme, state.font, state.chords, state.setIds, state.setName,
-    state.layoutSizes, state.layoutVisibility,
+    state.layoutSizes, state.layoutVisibility, state.lyricStyle, state.bibleHighlights,
   ]);
 
   const [bibleManifest, setBibleManifest] = useState<BibleMeta[]>([]);
@@ -241,6 +249,10 @@ export function useLumen(props: LumenProps = {}) {
       setIds: previousState.setIds.includes(songId)
         ? previousState.setIds.filter((existingSongId) => existingSongId !== songId)
         : [...previousState.setIds, songId],
+      // Editing the working set by hand detaches it from whichever saved
+      // lineup it was copied from — otherwise the header would keep
+      // claiming a song count that no longer matches that lineup.
+      activeLineupId: null,
     }));
   }, [patch]);
 
@@ -250,7 +262,7 @@ export function useLumen(props: LumenProps = {}) {
     getRepository().upsertLineup(lineup);
     patch((previousState) => ({
       lineups: [...previousState.lineups, lineup],
-      setIds: songIds, setName: name,
+      setIds: songIds, setName: name, activeLineupId: lineupId,
       lineupModalOpen: false, editingLineupId: null,
     }));
   }, [patch]);
@@ -259,19 +271,29 @@ export function useLumen(props: LumenProps = {}) {
     getRepository().upsertLineup({ id: lineupId, name, songIds });
     patch((previousState) => ({
       lineups: previousState.lineups.map((lineup) => (lineup.id === lineupId ? { ...lineup, name, songIds } : lineup)),
+      ...(previousState.activeLineupId === lineupId ? { setIds: songIds, setName: name } : {}),
       lineupModalOpen: false, editingLineupId: null,
     }));
   }, [patch]);
 
   const deleteLineup = useCallback((lineupId: string) => {
     getRepository().deleteLineup(lineupId);
-    patch((previousState) => ({ lineups: previousState.lineups.filter((lineup) => lineup.id !== lineupId) }));
+    patch((previousState) => ({
+      lineups: previousState.lineups.filter((lineup) => lineup.id !== lineupId),
+      // The header shows the working set's name/count, copied from the
+      // lineup that seeded it — if that's the lineup just deleted, the
+      // label would otherwise keep pointing at a lineup that no longer
+      // exists anywhere in the Lineups tab.
+      ...(previousState.activeLineupId === lineupId ? { setName: "Untitled set", activeLineupId: null } : {}),
+    }));
   }, [patch]);
 
   const activateLineup = useCallback((lineupId: string) => {
     patch((previousState) => {
       const targetLineup = previousState.lineups.find((entry) => entry.id === lineupId);
-      return targetLineup ? { setIds: targetLineup.songIds, setName: targetLineup.name, setPanelOpen: false } : {};
+      return targetLineup
+        ? { setIds: targetLineup.songIds, setName: targetLineup.name, activeLineupId: lineupId, setPanelOpen: false }
+        : {};
     });
   }, [patch]);
 
@@ -370,15 +392,19 @@ export function useLumen(props: LumenProps = {}) {
 
   const slides = useMemo<Slide[]>(() => {
     if (state.mode === "bible") {
-      return passage.map((verseText, verseIndex) => ({
-        label: "v" + vnum(verseIndex), lines: [verseText], slideNumber: verseIndex + 1,
-        caption: ref + ":" + vnum(verseIndex) + "  ·  " + shortTransLabel(state.trans),
-      }));
+      return passage.map((verseText, verseIndex) => {
+        const key = bibleHighlightKey(state.trans, state.book, state.chapter, vnum(verseIndex));
+        return {
+          label: "v" + vnum(verseIndex), lines: [verseText], lineHighlights: [state.bibleHighlights[key] ?? []],
+          slideNumber: verseIndex + 1, caption: ref + ":" + vnum(verseIndex) + "  ·  " + shortTransLabel(state.trans),
+        };
+      });
     }
     return song.sections.map((section, sectionIndex) => ({
-      label: section.label, lines: section.lines, slideNumber: sectionIndex + 1, caption: "",
+      label: section.label, lines: section.lines, lineHighlights: section.lineHighlights,
+      slideNumber: sectionIndex + 1, caption: "",
     }));
-  }, [state.mode, passage, vnum, ref, state.trans, song]);
+  }, [state.mode, passage, vnum, ref, state.trans, state.book, state.chapter, state.bibleHighlights, song]);
 
   const go = useCallback((direction: number) => {
     setState((previousState) => {
@@ -407,9 +433,7 @@ export function useLumen(props: LumenProps = {}) {
     return () => window.removeEventListener("keydown", onKey);
   }, [go, patch]);
 
-  const lyricFamily = state.font === "serif" || (!state.font && props.lyricFont === "serif")
-    ? "font-serif"
-    : "font-sans";
+  const lyricFamily = (LYRIC_FONTS.find((font) => font.id === (state.font || props.lyricFont)) ?? LYRIC_FONTS[0]).className;
 
   const canvas = "absolute inset-0 flex flex-col items-center justify-center p-[6%_8%] text-center z-[1]";
 
@@ -419,6 +443,70 @@ export function useLumen(props: LumenProps = {}) {
   const prv = slides[idx - 1];
   const hidden = state.black || state.blank;
   const bible = state.mode === "bible";
+
+  // Highlighting a slice of the currently-live slide — driven by selecting
+  // text directly on the Live output box (MainPanel), not a separate editor.
+  // The selection may span multiple lines (a song section can have several
+  // lines; a Bible slide is always exactly one). Song lines are persisted
+  // as a lyric override (same path as manual lyric edits); Bible verses
+  // aren't part of any Song, so they get their own reference-keyed store.
+  type LiveHighlightSelection = { startLineIndex: number; startOffset: number; endLineIndex: number; endOffset: number };
+
+  // Ranges for each line touched by the selection: the first line runs from
+  // its startOffset to its own end, the last line runs from 0 to its
+  // endOffset, and anything in between is highlighted/cleared in full.
+  const rangeForLine = useCallback((selection: LiveHighlightSelection, lineIndex: number, lineLength: number) => {
+    if (lineIndex < selection.startLineIndex || lineIndex > selection.endLineIndex) return null;
+    const start = lineIndex === selection.startLineIndex ? selection.startOffset : 0;
+    const end = lineIndex === selection.endLineIndex ? selection.endOffset : lineLength;
+    return start < end ? { start, end } : null;
+  }, []);
+
+  const applyLiveHighlight = useCallback((selection: LiveHighlightSelection, color: string) => {
+    if (bible) {
+      const key = bibleHighlightKey(state.trans, state.book, state.chapter, vnum(idx));
+      patch((previousState) => ({
+        bibleHighlights: {
+          ...previousState.bibleHighlights,
+          [key]: addHighlightRange(previousState.bibleHighlights[key] ?? [], { start: selection.startOffset, end: selection.endOffset, color }),
+        },
+      }));
+      return;
+    }
+    const updatedSections = song.sections.map((section, sectionIndex) => {
+      if (sectionIndex !== idx) return section;
+      const lineHighlights = section.lines.map((line, lineIndex) => {
+        const existing = section.lineHighlights?.[lineIndex] ?? [];
+        const range = rangeForLine(selection, lineIndex, line.length);
+        return range ? addHighlightRange(existing, { ...range, color }) : existing;
+      });
+      return { ...section, lineHighlights };
+    });
+    saveLyrics(updatedSections);
+  }, [bible, state.trans, state.book, state.chapter, idx, vnum, song, patch, saveLyrics, rangeForLine]);
+
+  const removeLiveHighlight = useCallback((selection: LiveHighlightSelection) => {
+    if (bible) {
+      const key = bibleHighlightKey(state.trans, state.book, state.chapter, vnum(idx));
+      patch((previousState) => ({
+        bibleHighlights: {
+          ...previousState.bibleHighlights,
+          [key]: subtractHighlightRange(previousState.bibleHighlights[key] ?? [], selection.startOffset, selection.endOffset),
+        },
+      }));
+      return;
+    }
+    const updatedSections = song.sections.map((section, sectionIndex) => {
+      if (sectionIndex !== idx) return section;
+      const lineHighlights = section.lines.map((line, lineIndex) => {
+        const existing = section.lineHighlights?.[lineIndex] ?? [];
+        const range = rangeForLine(selection, lineIndex, line.length);
+        return range ? subtractHighlightRange(existing, range.start, range.end) : existing;
+      });
+      return { ...section, lineHighlights };
+    });
+    saveLyrics(updatedSections);
+  }, [bible, state.trans, state.book, state.chapter, idx, vnum, song, patch, saveLyrics, rangeForLine]);
 
   const chipBase = (on: boolean) => cx(
     "h-[26px] px-[11px] rounded-[20px] text-[12px] cursor-pointer border",
@@ -455,14 +543,17 @@ export function useLumen(props: LumenProps = {}) {
   const longestLineLength = cur.lines.reduce((maxLength, line) => Math.max(maxLength, line.length), 0);
   const fit = longestLineLength > 110 ? 0.62 : longestLineLength > 70 ? 0.78 : 1;
   const bigLine: CSSProperties = {
-    fontSize: 26 * state.scale * fit + "px", lineHeight: 1.34, fontWeight: 600,
-    letterSpacing: "-0.015em", color: "#fff", textShadow: "0 2px 24px rgba(0,0,0,.5)",
+    fontSize: 26 * state.scale * fit + "px", lineHeight: 1.34, fontWeight: state.lyricStyle.bold ? 700 : 600,
+    fontStyle: state.lyricStyle.italic ? "italic" : "normal",
+    letterSpacing: "-0.015em", color: state.lyricStyle.color || "#fff",
+    WebkitTextStroke: state.lyricStyle.outline ? "1.5px rgba(0,0,0,.55)" : undefined,
+    textShadow: "0 2px 24px rgba(0,0,0,.5)",
   };
 
   return {
     state, patch, theme, accent, ref, passage, vnum, song, look, allLooks, slides, go, idx, cur, nxt, prv, hidden,
     bible, list, chipBase, tabStyle, pill, toolBtn, canvas, lyricFamily, fit, bigLine,
-    setSongs, inSet, toggleSetSong, saveLyrics, addSong, allSongs, toggleFavorite,
+    setSongs, inSet, toggleSetSong, saveLyrics, applyLiveHighlight, removeLiveHighlight, addSong, allSongs, toggleFavorite,
     createLineup, updateLineup, deleteLineup, activateLineup, reorderLineupSongs,
     adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
     bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel,

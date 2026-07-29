@@ -1,6 +1,131 @@
+import type { CSSProperties } from "react";
+
+// A single global style applied to every lyric line on screen — set once in
+// Settings, not per line/song. Font size stays governed by the existing
+// "Lyric size" slider (state.scale), so it isn't duplicated here. Highlight
+// is deliberately NOT part of this — it's applied to specific selected text
+// instead (see HighlightRange below), not the whole screen.
+export type LyricStyle = {
+  bold: boolean;
+  italic: boolean;
+  color?: string;
+  outline: boolean;
+};
+
+export const DEFAULT_LYRIC_STYLE: LyricStyle = {
+  bold: false, italic: false, outline: false,
+};
+
+// Converts the global lyric style into real CSS, applied at every render
+// surface (MainPanel, PresentationOverlay, SlidesStrip). Properties are left
+// undefined when off, so each surface's own default (className-driven)
+// weight/color keeps applying instead of being clobbered.
+export function lyricStyleCss(style: LyricStyle): CSSProperties {
+  return {
+    fontWeight: style.bold ? 700 : undefined,
+    fontStyle: style.italic ? "italic" : undefined,
+    color: style.color || undefined,
+    WebkitTextStroke: style.outline ? "1.5px rgba(0,0,0,.55)" : undefined,
+  };
+}
+
+// A highlight applied to one specific slice of one specific line — set by
+// selecting text in the lyrics editor and picking a color, not a global
+// toggle. `start`/`end` are character offsets into that line's string.
+export type HighlightRange = { start: number; end: number; color: string };
+
+// Splits a line into plain/highlighted segments for rendering. Ranges are
+// clamped to the line's bounds and sorted so out-of-order or slightly
+// stale ranges (e.g. after the line text was edited) still render sanely
+// instead of throwing or producing overlapping spans.
+export function splitLineIntoSegments(line: string, ranges?: HighlightRange[]): { text: string; color?: string }[] {
+  if (!ranges || ranges.length === 0) return [{ text: line }];
+  const sortedRanges = [...ranges].sort((a, b) => a.start - b.start);
+  const segments: { text: string; color?: string }[] = [];
+  let cursor = 0;
+  for (const range of sortedRanges) {
+    const start = Math.max(cursor, Math.min(range.start, line.length));
+    const end = Math.max(start, Math.min(range.end, line.length));
+    if (start > cursor) segments.push({ text: line.slice(cursor, start) });
+    if (end > start) segments.push({ text: line.slice(start, end), color: range.color });
+    cursor = Math.max(cursor, end);
+  }
+  if (cursor < line.length) segments.push({ text: line.slice(cursor) });
+  return segments.length ? segments : [{ text: line }];
+}
+
+// Removes (or clips) any existing ranges that overlap [start, end) — used
+// both before inserting a new highlight (so colors never overlap) and to
+// implement "remove highlight" over a selection.
+export function subtractHighlightRange(ranges: HighlightRange[], start: number, end: number): HighlightRange[] {
+  const result: HighlightRange[] = [];
+  for (const range of ranges) {
+    if (range.end <= start || range.start >= end) { result.push(range); continue; }
+    if (range.start < start) result.push({ ...range, end: start });
+    if (range.end > end) result.push({ ...range, start: end });
+  }
+  return result;
+}
+
+export function addHighlightRange(ranges: HighlightRange[], newRange: HighlightRange): HighlightRange[] {
+  return [...subtractHighlightRange(ranges, newRange.start, newRange.end), newRange].sort((a, b) => a.start - b.start);
+}
+
+// Bible verses aren't part of a Song's sections, so their highlights are
+// stored separately — keyed by translation + reference, since ranges are
+// character offsets into that translation's specific wording.
+export type BibleHighlights = Record<string, HighlightRange[]>;
+
+export function bibleHighlightKey(translation: string, book: string, chapter: number, verseNumber: number): string {
+  return translation + "|" + book + "|" + chapter + "|" + verseNumber;
+}
+
+export type LyricFontId =
+  | "sans" | "serif" | "inter" | "poppins" | "playfair" | "merriweather"
+  | "arial" | "helvetica" | "times" | "georgia" | "courier" | "verdana"
+  | "tahoma" | "trebuchet" | "garamond" | "palatino" | "comicsans" | "impact";
+
+export type LyricFontOption = {
+  id: LyricFontId;
+  name: string;
+  className: string;
+  group: "Theme fonts" | "System fonts";
+};
+
+export const LYRIC_FONTS: LyricFontOption[] = [
+  { id: "sans", name: "Instrument Sans", className: "font-sans", group: "Theme fonts" },
+  { id: "serif", name: "Instrument Serif", className: "font-serif", group: "Theme fonts" },
+  { id: "inter", name: "Inter", className: "font-inter", group: "Theme fonts" },
+  { id: "poppins", name: "Poppins", className: "font-poppins", group: "Theme fonts" },
+  { id: "playfair", name: "Playfair Display", className: "font-playfair", group: "Theme fonts" },
+  { id: "merriweather", name: "Merriweather", className: "font-merriweather", group: "Theme fonts" },
+  // Standard OS-installed fonts — no download needed, rendered using
+  // whatever the presenting machine already has (same convention as any
+  // Word/PowerPoint font list).
+  { id: "arial", name: "Arial", className: "font-arial", group: "System fonts" },
+  { id: "helvetica", name: "Helvetica", className: "font-helvetica", group: "System fonts" },
+  { id: "times", name: "Times New Roman", className: "font-times", group: "System fonts" },
+  { id: "georgia", name: "Georgia", className: "font-georgia", group: "System fonts" },
+  { id: "courier", name: "Courier New", className: "font-courier", group: "System fonts" },
+  { id: "verdana", name: "Verdana", className: "font-verdana", group: "System fonts" },
+  { id: "tahoma", name: "Tahoma", className: "font-tahoma", group: "System fonts" },
+  { id: "trebuchet", name: "Trebuchet MS", className: "font-trebuchet", group: "System fonts" },
+  { id: "garamond", name: "Garamond", className: "font-garamond", group: "System fonts" },
+  { id: "palatino", name: "Palatino Linotype", className: "font-palatino", group: "System fonts" },
+  { id: "comicsans", name: "Comic Sans MS", className: "font-comicsans", group: "System fonts" },
+  { id: "impact", name: "Impact", className: "font-impact", group: "System fonts" },
+];
+
+export const LYRIC_FONT_GROUPS: LyricFontOption["group"][] = ["Theme fonts", "System fonts"];
+
+export const DEFAULT_LYRIC_FONT: LyricFontId = "sans";
+
 export type Section = {
   label: string;
   lines: string[];
+  // Parallel to `lines` — lineHighlights[i] is the set of highlighted
+  // ranges within lines[i]. Omitted/empty entries mean no highlights.
+  lineHighlights?: HighlightRange[][];
 };
 
 export type Song = {
