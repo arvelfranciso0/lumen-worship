@@ -1,12 +1,13 @@
 "use client";
 
-import { LOOKS } from "./data";
+import { isCustomBackground } from "./data";
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
+import { LookBackground } from "./LookBackground";
 import type { UseLumen } from "./useLumen";
 
 export function Toolbar({ lumen }: { lumen: UseLumen }) {
-  const { state, patch, go, toolBtn } = lumen;
+  const { state, patch, go, toolBtn, allLooks } = lumen;
 
   const smaller = () =>
     patch((s) => ({ scale: Math.max(0.7, +(s.scale - 0.1).toFixed(2)) }));
@@ -52,13 +53,14 @@ export function Toolbar({ lumen }: { lumen: UseLumen }) {
           Look
         </span>
         <div className="flex gap-1.5">
-          {LOOKS.map((lk) => {
-            const on = lk.id === state.look;
+          {allLooks.map((lookOption) => {
+            const on = lookOption.id === state.look;
+            const custom = isCustomBackground(lookOption);
             return (
               <button
-                key={lk.id}
-                onClick={() => patch({ look: lk.id })}
-                title={lk.name}
+                key={lookOption.id}
+                onClick={() => patch({ look: lookOption.id })}
+                title={lookOption.name}
                 className={cx(
                   "h-9 px-2.75 rounded-2.25 text-[12px] cursor-pointer flex items-center gap-1.75 border",
                   on
@@ -66,11 +68,17 @@ export function Toolbar({ lumen }: { lumen: UseLumen }) {
                     : "border-border bg-panel2 text-muted font-normal",
                 )}
               >
-                <span
-                  className="w-3.5 h-3.5 rounded-1 border border-[rgba(255,255,255,.12)]"
-                  style={{ background: lk.swatch }}
-                />
-                {lk.name}
+                {custom ? (
+                  <span className="relative w-3.5 h-3.5 rounded-1 overflow-hidden border border-[rgba(255,255,255,.12)] bg-black flex-none">
+                    <LookBackground look={lookOption} preview />
+                  </span>
+                ) : (
+                  <span
+                    className="w-3.5 h-3.5 rounded-1 border border-[rgba(255,255,255,.12)]"
+                    style={{ background: lookOption.swatch }}
+                  />
+                )}
+                {lookOption.name}
               </button>
             );
           })}

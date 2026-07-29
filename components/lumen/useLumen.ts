@@ -6,12 +6,65 @@ import { cx } from "./cx";
 import {
   DEFAULT_LAYOUT_SIZES, DEFAULT_LAYOUT_VISIBILITY, DEFAULT_TRANSLATION, LAYOUT_SIZE_LIMITS,
   LOADING_PASSAGE, LOOKS, MISSING_PASSAGE, SONGS,
-  type BibleMeta, type BibleTranslation, type LayoutPanelId, type LayoutSizes, type LayoutVisibility,
-  type Lineup, type Section, type Song,
+  type BibleMeta, type BibleTranslation, type CustomBackground, type LayoutPanelId, type LayoutSizes,
+  type LayoutVisibility, type Lineup, type Section, type Song,
 } from "./data";
 import type { ParsedSong } from "./songImport";
 
 const shortTransLabel = (code: string) => code.replace(/^(English|Cebuano)/, "") || code;
+
+const MAX_BACKGROUND_IMAGE_DIMENSION = 1920;
+
+// Captures a single frame from a video as a data URL, so preview spots (the
+// slides strip, the Toolbar/Settings pickers, the "Next up" box) can show a
+// still instead of independently decoding the full video.
+function generateVideoPoster(videoUrl: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.src = videoUrl;
+    video.addEventListener("loadeddata", () => {
+      const posterCanvas = document.createElement("canvas");
+      posterCanvas.width = video.videoWidth;
+      posterCanvas.height = video.videoHeight;
+      const context = posterCanvas.getContext("2d");
+      if (!context) { reject(new Error("2d context unavailable")); return; }
+      context.drawImage(video, 0, 0);
+      resolve(posterCanvas.toDataURL("image/jpeg", 0.8));
+    }, { once: true });
+    video.addEventListener("error", () => reject(new Error("Failed to load video for poster generation")), { once: true });
+  });
+}
+
+// Caps an uploaded image to a sane max dimension before it's stored, so a
+// dropped-in 4K/12MP photo doesn't cost full-resolution paint everywhere the
+// background renders. Re-encodes as JPEG regardless of the source format —
+// fine for a fullscreen background, but does drop alpha transparency.
+function downscaleImage(file: File, maxDimension: number): Promise<{ blob: Blob; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+      const targetWidth = Math.round(image.width * scale);
+      const targetHeight = Math.round(image.height * scale);
+      const resizeCanvas = document.createElement("canvas");
+      resizeCanvas.width = targetWidth;
+      resizeCanvas.height = targetHeight;
+      const context = resizeCanvas.getContext("2d");
+      URL.revokeObjectURL(objectUrl);
+      if (!context) { reject(new Error("2d context unavailable")); return; }
+      context.drawImage(image, 0, 0, targetWidth, targetHeight);
+      resizeCanvas.toBlob((blob) => {
+        if (!blob) { reject(new Error("Failed to encode downscaled image")); return; }
+        resolve({ blob, mimeType: "image/jpeg" });
+      }, "image/jpeg", 0.85);
+    };
+    image.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Failed to load image for downscaling")); };
+    image.src = objectUrl;
+  });
+}
 
 export type LumenProps = {
   accent?: string;
@@ -53,6 +106,7 @@ type LumenState = {
   editingLineupId: string | null;
   layoutSizes: LayoutSizes;
   layoutVisibility: LayoutVisibility;
+  customBackgrounds: CustomBackground[];
 };
 
 type Slide = { label: string; lines: string[]; slideNumber: number; caption: string };
@@ -68,6 +122,7 @@ const INITIAL_STATE: LumenState = {
   customSongs: [], uploadOpen: false,
   lineups: [], lineupModalOpen: false, editingLineupId: null,
   layoutSizes: DEFAULT_LAYOUT_SIZES, layoutVisibility: DEFAULT_LAYOUT_VISIBILITY,
+  customBackgrounds: [],
 };
 
 export function useLumen(props: LumenProps = {}) {
@@ -87,9 +142,22 @@ export function useLumen(props: LumenProps = {}) {
       patch({
         customSongs: data.customSongs,
         lineups: data.lineups,
+        customBackgrounds: data.customBackgrounds,
         songOverrides: data.songOverrides,
         ...data.prefs,
       });
+      data.customBackgrounds
+        .filter((background) => background.mediaType === "video")
+        .forEach((background) => {
+          generateVideoPoster(background.url).then((posterUrl) => {
+            if (cancelled) return;
+            patch((previousState) => ({
+              customBackgrounds: previousState.customBackgrounds.map((entry) =>
+                entry.id === background.id ? { ...entry, posterUrl } : entry
+              ),
+            }));
+          }).catch(() => {});
+        });
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [patch]);
@@ -160,7 +228,8 @@ export function useLumen(props: LumenProps = {}) {
     const override = state.songOverrides[baseSong.id];
     return override ? { ...baseSong, sections: override } : baseSong;
   }, [state.songId, state.songOverrides, allSongs]);
-  const look = useMemo(() => LOOKS.find((lookEntry) => lookEntry.id === state.look) || LOOKS[0], [state.look]);
+  const allLooks = useMemo(() => [...LOOKS, ...state.customBackgrounds], [state.customBackgrounds]);
+  const look = useMemo(() => allLooks.find((lookEntry) => lookEntry.id === state.look) || LOOKS[0], [allLooks, state.look]);
 
   const setSongs = useMemo(
     () => state.setIds.map((songId) => allSongs.find((candidate) => candidate.id === songId)).filter((maybeSong): maybeSong is Song => !!maybeSong),
@@ -238,6 +307,46 @@ export function useLumen(props: LumenProps = {}) {
 
   const resetLayout = useCallback(() => {
     patch({ layoutSizes: DEFAULT_LAYOUT_SIZES, layoutVisibility: DEFAULT_LAYOUT_VISIBILITY });
+  }, [patch]);
+
+  const addBackground = useCallback(async (file: File) => {
+    const backgroundId = "bg-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const mediaType: "image" | "video" = file.type.startsWith("video/") ? "video" : "image";
+    // The object URL works immediately in this session regardless of backend —
+    // the repository's own URL resolution (blob vs custom protocol) only
+    // matters for backgrounds reloaded via loadAll() on a later launch.
+
+    if (mediaType === "image") {
+      const { blob: downscaledBlob, mimeType } = await downscaleImage(file, MAX_BACKGROUND_IMAGE_DIMENSION);
+      const objectUrl = URL.createObjectURL(downscaledBlob);
+      const fileData = await downscaledBlob.arrayBuffer();
+      getRepository().addBackground({ id: backgroundId, name: file.name, mediaType, mimeType, data: fileData });
+      patch((previousState) => ({
+        customBackgrounds: [...previousState.customBackgrounds, { id: backgroundId, name: file.name, mediaType, url: objectUrl }],
+        look: backgroundId,
+      }));
+      return;
+    }
+
+    // Video: left untouched (client-side transcoding isn't worth the cost/
+    // complexity here), but a poster frame is captured once so every preview
+    // spot except the actual live output can skip decoding it.
+    const objectUrl = URL.createObjectURL(file);
+    const fileData = await file.arrayBuffer();
+    getRepository().addBackground({ id: backgroundId, name: file.name, mediaType, mimeType: file.type, data: fileData });
+    const posterUrl = await generateVideoPoster(objectUrl).catch(() => undefined);
+    patch((previousState) => ({
+      customBackgrounds: [...previousState.customBackgrounds, { id: backgroundId, name: file.name, mediaType, url: objectUrl, posterUrl }],
+      look: backgroundId,
+    }));
+  }, [patch]);
+
+  const deleteBackground = useCallback((backgroundId: string) => {
+    getRepository().deleteBackground(backgroundId);
+    patch((previousState) => ({
+      customBackgrounds: previousState.customBackgrounds.filter((background) => background.id !== backgroundId),
+      look: previousState.look === backgroundId ? LOOKS[0].id : previousState.look,
+    }));
   }, [patch]);
 
   const saveLyrics = useCallback((sections: Section[]) => {
@@ -351,11 +460,11 @@ export function useLumen(props: LumenProps = {}) {
   };
 
   return {
-    state, patch, theme, accent, ref, passage, vnum, song, look, slides, go, idx, cur, nxt, prv, hidden,
+    state, patch, theme, accent, ref, passage, vnum, song, look, allLooks, slides, go, idx, cur, nxt, prv, hidden,
     bible, list, chipBase, tabStyle, pill, toolBtn, canvas, lyricFamily, fit, bigLine,
     setSongs, inSet, toggleSetSong, saveLyrics, addSong, allSongs, toggleFavorite,
     createLineup, updateLineup, deleteLineup, activateLineup, reorderLineupSongs,
-    adjustLayoutSize, toggleLayoutPanel, resetLayout,
+    adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
     bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel,
   };
 }

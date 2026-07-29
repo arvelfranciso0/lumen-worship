@@ -12,4 +12,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteLineup: (id) => ipcRenderer.invoke("repo:deleteLineup", id),
   setSongOverride: (songId, sections) => ipcRenderer.invoke("repo:setSongOverride", songId, sections),
   setPrefs: (patch) => ipcRenderer.invoke("repo:setPrefs", patch),
+  addBackground: (input) => ipcRenderer.invoke("repo:addBackground", input),
+  deleteBackground: (id) => ipcRenderer.invoke("repo:deleteBackground", id),
 });

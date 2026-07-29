@@ -1,4 +1,4 @@
-import type { Lineup, LayoutSizes, LayoutVisibility, Section, Song } from "@/components/lumen/data";
+import type { CustomBackground, Lineup, LayoutSizes, LayoutVisibility, Section, Song } from "@/components/lumen/data";
 
 export type PersistedPrefs = Partial<{
   favs: Record<string, boolean>;
@@ -16,8 +16,20 @@ export type PersistedPrefs = Partial<{
 export type PersistedData = {
   customSongs: Song[];
   lineups: Lineup[];
+  customBackgrounds: CustomBackground[];
   songOverrides: Record<string, Section[]>;
   prefs: PersistedPrefs;
+};
+
+// The raw upload payload for a new background. `data` is an ArrayBuffer (not
+// a Blob/File) because it has to survive both an IndexedDB put and an
+// Electron contextBridge/IPC hop — both structured-clone ArrayBuffer cleanly.
+export type NewBackgroundInput = {
+  id: string;
+  name: string;
+  mediaType: "image" | "video";
+  mimeType: string;
+  data: ArrayBuffer;
 };
 
 export interface AppRepository {
@@ -28,4 +40,6 @@ export interface AppRepository {
   deleteLineup(id: string): Promise<void>;
   setSongOverride(songId: string, sections: Section[]): Promise<void>;
   setPrefs(patch: PersistedPrefs): Promise<void>;
+  addBackground(input: NewBackgroundInput): Promise<void>;
+  deleteBackground(id: string): Promise<void>;
 }

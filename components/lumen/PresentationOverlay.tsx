@@ -1,6 +1,7 @@
 "use client";
 
 import { cx } from "./cx";
+import { LookBackground } from "./LookBackground";
 import type { UseLumen } from "./useLumen";
 
 export function PresentationOverlay({ lumen }: { lumen: UseLumen }) {
@@ -14,7 +15,7 @@ export function PresentationOverlay({ lumen }: { lumen: UseLumen }) {
 
   return (
     <div className="fixed inset-0 z-[200] bg-black overflow-hidden">
-      <div className="absolute inset-0" style={{ background: state.black ? "#000" : look.css }} />
+      <LookBackground look={look} black={state.black} />
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-[2.2vh] p-[8vh_10vw] text-center z-[1]">
         {stageLines.map((line, lineIndex) => (
           <div

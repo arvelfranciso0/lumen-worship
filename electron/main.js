@@ -1,11 +1,26 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { pathToFileURL } = require("node:url");
+const { app, BrowserWindow, ipcMain, protocol, net } = require("electron");
 const { createDb } = require("./db.js");
 
 let db;
 let staticServer;
+
+// Some machines (VMs, remote-desktop sessions, flaky GPU drivers) can't run
+// Chromium's GPU process reliably — it crash-loops, the compositor can never
+// paint a frame, and the window shows blank even though the page underneath
+// loaded fine. Disabling hardware acceleration avoids that entirely. Must be
+// called before app.ready.
+app.disableHardwareAcceleration();
+
+// Serves uploaded background images/video from userData/backgrounds/ back to
+// the renderer. Registered before app.ready, as Electron requires. A raw
+// file:// path is avoided here since it's unreliable under contextIsolation.
+protocol.registerSchemesAsPrivileged([
+  { scheme: "lumen-media", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+]);
 
 const MIME_TYPES = {
   ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
@@ -67,6 +82,13 @@ async function createWindow() {
 
 app.whenReady().then(() => {
   db = createDb(path.join(app.getPath("userData"), "lumen.db"));
+
+  const backgroundsDir = path.join(app.getPath("userData"), "backgrounds");
+  protocol.handle("lumen-media", (request) => {
+    const fileName = decodeURIComponent(request.url.replace("lumen-media://", "").split("?")[0]);
+    return net.fetch(pathToFileURL(path.join(backgroundsDir, fileName)).toString());
+  });
+
   registerIpcHandlers();
   createWindow();
 
@@ -83,6 +105,8 @@ function registerIpcHandlers() {
   ipcMain.handle("repo:deleteLineup", (_event, id) => db.deleteLineup(id));
   ipcMain.handle("repo:setSongOverride", (_event, songId, sections) => db.setSongOverride(songId, sections));
   ipcMain.handle("repo:setPrefs", (_event, patch) => db.setPrefs(patch));
+  ipcMain.handle("repo:addBackground", (_event, input) => db.addBackground(input));
+  ipcMain.handle("repo:deleteBackground", (_event, id) => db.deleteBackground(id));
 }
 
 app.on("window-all-closed", () => {

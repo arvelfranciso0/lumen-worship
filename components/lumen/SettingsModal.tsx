@@ -1,16 +1,23 @@
 "use client";
 
-import { LAYOUT_PANELS, LOOKS } from "./data";
+import { useRef } from "react";
+import { LAYOUT_PANELS, isCustomBackground } from "./data";
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
+import { LookBackground } from "./LookBackground";
 import type { UseLumen } from "./useLumen";
 
 export function SettingsModal({ lumen }: { lumen: UseLumen }) {
-  const { state, patch, toggleLayoutPanel, resetLayout } = lumen;
+  const { state, patch, allLooks, addBackground, deleteBackground, toggleLayoutPanel, resetLayout } = lumen;
+  const backgroundFileInputRef = useRef<HTMLInputElement>(null);
   if (!state.settingsOpen) return null;
 
   const close = () => patch({ settingsOpen: false });
   const sizePct = Math.round(((state.scale - 0.7) / 0.8) * 100);
+
+  const onBackgroundFile = (file: File | undefined) => {
+    if (file) addBackground(file);
+  };
 
   return (
     <div
@@ -36,23 +43,57 @@ export function SettingsModal({ lumen }: { lumen: UseLumen }) {
 
         <div className="p-[18px_20px] flex flex-col gap-4.5 overflow-y-auto flex-1">
           <div>
-            <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint mb-2.25">Background</div>
+            <div className="flex items-center justify-between mb-2.25">
+              <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Background</div>
+              <InteractiveButton
+                onClick={() => backgroundFileInputRef.current?.click()}
+                className="text-[12px] text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
+              >
+                + Upload background
+              </InteractiveButton>
+              <input
+                ref={backgroundFileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                onChange={(changeEvent) => { onBackgroundFile(changeEvent.target.files?.[0]); changeEvent.target.value = ""; }}
+                className="hidden"
+              />
+            </div>
             <div className="grid grid-cols-4 gap-2.5">
-              {LOOKS.map((lookEntry) => {
-                const on = lookEntry.id === state.look;
+              {allLooks.map((lookOption) => {
+                const on = lookOption.id === state.look;
+                const custom = isCustomBackground(lookOption);
                 return (
-                  <button
-                    key={lookEntry.id}
-                    onClick={() => patch({ look: lookEntry.id })}
-                    className={cx(
-                      "flex flex-col items-start gap-1.5 p-2 rounded-xl cursor-pointer text-text border",
-                      on ? "border-accent bg-accent-soft" : "border-border bg-panel2"
+                  <div key={lookOption.id} className="relative">
+                    <button
+                      onClick={() => patch({ look: lookOption.id })}
+                      className={cx(
+                        "flex flex-col items-start gap-1.5 p-2 rounded-xl cursor-pointer text-text border w-full",
+                        on ? "border-accent bg-accent-soft" : "border-border bg-panel2"
+                      )}
+                    >
+                      {custom ? (
+                        <span className="relative block w-full h-14 rounded-lg border border-border overflow-hidden bg-black">
+                          <LookBackground look={lookOption} preview />
+                        </span>
+                      ) : (
+                        <span className="w-full h-14 rounded-lg border border-border" style={{ background: lookOption.css }} />
+                      )}
+                      <span className="text-[11.5px] truncate w-full text-left">{lookOption.name}</span>
+                      <span className="text-[10px] text-faint">
+                        {custom ? (lookOption.mediaType === "video" ? "Video" : "Image") : lookOption.kind}
+                      </span>
+                    </button>
+                    {custom && (
+                      <button
+                        onClick={(clickEvent) => { clickEvent.stopPropagation(); deleteBackground(lookOption.id); }}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[rgba(0,0,0,.55)] text-white text-[11px] cursor-pointer border-none flex items-center justify-center"
+                        title="Remove background"
+                      >
+                        ✕
+                      </button>
                     )}
-                  >
-                    <span className="w-full h-14 rounded-lg border border-border" style={{ background: lookEntry.css }} />
-                    <span className="text-[11.5px]">{lookEntry.name}</span>
-                    <span className="text-[10px] text-faint">{lookEntry.kind}</span>
-                  </button>
+                  </div>
                 );
               })}
             </div>

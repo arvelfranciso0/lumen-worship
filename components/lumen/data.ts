@@ -65,6 +65,27 @@ export type Look = {
   note?: "image" | "video";
 };
 
+// An uploaded image/video background, layered alongside the builtin gradient
+// Looks. `url` is resolved by the repository layer at load time (an object
+// URL for the IndexedDB backend, a custom-protocol URL for Electron) — never
+// persisted as-is, since object URLs don't survive a reload.
+export type CustomBackground = {
+  id: string;
+  name: string;
+  mediaType: "image" | "video";
+  url: string;
+  // A single captured frame (data URL), generated client-side once per
+  // session — not persisted. Lets every preview spot except the actual live
+  // output skip decoding the real video.
+  posterUrl?: string;
+};
+
+export type LookOption = Look | CustomBackground;
+
+export function isCustomBackground(option: LookOption): option is CustomBackground {
+  return "mediaType" in option;
+}
+
 export const SONGS: Song[] = [
   {
     id: "s1", title: "Amazing Grace", artist: "John Newton · Trad.", key: "G", bpm: "72 BPM",

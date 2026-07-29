@@ -2,6 +2,7 @@
 
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
+import { LookBackground } from "./LookBackground";
 import { ResizeHandle } from "./ResizeHandle";
 import type { UseLumen } from "./useLumen";
 
@@ -22,8 +23,6 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
   const curBpm = bible ? lumen.passage.length + " verses" : song.bpm;
   const slideCounter = idx + 1 + " / " + slides.length;
   const liveState = state.black ? "BLACK" : state.blank ? "BLANK" : "LYRICS";
-
-  const bgStyle = { background: state.black ? "#000" : look.css };
 
   const hasCaption = !!cur.caption && !hidden;
   const previewVisible = state.layoutVisibility.preview;
@@ -82,7 +81,7 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
             <span className="font-mono text-[11px] text-faint">{liveState}</span>
           </div>
           <div className="relative flex-none w-full aspect-video min-h-60 rounded-2xl overflow-hidden border border-border2 bg-black shadow-app">
-            <div className="absolute inset-0" style={bgStyle} />
+            <LookBackground look={look} black={state.black} />
             <div className={cx(canvas, "gap-2.5 transition-opacity duration-180 ease-in-out", hidden ? "opacity-0" : "opacity-100")}>
               {cur.lines.map((line, lineIndex) => (
                 <div key={lineIndex} className={lyricFamily} style={bigLine}>{line}</div>
@@ -130,7 +129,7 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
                   <span className={pill(false)}>{nxt ? nxt.label : "End"}</span>
                 </div>
                 <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-accent bg-black shadow-[0_0_0_3px_var(--accent-soft)]">
-                  <div className="absolute inset-0" style={bgStyle} />
+                  <LookBackground look={look} black={state.black} preview />
                   <div className={cx(canvas, "gap-1.25")}>
                     {(nxt ? nxt.lines : ["— end of song —"]).map((line, lineIndex) => (
                       <div key={lineIndex} className={cx(lyricFamily, "text-[13px] leading-[1.4] font-semibold text-white")}>{line}</div>

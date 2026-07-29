@@ -1,6 +1,8 @@
 // SQLite persistence for the Electron main process, backed by Node's
 // built-in node:sqlite module (no native module / rebuild step needed).
 
+const fs = require("node:fs");
+const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 
 const SCHEMA = `
@@ -17,6 +19,9 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS prefs (
     key TEXT PRIMARY KEY, value TEXT
   );
+  CREATE TABLE IF NOT EXISTS backgrounds (
+    id TEXT PRIMARY KEY, name TEXT, media_type TEXT, mime_type TEXT, file_name TEXT
+  );
 `;
 
 function rowToSong(row) {
@@ -31,9 +36,15 @@ function rowToLineup(row) {
   return { id: row.id, name: row.name, songIds: JSON.parse(row.song_ids || "[]") };
 }
 
+function rowToBackground(row) {
+  return { id: row.id, name: row.name, mediaType: row.media_type, url: "lumen-media://" + row.file_name };
+}
+
 function createDb(dbPath) {
   const db = new DatabaseSync(dbPath);
   db.exec(SCHEMA);
+  const backgroundsDir = path.join(path.dirname(dbPath), "backgrounds");
+  fs.mkdirSync(backgroundsDir, { recursive: true });
 
   return {
     loadAll() {
@@ -45,7 +56,8 @@ function createDb(dbPath) {
       );
       const prefRows = db.prepare("SELECT * FROM prefs").all();
       const prefs = Object.fromEntries(prefRows.map((r) => [r.key, JSON.parse(r.value)]));
-      return { customSongs, lineups, songOverrides, prefs };
+      const customBackgrounds = db.prepare("SELECT * FROM backgrounds").all().map(rowToBackground);
+      return { customSongs, lineups, customBackgrounds, songOverrides, prefs };
     },
 
     upsertSong(song) {
@@ -91,6 +103,25 @@ function createDb(dbPath) {
       for (const [key, value] of Object.entries(patch)) {
         stmt.run(key, JSON.stringify(value));
       }
+    },
+
+    addBackground({ id, name, mediaType, mimeType, data }) {
+      const extension = mimeType.split("/")[1] || "bin";
+      const fileName = id + "." + extension;
+      fs.writeFileSync(path.join(backgroundsDir, fileName), Buffer.from(data));
+      db.prepare(
+        `INSERT INTO backgrounds (id, name, media_type, mime_type, file_name) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           name=excluded.name, media_type=excluded.media_type, mime_type=excluded.mime_type, file_name=excluded.file_name`
+      ).run(id, name, mediaType, mimeType, fileName);
+    },
+
+    deleteBackground(id) {
+      const row = db.prepare("SELECT file_name FROM backgrounds WHERE id = ?").get(id);
+      if (row) {
+        try { fs.unlinkSync(path.join(backgroundsDir, row.file_name)); } catch { /* already gone */ }
+      }
+      db.prepare("DELETE FROM backgrounds WHERE id = ?").run(id);
     },
 
     close() {

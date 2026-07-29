@@ -1,6 +1,7 @@
 "use client";
 
 import { cx } from "./cx";
+import { LookBackground } from "./LookBackground";
 import { ResizeHandle } from "./ResizeHandle";
 import type { UseLumen } from "./useLumen";
 
@@ -37,15 +38,15 @@ export function SlidesStrip({ lumen }: { lumen: UseLumen }) {
                 slideIndex === currentSlideIndex ? "border-accent shadow-[0_0_0_3px_var(--accent-soft)]" : "border-border shadow-none"
               )}
             >
-              <div
-                className="aspect-video flex flex-col items-center justify-center gap-0.5 p-[6px_8px]"
-                style={{ background: look.css, height: thumbnailAreaHeight }}
-              >
-                {slide.lines.map((line, lineIndex) => (
-                  <div key={lineIndex} className="text-[6.5px] leading-normal font-medium text-center text-white opacity-[.92]">
-                    {line}
-                  </div>
-                ))}
+              <div className="relative aspect-video overflow-hidden" style={{ height: thumbnailAreaHeight }}>
+                <LookBackground look={look} preview />
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 p-[6px_8px]">
+                  {slide.lines.map((line, lineIndex) => (
+                    <div key={lineIndex} className="text-[6.5px] leading-normal font-medium text-center text-white opacity-[.92]">
+                      {line}
+                    </div>
+                  ))}
+                </div>
               </div>
               <div className="flex items-center justify-between p-[5px_7px_6px]">
                 <span className={cx("text-[10px] font-semibold tracking-[.03em] uppercase", slideIndex === currentSlideIndex ? "text-accent" : "text-muted")}>
