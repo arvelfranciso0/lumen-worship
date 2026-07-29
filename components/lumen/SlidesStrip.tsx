@@ -1,44 +1,41 @@
 "use client";
 
+import { cx } from "./cx";
 import type { UseLumen } from "./useLumen";
 
 export function SlidesStrip({ v }: { v: UseLumen }) {
   const { slides, idx, patch, look } = v;
 
   return (
-    <div style={{ flex: "none", borderTop: "1px solid var(--border)", background: "var(--panel2)", padding: "12px 22px 14px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 9 }}>
-        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>Slides</span>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--faint)" }}>{idx + 1} / {slides.length}</span>
-        <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11.5, color: "var(--faint)" }}>Click a slide to go live</span>
+    <div className="flex-none border-t border-border bg-panel2 p-[12px_22px_14px]">
+      <div className="flex items-center gap-2.5 mb-2.25">
+        <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Slides</span>
+        <span className="font-mono text-[11px] text-faint">{idx + 1} / {slides.length}</span>
+        <div className="flex-1" />
+        <span className="text-[11.5px] text-faint">Click a slide to go live</span>
       </div>
-      <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 6 }}>
+      <div className="flex gap-2.5 overflow-x-auto pb-1.5">
         {slides.map((s, i) => (
           <div
             key={i}
             onClick={() => patch({ idx: i, black: false, blank: false })}
-            style={{
-              width: 132, flex: "none", borderRadius: 10, overflow: "hidden", cursor: "pointer",
-              border: "1px solid " + (i === idx ? "var(--accent)" : "var(--border)"),
-              background: "var(--panel)", boxShadow: i === idx ? "0 0 0 3px var(--accent-soft)" : "none",
-            }}
+            className={cx(
+              "w-33 flex-none rounded-[10px] overflow-hidden cursor-pointer bg-panel border",
+              i === idx ? "border-accent shadow-[0_0_0_3px_var(--accent-soft)]" : "border-border shadow-none"
+            )}
           >
-            <div style={{
-              height: 74, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              gap: 2, padding: "6px 8px", background: look.css,
-            }}>
+            <div className="h-18.5 flex flex-col items-center justify-center gap-0.5 p-[6px_8px]" style={{ background: look.css }}>
               {s.lines.map((l, j) => (
-                <div key={j} style={{ fontSize: 6.5, lineHeight: 1.5, fontWeight: 500, textAlign: "center", color: "#fff", opacity: 0.92 }}>
+                <div key={j} className="text-[6.5px] leading-normal font-medium text-center text-white opacity-[.92]">
                   {l}
                 </div>
               ))}
             </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 7px 6px" }}>
-              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".03em", textTransform: "uppercase", color: i === idx ? "var(--accent)" : "var(--muted)" }}>
+            <div className="flex items-center justify-between p-[5px_7px_6px]">
+              <span className={cx("text-[10px] font-semibold tracking-[.03em] uppercase", i === idx ? "text-accent" : "text-muted")}>
                 {s.label}
               </span>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--faint)" }}>{i + 1}</span>
+              <span className="font-mono text-[9px] text-faint">{i + 1}</span>
             </div>
           </div>
         ))}

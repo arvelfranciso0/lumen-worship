@@ -16,19 +16,17 @@ import { useLumen, type LumenProps } from "./useLumen";
 export function LumenApp(props: LumenProps) {
   const v = useLumen(props);
 
-  const rootStyle: CSSProperties = {
-    height: "100vh", minWidth: 1280, display: "flex", flexDirection: "column",
-    background: "var(--bg)", color: "var(--text)", overflow: "hidden",
+  const accentVars: CSSProperties = {
     ["--accent" as string]: v.accent,
     ["--accent-soft" as string]: v.accent + "26",
   };
 
   return (
-    <div data-theme={v.theme} style={rootStyle}>
+    <div data-theme={v.theme} style={accentVars} className="h-screen min-w-[1280px] flex flex-col bg-bg text-text overflow-hidden">
       <Header v={v} />
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+      <div className="flex-1 flex min-h-0">
         <Sidebar v={v} />
-        <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
+        <main className="flex-1 flex flex-col min-w-0 min-h-0">
           <MainPanel v={v} />
           <SlidesStrip v={v} />
           <Toolbar v={v} />

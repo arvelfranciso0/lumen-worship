@@ -201,7 +201,7 @@
   },
   {
     "code": "Tagalog2001",
-    "language": "English",
+    "language": "Tagalog",
     "name": "Tagalog (Ang Biblia 2001)",
     "license": "© Philippine Bible Society, 2001",
     "link": "https://www.bible.com/bible/2195/GEN.1.ABTAG01",
@@ -209,7 +209,7 @@
   },
   {
     "code": "Tagalog2005",
-    "language": "English",
+    "language": "Tagalog",
     "name": "Tagalog 2005 (Magandang Balita Biblia (2005))",
     "license": "© 2005 Philippine Bible Society",
     "link": "https://www.bible.com/bible/144/DEU.7.MBB05",
@@ -217,7 +217,7 @@
   },
   {
     "code": "Tagalog2012",
-    "language": "English",
+    "language": "Tagalog",
     "name": "Tagalog 2012 (Magandang Balita Biblia)",
     "license": "New Testament © 2012 Philippine Bible Society Old Testament © 2005 Philippine Bible Society",
     "link": "https://www.bible.com/bible/2197/MRK.16.MBBTAG12",
@@ -225,7 +225,7 @@
   },
   {
     "code": "Tagalog2015",
-    "language": "English",
+    "language": "Tagalog",
     "name": "Tagalog (Ang Salita ng Dios)",
     "license": "Ang Salita ng Dios (Tagalog Contemporary Bible) Copyright © 2009, 2011, 2014, 2015 by Biblica, Inc",
     "link": "https://www.bible.com/bible/1264/DEU.7.ASD",
@@ -233,7 +233,7 @@
   },
   {
     "code": "Tagalog",
-    "language": "English",
+    "language": "Tagalog",
     "name": "Tagalog (TLAB) 1905 (Ang Biblia (1905/1982))",
     "license": "Ang Biblia © Philippine Bible Society, 1982",
     "link": "https://www.bible.com/bible/2196/GEN.1.ABTAG",
@@ -241,7 +241,7 @@
   },
   {
     "code": "TagalogRevised2005",
-    "language": "English",
+    "language": "Tagalog",
     "name": "Tagalog 2005 Revised (Magandang Balita Bible (Revised))",
     "license": "© 2005 Philippine Bible Society",
     "link": "https://www.bible.com/bible/399/MRK.16.RTPV05",
@@ -249,7 +249,7 @@
   },
   {
     "code": "TagalogTLBA",
-    "language": "English",
+    "language": "Tagalog",
     "name": "Tagalog TLBA (Ang Biblia)",
     "license": "None",
     "link": "https://www.bible.com/bible/177/MRK.16.TLAB",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { cx } from "./cx";
 import { InteractiveButton, InteractiveInput } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
@@ -47,60 +48,57 @@ export function LineupModal({ v }: { v: UseLumen }) {
   return (
     <div
       onClick={close}
-      style={{ position: "fixed", inset: 0, zIndex: 120, background: "rgba(6,6,8,.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      className="fixed inset-0 z-120 bg-[rgba(6,6,8,.6)] backdrop-blur-[6px] flex items-center justify-center"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ width: 480, maxHeight: "84vh", display: "flex", flexDirection: "column", borderRadius: 18, border: "1px solid var(--border2)", background: "var(--panel)", boxShadow: "var(--shadow)", overflow: "hidden", animation: "fadeUp .18s ease both" }}
+        className="w-120 max-h-[84vh] flex flex-col rounded-[18px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 14px", borderBottom: "1px solid var(--border)" }}>
+        <div className="flex items-center justify-between p-[18px_20px_14px] border-b border-border">
           <div>
-            <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.02em" }}>
+            <div className="text-[16px] font-semibold tracking-[-0.02em]">
               {editingLineup ? "Edit lineup" : "Create lineup"}
             </div>
-            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3 }}>Name it, then pick the songs that belong in it</div>
+            <div className="text-[12.5px] text-muted mt-0.75">Name it, then pick the songs that belong in it</div>
           </div>
           <InteractiveButton
             onClick={close}
-            base={{ width: 32, height: 32, borderRadius: 9, borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--panel2)", color: "var(--muted)", cursor: "pointer" }}
-            hover={{ color: "var(--text)", background: "var(--raise)" }}
+            className="w-8 h-8 rounded-2.25 border border-border bg-panel2 text-muted cursor-pointer hover:text-text hover:bg-raise"
           >
             ✕
           </InteractiveButton>
         </div>
 
-        <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", flex: 1 }}>
+        <div className="p-[18px_20px] flex flex-col gap-3 overflow-y-auto flex-1">
           <input
             value={name}
             onChange={(e) => { setName(e.target.value); setError(""); }}
             placeholder="Lineup name — e.g. Sunday AM"
-            style={{ height: 36, padding: "0 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--panel2)", color: "var(--text)", fontSize: 13, outline: "none" }}
+            className="h-9 px-2.5 rounded-2 border border-border bg-panel2 text-text text-[13px] outline-none"
           />
 
           <InteractiveInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search songs, artists, tags"
-            base={{ height: 34, padding: "0 10px", borderRadius: 8, borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--panel2)", fontSize: 13, outline: "none" }}
-            focusStyle={{ borderColor: "var(--accent)", boxShadow: "0 0 0 3px var(--accent-soft)" }}
+            className="h-8.5 px-2.5 rounded-2 border border-border bg-panel2 text-[13px] outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-soft)]"
           />
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">
               {selectedCount} of {allSongs.length} songs selected
             </div>
             <InteractiveButton
               onClick={() => patch({ uploadOpen: true })}
-              base={{ fontSize: 12, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}
-              hover={{ color: "var(--text)" }}
+              className="text-[12px] text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
             >
               + Upload song
             </InteractiveButton>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, border: "1px solid var(--border)", borderRadius: 12, background: "var(--panel2)", padding: 6, maxHeight: 320, overflowY: "auto" }}>
+          <div className="flex flex-col gap-1 border border-border rounded-xl bg-panel2 p-1.5 max-h-80 overflow-y-auto">
             {filteredSongs.length === 0 && (
-              <div style={{ padding: "20px 10px", textAlign: "center", fontSize: 12.5, color: "var(--muted)" }}>
+              <div className="p-[20px_10px] text-center text-[12.5px] text-muted">
                 No songs match “{query}”.
               </div>
             )}
@@ -110,45 +108,40 @@ export function LineupModal({ v }: { v: UseLumen }) {
                 <button
                   key={s.id}
                   onClick={() => toggleSong(s.id)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "8px 9px", borderRadius: 8,
-                    border: "1px solid " + (on ? "var(--accent)" : "transparent"),
-                    background: on ? "var(--accent-soft)" : "transparent",
-                    color: "var(--text)", cursor: "pointer", textAlign: "left",
-                  }}
+                  className={cx(
+                    "flex items-center gap-2.5 w-full p-[8px_9px] rounded-2 border text-text cursor-pointer text-left",
+                    on ? "border-accent bg-accent-soft" : "border-transparent bg-transparent"
+                  )}
                 >
-                  <span style={{
-                    width: 16, height: 16, borderRadius: 4, flex: "none",
-                    border: "1px solid " + (on ? "var(--accent)" : "var(--border2)"),
-                    background: on ? "var(--accent)" : "transparent",
-                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff",
-                  }}>
+                  <span className={cx(
+                    "w-4 h-4 rounded-1 flex-none flex items-center justify-center text-[11px] text-white border",
+                    on ? "border-accent bg-accent" : "border-border2 bg-transparent"
+                  )}>
                     {on ? "✓" : ""}
                   </span>
-                  <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>
+                  <span className="flex-1 min-w-0 truncate text-[13px]">
                     {s.title}
                   </span>
-                  <span style={{ fontSize: 12, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span className="text-[12px] text-muted truncate">
                     {s.artist}
                   </span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)", flex: "none" }}>{s.key}</span>
+                  <span className="font-mono text-[10px] text-faint flex-none">{s.key}</span>
                 </button>
               );
             })}
           </div>
 
-          {error && <div style={{ fontSize: 12, color: "var(--danger)" }}>{error}</div>}
+          {error && <div className="text-[12px] text-danger">{error}</div>}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, padding: "14px 20px", borderTop: "1px solid var(--border)", background: "var(--panel2)" }}>
+        <div className="flex justify-end gap-2.25 p-[14px_20px] border-t border-border bg-panel2">
           <InteractiveButton
             onClick={close}
-            base={{ height: 36, padding: "0 14px", borderRadius: 9, borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--panel)", fontSize: 13, color: "var(--muted)", cursor: "pointer" }}
-            hover={{ color: "var(--text)" }}
+            className="h-9 px-3.5 rounded-2.25 border border-border bg-panel text-[13px] text-muted cursor-pointer hover:text-text"
           >
             Cancel
           </InteractiveButton>
-          <button onClick={submit} style={{ height: 36, padding: "0 16px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <button onClick={submit} className="h-9 px-4 rounded-2.25 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer">
             {editingLineup ? "Save changes" : "Create lineup"}
           </button>
         </div>

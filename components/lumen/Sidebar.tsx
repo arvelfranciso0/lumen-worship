@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { CHIPS, SONGS, SORTS } from "./data";
+import { cx } from "./cx";
 import { InteractiveButton, InteractiveInput } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
 const RECENT = SONGS.slice(0, 3);
-const BIBLE_LANGUAGES = ["English", "Cebuano"] as const;
+const BIBLE_LANGUAGES = ["English", "Cebuano", "Tagalog"] as const;
 
 export function Sidebar({ v }: { v: UseLumen }) {
   const {
@@ -31,45 +32,38 @@ export function Sidebar({ v }: { v: UseLumen }) {
   const showRecent = state.chip === "All" && !state.query;
 
   return (
-    <aside style={{
-      width: 328, flex: "none", borderRight: "1px solid var(--border)", background: "var(--panel)",
-      display: "flex", flexDirection: "column", minHeight: 0,
-    }}>
-      <div style={{ padding: "14px 14px 10px", display: "flex", flexDirection: "column", gap: 10, borderBottom: "1px solid var(--border)" }}>
-        <div style={{ display: "flex", padding: 3, gap: 3, borderRadius: 10, background: "var(--panel2)", border: "1px solid var(--border)" }}>
-          <button onClick={() => patch({ mode: "songs", idx: 0, black: false, blank: false })} style={tabStyle(state.mode === "songs")}>Songs</button>
-          <button onClick={() => patch({ mode: "bible", idx: 0, black: false, blank: false })} style={tabStyle(state.mode === "bible")}>Bible</button>
-          <button onClick={() => patch({ mode: "lineups", idx: 0, black: false, blank: false })} style={tabStyle(lineupsMode)}>Lineups</button>
+    <aside className="w-82 flex-none border-r border-border bg-panel flex flex-col min-h-0">
+      <div className="p-[14px_14px_10px] flex flex-col gap-2.5 border-b border-border">
+        <div className="flex p-0.75 gap-0.75 rounded-[10px] bg-panel2 border border-border">
+          <button onClick={() => patch({ mode: "songs", idx: 0, black: false, blank: false })} className={tabStyle(state.mode === "songs")}>Songs</button>
+          <button onClick={() => patch({ mode: "bible", idx: 0, black: false, blank: false })} className={tabStyle(state.mode === "bible")}>Bible</button>
+          <button onClick={() => patch({ mode: "lineups", idx: 0, black: false, blank: false })} className={tabStyle(lineupsMode)}>Lineups</button>
         </div>
 
         {!lineupsMode && (
         <>
-        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-          <span style={{ position: "absolute", left: 11, fontSize: 13, color: "var(--faint)" }}>⌕</span>
+        <div className="relative flex items-center">
+          <span className="absolute left-2.75 text-[13px] text-faint">⌕</span>
           <InteractiveInput
             value={state.query}
             onChange={(e) => patch({ query: e.target.value })}
             placeholder={bible ? "Go to reference — e.g. John 3:16" : "Search songs, lyrics, tags"}
-            base={{ width: "100%", height: 36, padding: "0 44px 0 28px", borderRadius: 10, borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--panel2)", fontSize: 13, outline: "none" }}
-            focusStyle={{ borderColor: "var(--accent)", boxShadow: "0 0 0 3px var(--accent-soft)" }}
+            className="w-full h-9 p-[0_44px_0_28px] rounded-[10px] border border-border bg-panel2 text-[13px] outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-soft)]"
           />
-          <span style={{
-            position: "absolute", right: 10, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)",
-            border: "1px solid var(--border)", borderRadius: 5, padding: "2px 5px",
-          }}>⌘K</span>
+          <span className="absolute right-2.5 font-mono text-[10px] text-faint border border-border rounded-[5px] p-[2px_5px]">⌘K</span>
         </div>
 
         {bible && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          <div className="flex flex-wrap gap-1.5">
             {BIBLE_LANGUAGES.map((lang) => (
-              <button key={lang} onClick={() => setTransLang(lang)} style={chipBase(transLang === lang)}>
+              <button key={lang} onClick={() => setTransLang(lang)} className={chipBase(transLang === lang)}>
                 {lang}
               </button>
             ))}
           </div>
         )}
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div className="flex flex-wrap gap-1.5">
           {bible
             ? bibleManifest
                 .filter((m) => m.language === transLang)
@@ -77,37 +71,35 @@ export function Sidebar({ v }: { v: UseLumen }) {
                   <button
                     key={m.code}
                     onClick={() => patch({ trans: m.code })}
-                    style={chipBase(state.trans === m.code)}
+                    className={chipBase(state.trans === m.code)}
                     title={m.name}
                   >
                     {shortTransLabel(m.code)}
                   </button>
                 ))
             : CHIPS.map((c) => (
-                <button key={c} onClick={() => patch({ chip: c })} style={chipBase(state.chip === c)}>
+                <button key={c} onClick={() => patch({ chip: c })} className={chipBase(state.chip === c)}>
                   {c}
                 </button>
               ))}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 11, color: "var(--faint)", fontWeight: 500, letterSpacing: ".04em", textTransform: "uppercase" }}>
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] text-faint font-medium tracking-[.04em] uppercase">
             {resultCount}
           </div>
           {!bible && (
             <InteractiveButton
               onClick={() => patch((s) => ({ sort: SORTS[(SORTS.indexOf(s.sort) + 1) % SORTS.length] }))}
-              base={{ fontSize: 12, color: "var(--muted)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px", display: "flex", alignItems: "center", gap: 5 }}
-              hover={{ color: "var(--text)" }}
+              className="text-[12px] text-muted border-none cursor-pointer px-1 py-0.5 flex items-center gap-1.25 hover:text-text"
             >
-              Sort: {state.sort} <span style={{ color: "var(--faint)" }}>⇅</span>
+              Sort: {state.sort} <span className="text-faint">⇅</span>
             </InteractiveButton>
           )}
           {bible && (
             <InteractiveButton
               onClick={() => patch({ idx: 0, black: false, blank: false })}
-              base={{ fontSize: 12, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}
-              hover={{ color: "var(--text)" }}
+              className="text-[12px] text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
             >
               Queue whole chapter
             </InteractiveButton>
@@ -119,39 +111,34 @@ export function Sidebar({ v }: { v: UseLumen }) {
 
       {bible && (
         <>
-          <div style={{ flex: "none", display: "flex", borderBottom: "1px solid var(--border)", height: 172 }}>
-            <div style={{ width: 118, flex: "none", borderRight: "1px solid var(--border)", overflowY: "auto", padding: 6 }}>
+          <div className="flex-none flex border-b border-border h-43">
+            <div className="w-29.5 flex-none border-r border-border overflow-y-auto p-1.5">
               {bibleBooks.map((b) => (
                 <button
                   key={b.number}
                   onClick={() => patch({ book: b.name, chapter: 1, idx: 0 })}
-                  style={{
-                    display: "block", width: "100%", textAlign: "left", padding: "6px 8px", borderRadius: 7,
-                    border: "none", cursor: "pointer", fontSize: 12,
-                    background: b.name === state.book ? "var(--accent-soft)" : "transparent",
-                    color: b.name === state.book ? "var(--text)" : "var(--muted)",
-                    fontWeight: b.name === state.book ? 600 : 400,
-                  }}
+                  className={cx(
+                    "block w-full text-left p-[6px_8px] rounded-[7px] border-none cursor-pointer text-[12px]",
+                    b.name === state.book ? "bg-accent-soft text-text font-semibold" : "bg-transparent text-muted font-normal"
+                  )}
                 >
                   {b.name}
                 </button>
               ))}
             </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
-              <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)", padding: "2px 2px 7px" }}>
+            <div className="flex-1 overflow-y-auto p-2">
+              <div className="text-[10px] font-semibold tracking-[.06em] uppercase text-faint p-[2px_2px_7px]">
                 Chapter
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 5 }}>
+              <div className="grid grid-cols-5 gap-1.25">
                 {Array.from({ length: currentBook?.chapters.length || 1 }, (_, i) => i + 1).map((n) => (
                   <button
                     key={n}
                     onClick={() => patch({ chapter: n, idx: 0 })}
-                    style={{
-                      height: 26, borderRadius: 7, cursor: "pointer", fontSize: 11, fontFamily: "var(--font-mono)",
-                      border: "1px solid " + (n === state.chapter ? "var(--accent)" : "var(--border)"),
-                      background: n === state.chapter ? "var(--accent-soft)" : "var(--panel2)",
-                      color: n === state.chapter ? "var(--text)" : "var(--muted)",
-                    }}
+                    className={cx(
+                      "h-6.5 rounded-[7px] cursor-pointer text-[11px] font-mono border",
+                      n === state.chapter ? "border-accent bg-accent-soft text-text" : "border-border bg-panel2 text-muted"
+                    )}
                   >
                     {n}
                   </button>
@@ -160,35 +147,34 @@ export function Sidebar({ v }: { v: UseLumen }) {
             </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px 20px" }}>
-            <div style={{ padding: "4px 6px 9px" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em" }}>{ref}</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>
+          <div className="flex-1 overflow-y-auto p-[10px_10px_20px]">
+            <div className="p-[4px_6px_9px]">
+              <div className="flex items-baseline gap-2">
+                <div className="text-[13.5px] font-semibold tracking-[-0.01em]">{ref}</div>
+                <div className="font-mono text-[10px] text-faint">
                   {currentTransMeta?.name || state.trans}
                 </div>
               </div>
               {currentTransMeta && (
-                <div style={{ fontSize: 10, color: "var(--faint)", marginTop: 3, lineHeight: 1.4 }}>
+                <div className="text-[10px] text-faint mt-0.75 leading-[1.4]">
                   {currentTransMeta.license}
                 </div>
               )}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div className="flex flex-col gap-1">
               {passage.map((t, i) => (
                 <div
                   key={i}
                   onClick={() => patch({ idx: i, black: false, blank: false })}
-                  style={{
-                    display: "flex", gap: 9, padding: "8px 9px", borderRadius: 9, cursor: "pointer",
-                    border: "1px solid " + (i === idx ? "var(--accent)" : "transparent"),
-                    background: i === idx ? "var(--accent-soft)" : "var(--panel2)",
-                  }}
+                  className={cx(
+                    "flex gap-2.25 p-[8px_9px] rounded-2.25 cursor-pointer border",
+                    i === idx ? "border-accent bg-accent-soft" : "border-transparent bg-panel2"
+                  )}
                 >
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, paddingTop: 3, color: i === idx ? "var(--accent)" : "var(--faint)" }}>
+                  <span className={cx("font-mono text-[10px] pt-0.75", i === idx ? "text-accent" : "text-faint")}>
                     {vnum(i)}
                   </span>
-                  <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.5 }}>{t}</span>
+                  <span className="flex-1 text-[12.5px] leading-normal">{t}</span>
                 </div>
               ))}
             </div>
@@ -197,68 +183,64 @@ export function Sidebar({ v }: { v: UseLumen }) {
       )}
 
       {state.mode === "songs" && (
-        <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px 20px" }}>
+        <div className="flex-1 overflow-y-auto p-[10px_10px_20px]">
           {showRecent && (
             <>
-              <div style={{ padding: "8px 6px 6px", fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>
+              <div className="p-[8px_6px_6px] text-[11px] font-semibold tracking-[.06em] uppercase text-faint">
                 Recently used
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 10 }}>
+              <div className="flex flex-col gap-0.5 mb-2.5">
                 {RECENT.map((s) => (
                   <button
                     key={s.id}
                     onClick={() => patch({ songId: s.id, idx: 0 })}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "7px 8px", borderRadius: 8,
-                      border: "1px solid transparent", background: s.id === state.songId ? "var(--raise)" : "transparent",
-                      color: "var(--text)", cursor: "pointer",
-                    }}
+                    className={cx(
+                      "flex items-center gap-2.25 w-full p-[7px_8px] rounded-2 border border-transparent text-text cursor-pointer",
+                      s.id === state.songId ? "bg-raise" : "bg-transparent"
+                    )}
                   >
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)", width: 34, textAlign: "left" }}>{s.when}</span>
-                    <span style={{ flex: 1, textAlign: "left", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>{s.key}</span>
+                    <span className="font-mono text-[10px] text-faint w-8.5 text-left">{s.when}</span>
+                    <span className="flex-1 text-left text-[13px] truncate">{s.title}</span>
+                    <span className="font-mono text-[10px] text-faint">{s.key}</span>
                   </button>
                 ))}
               </div>
             </>
           )}
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 6px 6px" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>
+          <div className="flex items-center justify-between p-[8px_6px_6px]">
+            <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">
               Library
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
+            <div className="flex gap-2.5">
               <InteractiveButton
                 onClick={() => patch({ lineupModalOpen: true, editingLineupId: null })}
-                base={{ fontSize: 11.5, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}
-                hover={{ color: "var(--text)" }}
+                className="text-[11.5px] font-semibold text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
               >
                 + New lineup
               </InteractiveButton>
               <InteractiveButton
                 onClick={() => patch({ uploadOpen: true })}
-                base={{ fontSize: 11.5, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}
-                hover={{ color: "var(--text)" }}
+                className="text-[11.5px] font-semibold text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
               >
                 + Upload song
               </InteractiveButton>
             </div>
           </div>
           {list.length === 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textAlign: "center", padding: "40px 18px", color: "var(--muted)" }}>
-              <span style={{ fontSize: 22, color: "var(--faint)" }}>⌕</span>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>No songs found</div>
-              <div style={{ fontSize: 12, lineHeight: 1.5 }}>Try a different search term or filter.</div>
+            <div className="flex flex-col items-center gap-2 text-center p-[40px_18px] text-muted">
+              <span className="text-[22px] text-faint">⌕</span>
+              <div className="text-[13px] font-semibold text-text">No songs found</div>
+              <div className="text-[12px] leading-normal">Try a different search term or filter.</div>
               <InteractiveButton
                 onClick={() => patch({ query: "", chip: "All" })}
-                base={{ marginTop: 4, height: 30, padding: "0 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--panel2)", fontSize: 12, color: "var(--muted)", cursor: "pointer" }}
-                hover={{ color: "var(--text)", background: "var(--raise)" }}
+                className="mt-1 h-7.5 px-3 rounded-2 border border-border bg-panel2 text-[12px] text-muted cursor-pointer hover:text-text hover:bg-raise"
               >
                 Clear filters
               </InteractiveButton>
             </div>
           ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="flex flex-col gap-1.5">
             {list.map((s) => {
               const on = s.id === state.songId;
               const fav = !!state.favs[s.id];
@@ -266,37 +248,35 @@ export function Sidebar({ v }: { v: UseLumen }) {
                 <div
                   key={s.id}
                   onClick={() => patch({ songId: s.id, idx: 0, black: false, blank: false })}
-                  style={{
-                    padding: "11px 12px 10px", borderRadius: 12, cursor: "pointer",
-                    border: "1px solid " + (on ? "var(--accent)" : "var(--border)"),
-                    background: on ? "var(--accent-soft)" : "var(--panel2)",
-                    boxShadow: on ? "0 0 0 3px var(--accent-soft)" : "none",
-                  }}
+                  className={cx(
+                    "p-[11px_12px_10px] rounded-xl cursor-pointer border",
+                    on ? "border-accent bg-accent-soft shadow-[0_0_0_3px_var(--accent-soft)]" : "border-border bg-panel2 shadow-none"
+                  )}
                 >
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div className="flex items-start gap-2.5">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13.5px] font-semibold tracking-[-0.01em] truncate">
                         {s.title}
                       </div>
-                      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <div className="text-[12px] text-muted mt-0.5 truncate">
                         {s.artist}
                       </div>
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); toggleFavorite(s.id); }}
-                      style={{ border: "none", background: "none", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 2, color: fav ? "var(--warn)" : "var(--faint)" }}
+                      className={cx("border-none cursor-pointer text-[14px] leading-none p-0.5", fav ? "text-warn" : "text-faint")}
                     >
                       ★
                     </button>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9 }}>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text)", background: "var(--raise)", border: "1px solid var(--border)", padding: "2px 6px", borderRadius: 5 }}>
+                  <div className="flex items-center gap-1.5 mt-2.25">
+                    <span className="font-mono text-[10px] text-text bg-raise border border-border p-[2px_6px] rounded-[5px]">
                       {s.key}
                     </span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>{s.bpm}</span>
-                    <div style={{ flex: 1 }} />
+                    <span className="font-mono text-[10px] text-faint">{s.bpm}</span>
+                    <div className="flex-1" />
                     {s.tags.slice(0, 2).map((tag) => (
-                      <span key={tag} style={{ fontSize: 10.5, color: "var(--muted)", background: "var(--panel2)", border: "1px solid var(--border)", padding: "2px 7px", borderRadius: 20 }}>
+                      <span key={tag} className="text-[10.5px] text-muted bg-panel2 border border-border p-[2px_7px] rounded-5">
                         {tag}
                       </span>
                     ))}
@@ -310,53 +290,49 @@ export function Sidebar({ v }: { v: UseLumen }) {
       )}
 
       {lineupsMode && !viewingLineup && (
-        <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px 20px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 6px 6px" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>
+        <div className="flex-1 overflow-y-auto p-[10px_10px_20px]">
+          <div className="flex items-center justify-between p-[8px_6px_6px]">
+            <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">
               Lineups
             </div>
             <InteractiveButton
               onClick={() => patch({ lineupModalOpen: true, editingLineupId: null })}
-              base={{ fontSize: 11.5, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}
-              hover={{ color: "var(--text)" }}
+              className="text-[11.5px] font-semibold text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
             >
               + New lineup
             </InteractiveButton>
           </div>
 
           {state.lineups.length === 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textAlign: "center", padding: "40px 18px", color: "var(--muted)" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>No lineups yet</div>
-              <div style={{ fontSize: 12, lineHeight: 1.5 }}>Create one to group songs for a service or event.</div>
+            <div className="flex flex-col items-center gap-2 text-center p-[40px_18px] text-muted">
+              <div className="text-[13px] font-semibold text-text">No lineups yet</div>
+              <div className="text-[12px] leading-normal">Create one to group songs for a service or event.</div>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div className="flex flex-col gap-1.5">
               {state.lineups.map((lu) => (
                 <div
                   key={lu.id}
                   onClick={() => setViewingLineupId(lu.id)}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 12, cursor: "pointer",
-                    border: "1px solid var(--border)", background: "var(--panel2)",
-                  }}
+                  className="flex items-center gap-2.5 p-[11px_12px] rounded-xl cursor-pointer border border-border bg-panel2"
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13.5px] font-semibold tracking-[-0.01em] truncate">
                       {lu.name}
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                    <div className="text-[12px] text-muted mt-0.5">
                       {lu.songIds.length === 1 ? "1 song" : lu.songIds.length + " songs"}
                     </div>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); patch({ lineupModalOpen: true, editingLineupId: lu.id }); }}
-                    style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12.5, color: "var(--muted)", padding: 4 }}
+                    className="border-none cursor-pointer text-[12.5px] text-muted p-1"
                   >
                     Edit
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); deleteLineup(lu.id); }}
-                    style={{ border: "none", background: "none", cursor: "pointer", fontSize: 12.5, color: "var(--faint)", padding: 4 }}
+                    className="border-none cursor-pointer text-[12.5px] text-faint p-1"
                   >
                     ✕
                   </button>
@@ -368,70 +344,66 @@ export function Sidebar({ v }: { v: UseLumen }) {
       )}
 
       {lineupsMode && viewingLineup && (
-        <div style={{ flex: 1, overflowY: "auto", padding: "10px 10px 20px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px 12px" }}>
+        <div className="flex-1 overflow-y-auto p-[10px_10px_20px]">
+          <div className="flex items-center gap-2 p-[4px_6px_12px]">
             <button
               onClick={() => setViewingLineupId(null)}
-              style={{ border: "none", background: "none", cursor: "pointer", fontSize: 16, color: "var(--muted)", padding: 2, lineHeight: 1 }}
+              className="border-none cursor-pointer text-[16px] text-muted p-0.5 leading-none"
               title="Back to lineups"
             >
               ←
             </button>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-semibold tracking-[-0.01em] truncate">
                 {viewingLineup.name}
               </div>
-              <div style={{ fontSize: 11.5, color: "var(--faint)", marginTop: 2 }}>
+              <div className="text-[11.5px] text-faint mt-0.5">
                 {viewingLineup.songIds.length === 1 ? "1 song" : viewingLineup.songIds.length + " songs"}
               </div>
             </div>
             <InteractiveButton
               onClick={() => patch({ lineupModalOpen: true, editingLineupId: viewingLineup.id })}
-              base={{ fontSize: 12, color: "var(--muted)", background: "none", border: "1px solid var(--border)", borderRadius: 7, padding: "5px 9px", cursor: "pointer" }}
-              hover={{ color: "var(--text)", background: "var(--raise)" }}
+              className="text-[12px] text-muted border border-border rounded-[7px] p-[5px_9px] cursor-pointer hover:text-text hover:bg-raise"
             >
               Edit
             </InteractiveButton>
             <InteractiveButton
               onClick={() => { deleteLineup(viewingLineup.id); setViewingLineupId(null); }}
-              base={{ fontSize: 12, color: "var(--danger)", background: "none", border: "1px solid var(--border)", borderRadius: 7, padding: "5px 9px", cursor: "pointer" }}
-              hover={{ color: "#fff", background: "var(--danger)" }}
+              className="text-[12px] text-danger border border-border rounded-[7px] p-[5px_9px] cursor-pointer hover:text-white hover:bg-danger"
             >
               Delete
             </InteractiveButton>
           </div>
 
           {lineupSongs.length === 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textAlign: "center", padding: "40px 18px", color: "var(--muted)" }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>No songs in this lineup</div>
-              <div style={{ fontSize: 12, lineHeight: 1.5 }}>Click Edit to add some.</div>
+            <div className="flex flex-col items-center gap-2 text-center p-[40px_18px] text-muted">
+              <div className="text-[13px] font-semibold text-text">No songs in this lineup</div>
+              <div className="text-[12px] leading-normal">Click Edit to add some.</div>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div className="flex flex-col gap-1.5">
               {lineupSongs.map((s) => {
                 const on = s.id === state.songId;
                 return (
                   <div
                     key={s.id}
                     onClick={() => patch({ songId: s.id, idx: 0, black: false, blank: false })}
-                    style={{
-                      padding: "11px 12px 10px", borderRadius: 12, cursor: "pointer",
-                      border: "1px solid " + (on ? "var(--accent)" : "var(--border)"),
-                      background: on ? "var(--accent-soft)" : "var(--panel2)",
-                      boxShadow: on ? "0 0 0 3px var(--accent-soft)" : "none",
-                    }}
+                    className={cx(
+                      "p-[11px_12px_10px] rounded-xl cursor-pointer border",
+                      on ? "border-accent bg-accent-soft shadow-[0_0_0_3px_var(--accent-soft)]" : "border-border bg-panel2 shadow-none"
+                    )}
                   >
-                    <div style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div className="text-[13.5px] font-semibold tracking-[-0.01em] truncate">
                       {s.title}
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <div className="text-[12px] text-muted mt-0.5 truncate">
                       {s.artist}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9 }}>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text)", background: "var(--raise)", border: "1px solid var(--border)", padding: "2px 6px", borderRadius: 5 }}>
+                    <div className="flex items-center gap-1.5 mt-2.25">
+                      <span className="font-mono text-[10px] text-text bg-raise border border-border p-[2px_6px] rounded-[5px]">
                         {s.key}
                       </span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>{s.bpm}</span>
+                      <span className="font-mono text-[10px] text-faint">{s.bpm}</span>
                     </div>
                   </div>
                 );

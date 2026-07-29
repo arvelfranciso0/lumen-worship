@@ -1,104 +1,81 @@
 "use client";
 
+import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
 export function Header({ v }: { v: UseLumen }) {
   const { state, patch, theme, hidden, setSongs, activateLineup } = v;
   const themeLabel = theme === "dark" ? "☾ Dark" : "☀ Light";
-  const outputDot = hidden ? "var(--warn)" : "var(--ok)";
   const setCountLabel = setSongs.length === 1 ? "1 song" : setSongs.length + " songs";
 
   return (
-    <header style={{
-      height: 56, flex: "none", display: "flex", alignItems: "center", gap: 20,
-      padding: "0 16px 0 18px", borderBottom: "1px solid var(--border)", background: "var(--panel)",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, width: 294, flex: "none" }}>
-        <div style={{
-          width: 26, height: 26, borderRadius: 8, background: "var(--accent)",
-          boxShadow: "0 0 0 1px rgba(255,255,255,.08) inset",
-        }} />
-        <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>Lumen</div>
-        <div style={{
-          fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)",
-          border: "1px solid var(--border)", padding: "2px 5px", borderRadius: 5,
-        }}>v2.4</div>
+    <header className="h-14 flex-none flex items-center gap-5 p-[0_16px_0_18px] border-b border-border bg-panel">
+      <div className="flex items-center gap-2.5 w-73.5 flex-none">
+        <div className="w-6.5 h-6.5 rounded-2 bg-accent shadow-[0_0_0_1px_rgba(255,255,255,.08)_inset]" />
+        <div className="text-[15px] font-semibold tracking-[-0.01em]">Lumen</div>
+        <div className="font-mono text-[10px] text-faint border border-border p-[2px_5px] rounded-[5px]">v2.4</div>
       </div>
 
-      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--muted)" }}>
-        <span style={{
-          width: 7, height: 7, borderRadius: "50%", background: "var(--ok)",
-          boxShadow: "0 0 0 3px rgba(52,211,153,.16)",
-        }} />
-        <span style={{ color: "var(--text)", fontWeight: 500 }}>Sunday Gathering</span>
-        <span style={{ color: "var(--faint)" }}>·</span>
+      <div className="relative flex items-center gap-2 text-[13px] text-muted">
+        <span className="w-1.75 h-1.75 rounded-full bg-ok shadow-[0_0_0_3px_rgba(52,211,153,.16)]" />
+        <span className="text-text font-medium">Sunday Gathering</span>
+        <span className="text-faint">·</span>
         <InteractiveButton
           onClick={() => patch((s) => ({ setPanelOpen: !s.setPanelOpen }))}
-          base={{ background: "none", border: "none", padding: "2px 4px", margin: "-2px -4px", cursor: "pointer", fontSize: 13, color: "var(--muted)", borderRadius: 6 }}
-          hover={{ color: "var(--text)", background: "var(--panel2)" }}
+          className="border-none px-1 py-0.5 -my-0.5 -mx-1 cursor-pointer text-[13px] text-muted rounded-1.5 hover:text-text hover:bg-panel2"
         >
           {state.setName} — {setCountLabel}
         </InteractiveButton>
-        <span style={{ color: "var(--faint)" }}>·</span>
-        <span style={{ fontFamily: "var(--font-mono)" }}>10:00 AM</span>
+        <span className="text-faint">·</span>
+        <span className="font-mono">10:00 AM</span>
 
         {state.setPanelOpen && (
           <>
-            <div onClick={() => patch({ setPanelOpen: false })} style={{ position: "fixed", inset: 0, zIndex: 90 }} />
+            <div onClick={() => patch({ setPanelOpen: false })} className="fixed inset-0 z-90" />
             <div
               onClick={(e) => e.stopPropagation()}
-              style={{
-                position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 100, width: 300,
-                borderRadius: 12, border: "1px solid var(--border2)", background: "var(--panel)",
-                boxShadow: "var(--shadow)", overflow: "hidden",
-              }}
+              className="absolute top-[calc(100%+8px)] left-0 z-100 w-75 rounded-xl border border-border2 bg-panel shadow-app overflow-hidden"
             >
-              <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>
+              <div className="p-[10px_14px] border-b border-border text-[11px] font-semibold tracking-[.06em] uppercase text-faint">
                 {state.setName} · {setCountLabel}
               </div>
               {setSongs.length === 0 ? (
-                <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--muted)" }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 500, color: "var(--text)" }}>No songs in this set yet</div>
-                  <div style={{ fontSize: 11.5, marginTop: 4, lineHeight: 1.5 }}>
+                <div className="p-[24px_16px] text-center text-muted">
+                  <div className="text-[12.5px] font-medium text-text">No songs in this set yet</div>
+                  <div className="text-[11.5px] mt-1 leading-normal">
                     Open a song and click “Add to set” to add it here.
                   </div>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", padding: 6, maxHeight: 280, overflowY: "auto" }}>
+                <div className="flex flex-col p-1.5 max-h-70 overflow-y-auto">
                   {setSongs.map((s, i) => (
                     <button
                       key={s.id}
                       onClick={() => { patch({ mode: "songs", songId: s.id, idx: 0, black: false, blank: false, setPanelOpen: false }); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "8px 8px", borderRadius: 8,
-                        border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", textAlign: "left",
-                      }}
+                      className="flex items-center gap-2.25 w-full p-2 rounded-2 border-none bg-transparent text-text cursor-pointer text-left"
                     >
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)", width: 16 }}>{i + 1}</span>
-                      <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.title}</span>
-                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>{s.key}</span>
+                      <span className="font-mono text-[10px] text-faint w-4">{i + 1}</span>
+                      <span className="flex-1 text-[13px] truncate">{s.title}</span>
+                      <span className="font-mono text-[10px] text-faint">{s.key}</span>
                     </button>
                   ))}
                 </div>
               )}
               {state.lineups.length > 0 && (
                 <>
-                  <div style={{ padding: "8px 14px", borderTop: "1px solid var(--border)", fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>
+                  <div className="p-[8px_14px] border-t border-border text-[11px] font-semibold tracking-[.06em] uppercase text-faint">
                     Saved lineups
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", padding: "0 6px 6px", maxHeight: 160, overflowY: "auto" }}>
+                  <div className="flex flex-col p-[0_6px_6px] max-h-40 overflow-y-auto">
                     {state.lineups.map((lu) => (
                       <button
                         key={lu.id}
                         onClick={() => activateLineup(lu.id)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "8px 8px", borderRadius: 8,
-                          border: "none", background: "transparent", color: "var(--text)", cursor: "pointer", textAlign: "left",
-                        }}
+                        className="flex items-center gap-2.25 w-full p-2 rounded-2 border-none bg-transparent text-text cursor-pointer text-left"
                       >
-                        <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lu.name}</span>
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>
+                        <span className="flex-1 text-[13px] truncate">{lu.name}</span>
+                        <span className="font-mono text-[10px] text-faint">
                           {lu.songIds.length === 1 ? "1 song" : lu.songIds.length + " songs"}
                         </span>
                       </button>
@@ -111,45 +88,34 @@ export function Header({ v }: { v: UseLumen }) {
         )}
       </div>
 
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, padding: "6px 10px",
-          border: "1px solid var(--border)", borderRadius: 9, background: "var(--panel2)",
-          fontSize: 12, color: "var(--muted)",
-        }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: outputDot }} />
-          Output · Display 2 <span style={{ fontFamily: "var(--font-mono)", color: "var(--faint)" }}>1920×1080</span>
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 p-[6px_10px] border border-border rounded-2.25 bg-panel2 text-[12px] text-muted">
+          <span className={cx("w-1.5 h-1.5 rounded-full", hidden ? "bg-warn" : "bg-ok")} />
+          Output · Display 2 <span className="font-mono text-faint">1920×1080</span>
         </div>
 
         <InteractiveButton
           onClick={() => patch({ theme: theme === "dark" ? "light" : "dark" })}
-          base={{ height: 34, padding: "0 12px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--panel2)", fontSize: 13, color: "var(--muted)", cursor: "pointer" }}
-          hover={{ background: "var(--raise)", color: "var(--text)" }}
+          className="h-8.5 px-3 rounded-2.25 border border-border bg-panel2 text-[13px] text-muted cursor-pointer hover:bg-raise hover:text-text"
         >
           {themeLabel}
         </InteractiveButton>
 
         <InteractiveButton
           onClick={() => patch({ settingsOpen: true })}
-          base={{ height: 34, padding: "0 12px", borderRadius: 9, border: "1px solid var(--border)", background: "var(--panel2)", fontSize: 13, color: "var(--muted)", cursor: "pointer" }}
-          hover={{ background: "var(--raise)", color: "var(--text)" }}
+          className="h-8.5 px-3 rounded-2.25 border border-border bg-panel2 text-[13px] text-muted cursor-pointer hover:bg-raise hover:text-text"
         >
           Settings
         </InteractiveButton>
 
         <InteractiveButton
           onClick={() => patch({ presenting: true })}
-          base={{
-            height: 34, padding: "0 16px", borderRadius: 9, border: "none", background: "var(--accent)",
-            color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "var(--shadow-sm)",
-            display: "flex", alignItems: "center", gap: 8,
-          }}
-          hover={{ filter: "brightness(1.1)" }}
+          className="h-8.5 px-4 rounded-2.25 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer shadow-app-sm flex items-center gap-2 hover:brightness-110"
         >
           Present
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, opacity: 0.7 }}>F5</span>
+          <span className="font-mono text-[10px] opacity-70">F5</span>
         </InteractiveButton>
       </div>
     </header>

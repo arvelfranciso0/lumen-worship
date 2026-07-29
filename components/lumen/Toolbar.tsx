@@ -1,6 +1,7 @@
 "use client";
 
 import { LOOKS } from "./data";
+import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
@@ -12,37 +13,33 @@ export function Toolbar({ v }: { v: UseLumen }) {
   const fontPct = Math.round(state.scale * 100) + "%";
 
   return (
-    <div style={{ flex: "none", height: 84, display: "flex", alignItems: "center", gap: 12, padding: "0 22px", borderTop: "1px solid var(--border)", background: "var(--panel)", overflowX: "auto" }}>
+    <div className="flex-none h-21 flex items-center gap-3 px-5.5 border-t border-border bg-panel overflow-x-auto">
       <InteractiveButton
         onClick={() => go(-1)}
-        base={{ height: 52, padding: "0 22px", borderRadius: 12, borderWidth: 1, borderStyle: "solid", borderColor: "var(--border2)", background: "var(--raise)", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
-        hover={{ borderColor: "var(--accent)", background: "var(--panel2)" }}
-        active={{ transform: "translateY(1px)" }}
+        className="h-13 px-5.5 rounded-3 border border-border2 bg-raise text-[14px] font-semibold cursor-pointer flex items-center gap-2.5 hover:border-accent hover:bg-panel2 active:translate-y-px"
       >
         ← Previous
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>←</span>
+        <span className="font-mono text-[10px] text-faint">←</span>
       </InteractiveButton>
 
       <InteractiveButton
         onClick={() => go(1)}
-        base={{ height: 52, padding: "0 26px", borderRadius: 12, border: "none", background: "var(--accent)", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 10, boxShadow: "var(--shadow-sm)" }}
-        hover={{ filter: "brightness(1.1)" }}
-        active={{ transform: "translateY(1px)" }}
+        className="h-13 px-6.5 rounded-3 border-none bg-accent text-white text-[14px] font-semibold cursor-pointer flex items-center gap-2.5 shadow-app-sm hover:brightness-110 active:translate-y-px"
       >
         Next →
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, opacity: 0.7 }}>Space</span>
+        <span className="font-mono text-[10px] opacity-70">Space</span>
       </InteractiveButton>
 
-      <div style={{ width: 1, height: 36, background: "var(--border)", margin: "0 4px" }} />
+      <div className="w-px h-9 bg-border mx-1" />
 
-      <button onClick={() => patch((s) => ({ blank: !s.blank, black: false }))} style={toolBtn(state.blank, "var(--warn)")}>Blank</button>
-      <button onClick={() => patch((s) => ({ black: !s.black, blank: false }))} style={toolBtn(state.black, "#000")}>Black</button>
+      <button onClick={() => patch((s) => ({ blank: !s.blank, black: false }))} className={toolBtn(state.blank, "border-warn bg-warn text-[#0a0a0c]")}>Blank</button>
+      <button onClick={() => patch((s) => ({ black: !s.black, blank: false }))} className={toolBtn(state.black, "border-black bg-black text-white")}>Black</button>
 
-      <div style={{ width: 1, height: 36, background: "var(--border)", margin: "0 4px" }} />
+      <div className="w-px h-9 bg-border mx-1" />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)" }}>Look</span>
-        <div style={{ display: "flex", gap: 6 }}>
+      <div className="flex items-center gap-1.75">
+        <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Look</span>
+        <div className="flex gap-1.5">
           {LOOKS.map((lk) => {
             const on = lk.id === state.look;
             return (
@@ -50,15 +47,12 @@ export function Toolbar({ v }: { v: UseLumen }) {
                 key={lk.id}
                 onClick={() => patch({ look: lk.id })}
                 title={lk.name}
-                style={{
-                  height: 36, padding: "0 11px", borderRadius: 9, fontSize: 12, cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 7,
-                  border: "1px solid " + (on ? "var(--accent)" : "var(--border)"),
-                  background: on ? "var(--accent-soft)" : "var(--panel2)",
-                  color: on ? "var(--text)" : "var(--muted)", fontWeight: on ? 600 : 400,
-                }}
+                className={cx(
+                  "h-9 px-2.75 rounded-2.25 text-[12px] cursor-pointer flex items-center gap-1.75 border",
+                  on ? "border-accent bg-accent-soft text-text font-semibold" : "border-border bg-panel2 text-muted font-normal"
+                )}
               >
-                <span style={{ width: 14, height: 14, borderRadius: 4, background: lk.swatch, border: "1px solid rgba(255,255,255,.12)" }} />
+                <span className="w-3.5 h-3.5 rounded-1 border border-[rgba(255,255,255,.12)]" style={{ background: lk.swatch }} />
                 {lk.name}
               </button>
             );
@@ -66,24 +60,23 @@ export function Toolbar({ v }: { v: UseLumen }) {
         </div>
       </div>
 
-      <div style={{ width: 1, height: 36, background: "var(--border)", margin: "0 4px" }} />
+      <div className="w-px h-9 bg-border mx-1" />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--faint)", marginRight: 2 }}>Size</span>
-        <button onClick={smaller} style={{ width: 36, height: 36, borderRadius: 9, border: "1px solid var(--border)", background: "var(--panel2)", fontSize: 12, cursor: "pointer", color: "var(--muted)" }}>A−</button>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, width: 44, textAlign: "center", color: "var(--text)" }}>{fontPct}</span>
-        <button onClick={bigger} style={{ width: 36, height: 36, borderRadius: 9, border: "1px solid var(--border)", background: "var(--panel2)", fontSize: 15, cursor: "pointer", color: "var(--muted)" }}>A+</button>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint mr-0.5">Size</span>
+        <button onClick={smaller} className="w-9 h-9 rounded-2.25 border border-border bg-panel2 text-[12px] cursor-pointer text-muted">A−</button>
+        <span className="font-mono text-[12px] w-11 text-center text-text">{fontPct}</span>
+        <button onClick={bigger} className="w-9 h-9 rounded-2.25 border border-border bg-panel2 text-[15px] cursor-pointer text-muted">A+</button>
       </div>
 
-      <div style={{ flex: 1 }} />
+      <div className="flex-1" />
 
       <InteractiveButton
         onClick={() => patch({ presenting: true })}
-        base={{ height: 52, padding: "0 22px", borderRadius: 12, borderWidth: 1, borderStyle: "solid", borderColor: "var(--border2)", background: "var(--panel2)", fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
-        hover={{ borderColor: "var(--accent)", color: "var(--accent)" }}
+        className="h-13 px-5.5 rounded-3 border border-border2 bg-panel2 text-[14px] font-semibold cursor-pointer flex items-center gap-2.5 hover:border-accent hover:text-accent"
       >
         ⛶ Fullscreen presentation
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--faint)" }}>F5</span>
+        <span className="font-mono text-[10px] text-faint">F5</span>
       </InteractiveButton>
     </div>
   );

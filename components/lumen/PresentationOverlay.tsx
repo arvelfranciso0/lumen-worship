@@ -1,5 +1,6 @@
 "use client";
 
+import { cx } from "./cx";
 import type { UseLumen } from "./useLumen";
 
 export function PresentationOverlay({ v }: { v: UseLumen }) {
@@ -12,30 +13,25 @@ export function PresentationOverlay({ v }: { v: UseLumen }) {
     : cur.lines.reduce((m, l) => Math.max(m, l.length), 0) > 70 ? 0.78 : 1;
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "#000", overflow: "hidden" }}>
-      <div style={{ position: "absolute", inset: 0, background: state.black ? "#000" : look.css }} />
-      <div style={{
-        position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center",
-        justifyContent: "center", gap: "2.2vh", padding: "8vh 10vw", textAlign: "center", zIndex: 1,
-      }}>
+    <div className="fixed inset-0 z-[200] bg-black overflow-hidden">
+      <div className="absolute inset-0" style={{ background: state.black ? "#000" : look.css }} />
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-[2.2vh] p-[8vh_10vw] text-center z-[1]">
         {stageLines.map((line, i) => (
           <div
             key={i}
-            style={{
-              fontFamily: v.lyricFamily, fontSize: 4.4 * state.scale * fit + "vw", lineHeight: 1.24,
-              fontWeight: 600, letterSpacing: "-0.02em", color: "#fff", textShadow: "0 4px 60px rgba(0,0,0,.55)",
-            }}
+            className={cx(v.lyricFamily, "font-semibold tracking-[-0.02em] text-white leading-[1.24] [text-shadow:0_4px_60px_rgba(0,0,0,.55)]")}
+            style={{ fontSize: 4.4 * state.scale * fit + "vw" }}
           >
             {line}
           </div>
         ))}
         {hasStageCaption && (
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: "1.5vw", letterSpacing: ".12em", marginTop: "3vh", color: "rgba(255,255,255,.55)" }}>
+          <div className="font-mono text-[1.5vw] tracking-[.12em] mt-[3vh] text-[rgba(255,255,255,.55)]">
             {cur.caption}
           </div>
         )}
       </div>
-      <div style={{ position: "absolute", bottom: 18, right: 22, fontFamily: "var(--font-mono)", fontSize: 11, color: "rgba(255,255,255,.16)" }}>Esc</div>
+      <div className="absolute bottom-[18px] right-[22px] font-mono text-[11px] text-[rgba(255,255,255,.16)]">Esc</div>
     </div>
   );
 }

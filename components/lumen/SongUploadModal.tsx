@@ -2,16 +2,14 @@
 
 import { useRef, useState } from "react";
 import type { Section } from "./data";
+import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
 import { parseSongText } from "./songImport";
 import type { UseLumen } from "./useLumen";
 
 const EMPTY_SECTIONS: Section[] = [{ label: "Verse 1", lines: [""] }];
 
-const fieldStyle = {
-  height: 36, padding: "0 10px", borderRadius: 8, border: "1px solid var(--border)",
-  background: "var(--panel2)", color: "var(--text)", fontSize: 13, outline: "none",
-} as const;
+const fieldClass = "h-9 px-2.5 rounded-2 border border-border bg-panel2 text-text text-[13px] outline-none";
 
 export function SongUploadModal({ v }: { v: UseLumen }) {
   const { state, patch, addSong } = v;
@@ -80,72 +78,70 @@ export function SongUploadModal({ v }: { v: UseLumen }) {
   return (
     <div
       onClick={close}
-      style={{ position: "fixed", inset: 0, zIndex: 120, background: "rgba(6,6,8,.6)", backdropFilter: "blur(6px)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      className="fixed inset-0 z-120 bg-[rgba(6,6,8,.6)] backdrop-blur-[6px] flex items-center justify-center"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ width: 640, maxHeight: "84vh", display: "flex", flexDirection: "column", borderRadius: 18, border: "1px solid var(--border2)", background: "var(--panel)", boxShadow: "var(--shadow)", overflow: "hidden", animation: "fadeUp .18s ease both" }}
+        className="w-160 max-h-[84vh] flex flex-col rounded-[18px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px 14px", borderBottom: "1px solid var(--border)" }}>
+        <div className="flex items-center justify-between p-[18px_20px_14px] border-b border-border">
           <div>
-            <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.02em" }}>Upload song</div>
-            <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3 }}>Fill in the details below, or load them from a text file</div>
+            <div className="text-[16px] font-semibold tracking-[-0.02em]">Upload song</div>
+            <div className="text-[12.5px] text-muted mt-0.75">Fill in the details below, or load them from a text file</div>
           </div>
           <InteractiveButton
             onClick={close}
-            base={{ width: 32, height: 32, borderRadius: 9, borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--panel2)", color: "var(--muted)", cursor: "pointer" }}
-            hover={{ color: "var(--text)", background: "var(--raise)" }}
+            className="w-8 h-8 rounded-2.25 border border-border bg-panel2 text-muted cursor-pointer hover:text-text hover:bg-raise"
           >
             ✕
           </InteractiveButton>
         </div>
 
-        <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", flex: 1 }}>
+        <div className="p-[18px_20px] flex flex-col gap-3.5 overflow-y-auto flex-1">
           <input
             ref={fileRef}
             type="file"
             accept=".txt,text/plain"
             onChange={(e) => onFile(e.target.files?.[0])}
-            style={{ display: "none" }}
+            className="hidden"
           />
           <InteractiveButton
             onClick={() => fileRef.current?.click()}
-            base={{ height: 36, borderRadius: 9, borderWidth: 1, borderStyle: "dashed", borderColor: "var(--border2)", background: "transparent", fontSize: 12.5, color: "var(--muted)", cursor: "pointer" }}
-            hover={{ borderColor: "var(--accent)", color: "var(--accent)" }}
+            className="h-9 rounded-2.25 border border-dashed border-border2 bg-transparent text-[12.5px] text-muted cursor-pointer hover:border-accent hover:text-accent"
           >
             Choose .txt file to prefill…
           </InteractiveButton>
-          <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.6 }}>
+          <div className="text-[12px] text-muted leading-[1.6]">
             Start with <code>Title:</code>, <code>Artist:</code>, <code>Key:</code>, <code>BPM:</code>, <code>Tags:</code> lines, then mark
             each section with <code>[Verse 1]</code>, <code>[Chorus]</code>, etc. A blank line starts a new slide within a section.
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <input value={title} onChange={(e) => { setTitle(e.target.value); setError(""); }} placeholder="Title" style={fieldStyle} />
-            <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" style={fieldStyle} />
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="Key (e.g. G)" style={{ ...fieldStyle, flex: 1 }} />
-              <input value={bpm} onChange={(e) => setBpm(e.target.value)} placeholder="BPM (e.g. 120)" style={{ ...fieldStyle, flex: 1 }} />
+          <div className="flex flex-col gap-2">
+            <input value={title} onChange={(e) => { setTitle(e.target.value); setError(""); }} placeholder="Title" className={fieldClass} />
+            <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" className={fieldClass} />
+            <div className="flex gap-2">
+              <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="Key (e.g. G)" className={cx(fieldClass, "flex-1")} />
+              <input value={bpm} onChange={(e) => setBpm(e.target.value)} placeholder="BPM (e.g. 120)" className={cx(fieldClass, "flex-1")} />
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={cat} onChange={(e) => setCat(e.target.value)} placeholder="Category (e.g. Contemporary)" style={{ ...fieldStyle, flex: 1 }} />
-              <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="Tags, comma separated" style={{ ...fieldStyle, flex: 1 }} />
+            <div className="flex gap-2">
+              <input value={cat} onChange={(e) => setCat(e.target.value)} placeholder="Category (e.g. Contemporary)" className={cx(fieldClass, "flex-1")} />
+              <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="Tags, comma separated" className={cx(fieldClass, "flex-1")} />
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="flex flex-col gap-2">
             {sections.map((sec, i) => (
-              <div key={i} style={{ border: "1px solid var(--border)", borderRadius: 12, background: "var(--panel2)", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div key={i} className="border border-border rounded-xl bg-panel2 p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
                   <input
                     value={sec.label}
                     onChange={(e) => updateLabel(i, e.target.value)}
-                    style={{ flex: 1, height: 30, padding: "0 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--panel)", color: "var(--text)", fontSize: 12.5, fontWeight: 600, outline: "none" }}
+                    className="flex-1 h-7.5 px-2.5 rounded-2 border border-border bg-panel text-text text-[12.5px] font-semibold outline-none"
                   />
                   <button
                     onClick={() => removeSection(i)}
                     disabled={sections.length <= 1}
-                    style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--border)", background: "var(--panel)", color: "var(--muted)", cursor: sections.length <= 1 ? "not-allowed" : "pointer", opacity: sections.length <= 1 ? 0.5 : 1 }}
+                    className="w-7.5 h-7.5 rounded-2 border border-border bg-panel text-muted disabled:cursor-not-allowed disabled:opacity-50 not-disabled:cursor-pointer not-disabled:opacity-100"
                   >
                     ✕
                   </button>
@@ -155,32 +151,30 @@ export function SongUploadModal({ v }: { v: UseLumen }) {
                   onChange={(e) => updateLines(i, e.target.value)}
                   rows={Math.max(2, sec.lines.length)}
                   placeholder="One line per row"
-                  style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid var(--border)", background: "var(--panel)", color: "var(--text)", fontSize: 13, lineHeight: 1.5, resize: "vertical", outline: "none", fontFamily: "inherit" }}
+                  className="w-full p-2.5 rounded-2 border border-border bg-panel text-text text-[13px] leading-normal resize-y outline-none font-[inherit]"
                 />
               </div>
             ))}
 
             <InteractiveButton
               onClick={addSection}
-              base={{ height: 36, borderRadius: 9, borderWidth: 1, borderStyle: "dashed", borderColor: "var(--border2)", background: "transparent", fontSize: 12.5, color: "var(--muted)", cursor: "pointer" }}
-              hover={{ borderColor: "var(--accent)", color: "var(--accent)" }}
+              className="h-9 rounded-2.25 border border-dashed border-border2 bg-transparent text-[12.5px] text-muted cursor-pointer hover:border-accent hover:text-accent"
             >
               + Add section
             </InteractiveButton>
           </div>
 
-          {error && <div style={{ fontSize: 12, color: "var(--danger)" }}>{error}</div>}
+          {error && <div className="text-[12px] text-danger">{error}</div>}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, padding: "14px 20px", borderTop: "1px solid var(--border)", background: "var(--panel2)" }}>
+        <div className="flex justify-end gap-2.25 p-[14px_20px] border-t border-border bg-panel2">
           <InteractiveButton
             onClick={close}
-            base={{ height: 36, padding: "0 14px", borderRadius: 9, borderWidth: 1, borderStyle: "solid", borderColor: "var(--border)", background: "var(--panel)", fontSize: 13, color: "var(--muted)", cursor: "pointer" }}
-            hover={{ color: "var(--text)" }}
+            className="h-9 px-3.5 rounded-2.25 border border-border bg-panel text-[13px] text-muted cursor-pointer hover:text-text"
           >
             Cancel
           </InteractiveButton>
-          <button onClick={submit} style={{ height: 36, padding: "0 16px", borderRadius: 9, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <button onClick={submit} className="h-9 px-4 rounded-2.25 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer">
             Add song
           </button>
         </div>

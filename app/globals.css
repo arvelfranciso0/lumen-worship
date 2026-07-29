@@ -1,5 +1,25 @@
 @import "tailwindcss";
 
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel2: var(--panel2);
+  --color-raise: var(--raise);
+  --color-border: var(--border);
+  --color-border2: var(--border2);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --shadow-app: var(--shadow);
+  --shadow-app-sm: var(--shadow-sm);
+}
+
 :root {
   --bg: #0a0a0c;
   --panel: #111114;

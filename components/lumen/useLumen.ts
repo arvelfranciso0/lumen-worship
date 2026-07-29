@@ -2,6 +2,7 @@
 
 import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRepository } from "@/lib/repository";
+import { cx } from "./cx";
 import {
   DEFAULT_TRANSLATION, LOADING_PASSAGE, LOOKS, MISSING_PASSAGE, SONGS,
   type BibleMeta, type BibleTranslation, type Lineup, type Section, type Song,
@@ -251,14 +252,10 @@ export function useLumen(props: LumenProps = {}) {
   }, [go, patch]);
 
   const lyricFamily = state.font === "serif" || (!state.font && props.lyricFont === "serif")
-    ? "var(--font-serif)"
-    : "var(--font-sans)";
+    ? "font-serif"
+    : "font-sans";
 
-  const canvas = (pad: string): CSSProperties => ({
-    position: "absolute", inset: 0, display: "flex", flexDirection: "column",
-    alignItems: "center", justifyContent: "center", gap: pad, padding: "6% 8%",
-    textAlign: "center", zIndex: 1,
-  });
+  const canvas = "absolute inset-0 flex flex-col items-center justify-center p-[6%_8%] text-center z-[1]";
 
   const idx = Math.min(state.idx, slides.length - 1);
   const cur = slides[idx];
@@ -267,33 +264,28 @@ export function useLumen(props: LumenProps = {}) {
   const hidden = state.black || state.blank;
   const bible = state.mode === "bible";
 
-  const chipBase = (on: boolean): CSSProperties => ({
-    height: "26px", padding: "0 11px", borderRadius: "20px", fontSize: "12px", cursor: "pointer",
-    border: "1px solid " + (on ? "var(--accent)" : "var(--border)"),
-    background: on ? "var(--accent-soft)" : "var(--panel2)",
-    color: on ? "var(--text)" : "var(--muted)", fontWeight: on ? 600 : 400,
-  });
+  const chipBase = (on: boolean) => cx(
+    "h-[26px] px-[11px] rounded-[20px] text-[12px] cursor-pointer border",
+    on ? "border-accent bg-accent-soft text-text font-semibold" : "border-border bg-panel2 text-muted font-normal"
+  );
 
-  const tabStyle = (on: boolean): CSSProperties => ({
-    flex: 1, height: 28, borderRadius: "8px", border: "none", cursor: "pointer", fontSize: "12.5px",
-    fontWeight: on ? 600 : 500, background: on ? "var(--raise)" : "transparent",
-    color: on ? "var(--text)" : "var(--muted)", boxShadow: on ? "var(--shadow-sm)" : "none",
-  });
+  const tabStyle = (on: boolean) => cx(
+    "flex-1 h-[28px] rounded-[8px] border-none cursor-pointer text-[12.5px]",
+    on ? "font-semibold bg-raise text-text shadow-app-sm" : "font-medium bg-transparent text-muted shadow-none"
+  );
 
-  const pill = (isAccent: boolean): CSSProperties => ({
-    fontSize: "11px", fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase",
-    padding: "3px 9px", borderRadius: "6px",
-    background: isAccent ? "var(--accent-soft)" : "var(--raise)",
-    color: isAccent ? "var(--accent)" : "var(--muted)",
-    border: "1px solid " + (isAccent ? "var(--accent)" : "var(--border)"),
-  });
+  const pill = (isAccent: boolean) => cx(
+    "text-[11px] font-semibold tracking-[.04em] uppercase px-[9px] py-[3px] rounded-[6px] border",
+    isAccent ? "bg-accent-soft text-accent border-accent" : "bg-raise text-muted border-border"
+  );
 
-  const toolBtn = (on: boolean, tone: string): CSSProperties => ({
-    height: "44px", padding: "0 18px", borderRadius: "11px", fontSize: "13.5px", fontWeight: 600, cursor: "pointer",
-    border: "1px solid " + (on ? tone : "var(--border)"),
-    background: on ? tone : "var(--panel2)",
-    color: on ? (tone === "#000" ? "#fff" : "#0a0a0c") : "var(--muted)",
-  });
+  // onClasses is a complete literal Tailwind class string (border/background/text color for the "on" state) —
+  // passed in by the caller rather than built from a runtime color value, since Tailwind can only
+  // generate CSS for class names that appear as literal text in source, not ones assembled at runtime.
+  const toolBtn = (on: boolean, onClasses: string) => cx(
+    "h-[44px] px-[18px] rounded-[11px] text-[13.5px] font-semibold cursor-pointer border",
+    on ? onClasses : "border-border bg-panel2 text-muted"
+  );
 
   let list = allSongs.filter((s) => {
     const q = state.query.trim().toLowerCase();
@@ -307,7 +299,7 @@ export function useLumen(props: LumenProps = {}) {
   const longest = cur.lines.reduce((m, l) => Math.max(m, l.length), 0);
   const fit = longest > 110 ? 0.62 : longest > 70 ? 0.78 : 1;
   const bigLine: CSSProperties = {
-    fontFamily: lyricFamily, fontSize: 26 * state.scale * fit + "px", lineHeight: 1.34, fontWeight: 600,
+    fontSize: 26 * state.scale * fit + "px", lineHeight: 1.34, fontWeight: 600,
     letterSpacing: "-0.015em", color: "#fff", textShadow: "0 2px 24px rgba(0,0,0,.5)",
   };
 
