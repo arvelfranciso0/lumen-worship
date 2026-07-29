@@ -11,10 +11,17 @@ function formatClock(date: Date) {
 }
 
 export function Header({ lumen }: { lumen: UseLumen }) {
-  const { state, patch, theme, hidden, setSongs } = lumen;
+  const { state, patch, theme, hidden, setSongs, outputStatus } = lumen;
   const themeLabel = theme === "dark" ? "☾ Dark" : "☀ Light";
   const setCountLabel = setSongs.length === 1 ? "1 song" : setSongs.length + " songs";
   const hasActiveLineup = !!state.activeLineupId;
+
+  const outputDotClass = outputStatus.active ? "bg-ok" : hidden ? "bg-warn" : "bg-border2";
+  const outputLabel = outputStatus.active && outputStatus.display
+    ? "Output · " + outputStatus.display.label
+    : state.outputEnabled
+      ? "Output · Waiting…"
+      : "Output · Off";
 
   // Starts empty and fills in after mount so the server-prerendered markup
   // (static export, built at a fixed time) and the first client render match
@@ -98,10 +105,14 @@ export function Header({ lumen }: { lumen: UseLumen }) {
       <div className="flex-1" />
 
       <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2 p-[6px_10px] border border-border rounded-2.25 bg-panel2 text-[12px] text-muted">
-          <span className={cx("w-1.5 h-1.5 rounded-full", hidden ? "bg-warn" : "bg-ok")} />
-          Output · Display 2 <span className="font-mono text-faint">1920×1080</span>
-        </div>
+        <InteractiveButton
+          onClick={() => patch({ settingsOpen: true })}
+          title="Configure second-monitor output"
+          className="flex items-center gap-2 p-[6px_10px] border border-border rounded-2.25 bg-panel2 text-[12px] text-muted cursor-pointer hover:bg-raise hover:text-text"
+        >
+          <span className={cx("w-1.5 h-1.5 rounded-full", outputDotClass)} />
+          {outputLabel}
+        </InteractiveButton>
 
         <InteractiveButton
           onClick={() => patch({ theme: theme === "dark" ? "light" : "dark" })}

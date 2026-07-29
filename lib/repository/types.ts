@@ -13,6 +13,8 @@ export type PersistedPrefs = Partial<{
   layoutVisibility: LayoutVisibility;
   lyricStyle: LyricStyle;
   bibleHighlights: BibleHighlights;
+  outputEnabled: boolean;
+  outputDisplayId: number | "auto";
 }>;
 
 export type PersistedData = {

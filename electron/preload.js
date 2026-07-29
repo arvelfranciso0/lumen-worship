@@ -15,3 +15,26 @@ contextBridge.exposeInMainWorld("electronAPI", {
   addBackground: (input) => ipcRenderer.invoke("repo:addBackground", input),
   deleteBackground: (id) => ipcRenderer.invoke("repo:deleteBackground", id),
 });
+
+// Separate bridge for the second-monitor "audience output" feature — kept
+// apart from electronAPI above since that one is treated as a 1:1
+// AppRepository implementation (lib/repository/electron.ts spreads it
+// directly), and mixing window-management calls into it would break that.
+contextBridge.exposeInMainWorld("electronDisplay", {
+  list: () => ipcRenderer.invoke("display:list"),
+  getStatus: () => ipcRenderer.invoke("display:status"),
+  onStatusChanged: (callback) => {
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on("output:status", handler);
+    return () => ipcRenderer.removeListener("output:status", handler);
+  },
+  openOutput: (displayId) => ipcRenderer.invoke("output:open", displayId),
+  closeOutput: () => ipcRenderer.invoke("output:close"),
+  sendState: (payload) => ipcRenderer.send("output:state", payload),
+  onState: (callback) => {
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on("output:state", handler);
+    return () => ipcRenderer.removeListener("output:state", handler);
+  },
+  notifyReady: () => ipcRenderer.send("output:ready"),
+});

@@ -11,7 +11,10 @@ import {
   type LayoutPanelId, type LayoutSizes, type LayoutVisibility, type Lineup, type LyricFontId, type LyricStyle,
   type Section, type Song,
 } from "./data";
+import { getElectronDisplay, type OutputState, type OutputStatus } from "./electronDisplay";
 import type { ParsedSong } from "./songImport";
+
+const DEFAULT_OUTPUT_STATUS: OutputStatus = { active: false, selectedDisplayId: "auto", display: null, displays: [] };
 
 const shortTransLabel = (code: string) => code.replace(/^(English|Cebuano)/, "") || code;
 
@@ -25,6 +28,14 @@ function generateVideoPoster(videoUrl: string): Promise<string> {
     const video = document.createElement("video");
     video.muted = true;
     video.playsInline = true;
+    // Needed to draw the frame to a canvas and read it back via toDataURL —
+    // without it, a video loaded from a different origin (the Electron
+    // build's lumen-media:// custom protocol, distinct from the page's
+    // http://) taints the canvas and toDataURL throws a SecurityError, even
+    // though playback itself works fine either way. See the matching
+    // Access-Control-Allow-Origin header on the lumen-media:// response in
+    // electron/main.js — both sides are required.
+    video.crossOrigin = "anonymous";
     video.src = videoUrl;
     video.addEventListener("loadeddata", () => {
       const posterCanvas = document.createElement("canvas");
@@ -112,6 +123,13 @@ type LumenState = {
   customBackgrounds: CustomBackground[];
   lyricStyle: LyricStyle;
   bibleHighlights: BibleHighlights;
+  // Whether a second-monitor "audience output" window should be open, and
+  // which display it targets — "auto" picks the first non-primary display.
+  // Persisted like any other pref; the actual window lives in the Electron
+  // main process (see electronDisplay.ts / OutputWindowApp.tsx) and is a
+  // no-op in the plain browser build.
+  outputEnabled: boolean;
+  outputDisplayId: number | "auto";
 };
 
 type Slide = { label: string; lines: string[]; lineHighlights?: HighlightRange[][]; slideNumber: number; caption: string };
@@ -130,6 +148,7 @@ const INITIAL_STATE: LumenState = {
   customBackgrounds: [],
   lyricStyle: DEFAULT_LYRIC_STYLE,
   bibleHighlights: {},
+  outputEnabled: false, outputDisplayId: "auto",
 };
 
 export function useLumen(props: LumenProps = {}) {
@@ -175,13 +194,14 @@ export function useLumen(props: LumenProps = {}) {
         favs: state.favs, look: state.look, scale: state.scale, theme: state.theme,
         font: state.font, chords: state.chords, setIds: state.setIds, setName: state.setName,
         layoutSizes: state.layoutSizes, layoutVisibility: state.layoutVisibility, lyricStyle: state.lyricStyle,
-        bibleHighlights: state.bibleHighlights,
+        bibleHighlights: state.bibleHighlights, outputEnabled: state.outputEnabled, outputDisplayId: state.outputDisplayId,
       });
     }, 400);
     return () => clearTimeout(persistTimeout);
   }, [
     state.favs, state.look, state.scale, state.theme, state.font, state.chords, state.setIds, state.setName,
     state.layoutSizes, state.layoutVisibility, state.lyricStyle, state.bibleHighlights,
+    state.outputEnabled, state.outputDisplayId,
   ]);
 
   const [bibleManifest, setBibleManifest] = useState<BibleMeta[]>([]);
@@ -550,13 +570,55 @@ export function useLumen(props: LumenProps = {}) {
     textShadow: "0 2px 24px rgba(0,0,0,.5)",
   };
 
+  // ---- Second-monitor "audience output" (Electron only; a no-op in the
+  // plain browser build, since getElectronDisplay() returns null there) ----
+
+  const [outputStatus, setOutputStatus] = useState<OutputStatus>(DEFAULT_OUTPUT_STATUS);
+
+  useEffect(() => {
+    const electronDisplay = getElectronDisplay();
+    if (!electronDisplay) return;
+    electronDisplay.getStatus().then(setOutputStatus).catch(() => {});
+    return electronDisplay.onStatusChanged(setOutputStatus);
+  }, []);
+
+  // Opens/closes (or re-targets) the actual second-monitor window whenever
+  // the user's choice changes — the main process resolves "auto" to the
+  // first non-primary display and re-resolves it live if displays change.
+  useEffect(() => {
+    const electronDisplay = getElectronDisplay();
+    if (!electronDisplay) return;
+    if (state.outputEnabled) electronDisplay.openOutput(state.outputDisplayId).then(setOutputStatusFromOpenResult).catch(() => {});
+    else electronDisplay.closeOutput().catch(() => {});
+
+    function setOutputStatusFromOpenResult() {
+      electronDisplay!.getStatus().then(setOutputStatus).catch(() => {});
+    }
+  }, [state.outputEnabled, state.outputDisplayId]);
+
+  // Pushes the current live slide to the output window on every change —
+  // this is the one place that assembles exactly what OutputWindowApp needs,
+  // so the audience screen never has to run useLumen or touch the DB itself.
+  useEffect(() => {
+    const electronDisplay = getElectronDisplay();
+    if (!electronDisplay || !outputStatus.active) return;
+    const payload: OutputState = {
+      lines: hidden ? [] : cur.lines,
+      lineHighlights: cur.lineHighlights,
+      look, black: state.black, hidden,
+      lyricStyle: state.lyricStyle, fontClassName: lyricFamily,
+      scale: state.scale, fit, caption: !hidden ? cur.caption : "",
+    };
+    electronDisplay.sendState(payload);
+  }, [outputStatus.active, cur, look, state.black, hidden, state.lyricStyle, lyricFamily, state.scale, fit]);
+
   return {
     state, patch, theme, accent, ref, passage, vnum, song, look, allLooks, slides, go, idx, cur, nxt, prv, hidden,
     bible, list, chipBase, tabStyle, pill, toolBtn, canvas, lyricFamily, fit, bigLine,
     setSongs, inSet, toggleSetSong, saveLyrics, applyLiveHighlight, removeLiveHighlight, addSong, allSongs, toggleFavorite,
     createLineup, updateLineup, deleteLineup, activateLineup, reorderLineupSongs,
     adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
-    bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel,
+    bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus,
   };
 }
 

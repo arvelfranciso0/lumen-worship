@@ -37,7 +37,12 @@ function rowToLineup(row) {
 }
 
 function rowToBackground(row) {
-  return { id: row.id, name: row.name, mediaType: row.media_type, url: "lumen-media://" + row.file_name };
+  // The filename goes in the URL's path, not its host — "lumen-media" is a
+  // standard: true scheme, so a host-position filename gets reshaped by
+  // Chromium's URL parser (host normalization, a mandatory trailing "/"
+  // when there's no path), and the protocol handler's request.url no
+  // longer matches what was built here, silently failing to resolve.
+  return { id: row.id, name: row.name, mediaType: row.media_type, url: "lumen-media://local/" + encodeURIComponent(row.file_name) };
 }
 
 function createDb(dbPath) {
