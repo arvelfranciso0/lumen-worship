@@ -11,8 +11,8 @@ const EMPTY_SECTIONS: Section[] = [{ label: "Verse 1", lines: [""] }];
 
 const fieldClass = "h-9 px-2.5 rounded-2 border border-border bg-panel2 text-text text-[13px] outline-none";
 
-export function SongUploadModal({ v }: { v: UseLumen }) {
-  const { state, patch, addSong } = v;
+export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
+  const { state, patch, addSong } = lumen;
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [key, setKey] = useState("");

@@ -1,4 +1,4 @@
-import type { Lineup, Section, Song } from "@/components/lumen/data";
+import type { Lineup, LayoutSizes, LayoutVisibility, Section, Song } from "@/components/lumen/data";
 
 export type PersistedPrefs = Partial<{
   favs: Record<string, boolean>;
@@ -9,6 +9,8 @@ export type PersistedPrefs = Partial<{
   chords: boolean;
   setIds: string[];
   setName: string;
+  layoutSizes: LayoutSizes;
+  layoutVisibility: LayoutVisibility;
 }>;
 
 export type PersistedData = {

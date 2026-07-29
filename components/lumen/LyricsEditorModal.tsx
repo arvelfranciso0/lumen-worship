@@ -6,8 +6,8 @@ import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
-export function LyricsEditorModal({ v }: { v: UseLumen }) {
-  const { state, patch, song, saveLyrics } = v;
+export function LyricsEditorModal({ lumen }: { lumen: UseLumen }) {
+  const { state, patch, song, saveLyrics } = lumen;
   const [draft, setDraft] = useState<Section[]>(song.sections);
 
   useEffect(() => {

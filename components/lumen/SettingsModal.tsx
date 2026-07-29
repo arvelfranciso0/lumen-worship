@@ -1,12 +1,12 @@
 "use client";
 
-import { LOOKS } from "./data";
+import { LAYOUT_PANELS, LOOKS } from "./data";
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
-export function SettingsModal({ v }: { v: UseLumen }) {
-  const { state, patch } = v;
+export function SettingsModal({ lumen }: { lumen: UseLumen }) {
+  const { state, patch, toggleLayoutPanel, resetLayout } = lumen;
   if (!state.settingsOpen) return null;
 
   const close = () => patch({ settingsOpen: false });
@@ -18,8 +18,8 @@ export function SettingsModal({ v }: { v: UseLumen }) {
       className="fixed inset-0 z-120 bg-[rgba(6,6,8,.6)] backdrop-blur-[6px] flex items-center justify-center"
     >
       <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-155 rounded-[18px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
+        onClick={(clickEvent) => clickEvent.stopPropagation()}
+        className="w-155 max-h-[86vh] flex flex-col rounded-[18px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
       >
         <div className="flex items-center justify-between p-[18px_20px_14px] border-b border-border">
           <div>
@@ -34,24 +34,24 @@ export function SettingsModal({ v }: { v: UseLumen }) {
           </InteractiveButton>
         </div>
 
-        <div className="p-[18px_20px] flex flex-col gap-4.5">
+        <div className="p-[18px_20px] flex flex-col gap-4.5 overflow-y-auto flex-1">
           <div>
             <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint mb-2.25">Background</div>
             <div className="grid grid-cols-4 gap-2.5">
-              {LOOKS.map((lk) => {
-                const on = lk.id === state.look;
+              {LOOKS.map((lookEntry) => {
+                const on = lookEntry.id === state.look;
                 return (
                   <button
-                    key={lk.id}
-                    onClick={() => patch({ look: lk.id })}
+                    key={lookEntry.id}
+                    onClick={() => patch({ look: lookEntry.id })}
                     className={cx(
                       "flex flex-col items-start gap-1.5 p-2 rounded-xl cursor-pointer text-text border",
                       on ? "border-accent bg-accent-soft" : "border-border bg-panel2"
                     )}
                   >
-                    <span className="w-full h-14 rounded-lg border border-border" style={{ background: lk.css }} />
-                    <span className="text-[11.5px]">{lk.name}</span>
-                    <span className="text-[10px] text-faint">{lk.kind}</span>
+                    <span className="w-full h-14 rounded-lg border border-border" style={{ background: lookEntry.css }} />
+                    <span className="text-[11.5px]">{lookEntry.name}</span>
+                    <span className="text-[10px] text-faint">{lookEntry.kind}</span>
                   </button>
                 );
               })}
@@ -86,7 +86,7 @@ export function SettingsModal({ v }: { v: UseLumen }) {
               <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint mb-2.25">Lyric size</div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => patch((s) => ({ scale: Math.max(0.7, +(s.scale - 0.1).toFixed(2)) }))}
+                  onClick={() => patch((previousState) => ({ scale: Math.max(0.7, +(previousState.scale - 0.1).toFixed(2)) }))}
                   className="w-8.5 h-8.5 rounded-2.25 border border-border bg-panel2 cursor-pointer text-muted text-[12px]"
                 >
                   A−
@@ -95,7 +95,7 @@ export function SettingsModal({ v }: { v: UseLumen }) {
                   <div className="h-full bg-accent" style={{ width: sizePct + "%" }} />
                 </div>
                 <button
-                  onClick={() => patch((s) => ({ scale: Math.min(1.5, +(s.scale + 0.1).toFixed(2)) }))}
+                  onClick={() => patch((previousState) => ({ scale: Math.min(1.5, +(previousState.scale + 0.1).toFixed(2)) }))}
                   className="w-8.5 h-8.5 rounded-2.25 border border-border bg-panel2 cursor-pointer text-muted text-[15px]"
                 >
                   A+
@@ -110,11 +110,45 @@ export function SettingsModal({ v }: { v: UseLumen }) {
               <div className="text-[12px] text-muted mt-0.5">Never sent to the audience display.</div>
             </div>
             <button
-              onClick={() => patch((s) => ({ chords: !s.chords }))}
+              onClick={() => patch((previousState) => ({ chords: !previousState.chords }))}
               className={cx("w-11 h-6.5 rounded-5 border-none cursor-pointer p-0.75 flex", state.chords ? "justify-end bg-accent" : "justify-start bg-border2")}
             >
               <span className="w-5 h-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.3)]" />
             </button>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2.25">
+              <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Layout panels</div>
+              <InteractiveButton
+                onClick={resetLayout}
+                className="text-[12px] text-muted border-none cursor-pointer px-1 py-0.5 hover:text-text"
+              >
+                Reset layout
+              </InteractiveButton>
+            </div>
+            <div className="flex flex-col gap-2">
+              {LAYOUT_PANELS.map((panel) => {
+                const visible = state.layoutVisibility[panel.id];
+                return (
+                  <div
+                    key={panel.id}
+                    className="flex items-center justify-between p-[12px_14px] border border-border rounded-xl bg-panel2"
+                  >
+                    <div>
+                      <div className="text-[13px] font-medium">{panel.label}</div>
+                      <div className="text-[12px] text-muted mt-0.5">{panel.description}</div>
+                    </div>
+                    <button
+                      onClick={() => toggleLayoutPanel(panel.id)}
+                      className={cx("w-11 h-6.5 rounded-5 border-none cursor-pointer p-0.75 flex", visible ? "justify-end bg-accent" : "justify-start bg-border2")}
+                    >
+                      <span className="w-5 h-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.3)]" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 

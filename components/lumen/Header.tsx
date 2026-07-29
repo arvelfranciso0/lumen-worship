@@ -5,8 +5,8 @@ import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
-export function Header({ v }: { v: UseLumen }) {
-  const { state, patch, theme, hidden, setSongs, activateLineup } = v;
+export function Header({ lumen }: { lumen: UseLumen }) {
+  const { state, patch, theme, hidden, setSongs, activateLineup } = lumen;
   const themeLabel = theme === "dark" ? "☾ Dark" : "☀ Light";
   const setCountLabel = setSongs.length === 1 ? "1 song" : setSongs.length + " songs";
 

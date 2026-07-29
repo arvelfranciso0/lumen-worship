@@ -5,8 +5,8 @@ import { cx } from "./cx";
 import { InteractiveButton, InteractiveInput } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
-export function LineupModal({ v }: { v: UseLumen }) {
-  const { state, patch, allSongs, createLineup, updateLineup } = v;
+export function LineupModal({ lumen }: { lumen: UseLumen }) {
+  const { state, patch, allSongs, createLineup, updateLineup } = lumen;
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState("");

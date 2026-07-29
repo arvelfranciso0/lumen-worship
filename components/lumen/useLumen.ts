@@ -4,8 +4,10 @@ import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from
 import { getRepository } from "@/lib/repository";
 import { cx } from "./cx";
 import {
-  DEFAULT_TRANSLATION, LOADING_PASSAGE, LOOKS, MISSING_PASSAGE, SONGS,
-  type BibleMeta, type BibleTranslation, type Lineup, type Section, type Song,
+  DEFAULT_LAYOUT_SIZES, DEFAULT_LAYOUT_VISIBILITY, DEFAULT_TRANSLATION, LAYOUT_SIZE_LIMITS,
+  LOADING_PASSAGE, LOOKS, MISSING_PASSAGE, SONGS,
+  type BibleMeta, type BibleTranslation, type LayoutPanelId, type LayoutSizes, type LayoutVisibility,
+  type Lineup, type Section, type Song,
 } from "./data";
 import type { ParsedSong } from "./songImport";
 
@@ -49,27 +51,30 @@ type LumenState = {
   lineups: Lineup[];
   lineupModalOpen: boolean;
   editingLineupId: string | null;
+  layoutSizes: LayoutSizes;
+  layoutVisibility: LayoutVisibility;
 };
 
-type Slide = { label: string; lines: string[]; n: number; caption: string };
+type Slide = { label: string; lines: string[]; slideNumber: number; caption: string };
 
 const INITIAL_STATE: LumenState = {
   query: "", chip: "All", sort: "Recent", songId: "s3", idx: 2,
   favs: { s1: true, s3: true, s6: true },
   look: "aurora", scale: 1, presenting: false, blank: false, black: false,
   settingsOpen: false, font: "sans", chords: false, theme: null,
-  mode: "songs", book: "Psalms", chapter: 23, trans: DEFAULT_TRANSLATION,
+  mode: "songs", book: "Genesis", chapter: 1, trans: DEFAULT_TRANSLATION,
   setIds: ["s1", "s3", "s4", "s6"], setName: "Set 1", setPanelOpen: false,
   songOverrides: {}, lyricsEditorOpen: false,
   customSongs: [], uploadOpen: false,
   lineups: [], lineupModalOpen: false, editingLineupId: null,
+  layoutSizes: DEFAULT_LAYOUT_SIZES, layoutVisibility: DEFAULT_LAYOUT_VISIBILITY,
 };
 
 export function useLumen(props: LumenProps = {}) {
   const [state, setState] = useState<LumenState>(INITIAL_STATE);
 
-  const patch = useCallback((next: Partial<LumenState> | ((s: LumenState) => Partial<LumenState>)) => {
-    setState((prev) => ({ ...prev, ...(typeof next === "function" ? next(prev) : next) }));
+  const patch = useCallback((next: Partial<LumenState> | ((previousState: LumenState) => Partial<LumenState>)) => {
+    setState((previousState) => ({ ...previousState, ...(typeof next === "function" ? next(previousState) : next) }));
   }, []);
 
   const theme = state.theme || props.theme || "dark";
@@ -90,14 +95,18 @@ export function useLumen(props: LumenProps = {}) {
   }, [patch]);
 
   useEffect(() => {
-    const t = setTimeout(() => {
+    const persistTimeout = setTimeout(() => {
       getRepository().setPrefs({
         favs: state.favs, look: state.look, scale: state.scale, theme: state.theme,
         font: state.font, chords: state.chords, setIds: state.setIds, setName: state.setName,
+        layoutSizes: state.layoutSizes, layoutVisibility: state.layoutVisibility,
       });
     }, 400);
-    return () => clearTimeout(t);
-  }, [state.favs, state.look, state.scale, state.theme, state.font, state.chords, state.setIds, state.setName]);
+    return () => clearTimeout(persistTimeout);
+  }, [
+    state.favs, state.look, state.scale, state.theme, state.font, state.chords, state.setIds, state.setName,
+    state.layoutSizes, state.layoutVisibility,
+  ]);
 
   const [bibleManifest, setBibleManifest] = useState<BibleMeta[]>([]);
   const [bibleCache, setBibleCache] = useState<Record<string, BibleTranslation>>({});
@@ -107,7 +116,7 @@ export function useLumen(props: LumenProps = {}) {
   useEffect(() => {
     let cancelled = false;
     fetch("/bible/json/manifest.json")
-      .then((r) => r.json())
+      .then((response) => response.json())
       .then((data: BibleMeta[]) => { if (!cancelled) setBibleManifest(data); })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -117,9 +126,9 @@ export function useLumen(props: LumenProps = {}) {
     if (bibleCacheRef.current[state.trans]) return;
     let cancelled = false;
     fetch("/bible/json/" + state.trans + ".json")
-      .then((r) => r.json())
+      .then((response) => response.json())
       .then((data: BibleTranslation) => {
-        if (!cancelled) setBibleCache((prev) => ({ ...prev, [state.trans]: data }));
+        if (!cancelled) setBibleCache((previousCache) => ({ ...previousCache, [state.trans]: data }));
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -128,124 +137,162 @@ export function useLumen(props: LumenProps = {}) {
   const translation = bibleCache[state.trans];
   const bibleBooks = useMemo(() => translation?.books ?? [], [translation]);
   const currentTransMeta = useMemo(
-    () => bibleManifest.find((m) => m.code === state.trans),
+    () => bibleManifest.find((meta) => meta.code === state.trans),
     [bibleManifest, state.trans]
   );
 
   const ref = state.book + " " + state.chapter;
-  const currentBook = useMemo(() => bibleBooks.find((b) => b.name === state.book), [bibleBooks, state.book]);
+  const currentBook = useMemo(() => bibleBooks.find((book) => book.name === state.book), [bibleBooks, state.book]);
   const currentChapter = useMemo(
-    () => currentBook?.chapters.find((c) => c.number === state.chapter),
+    () => currentBook?.chapters.find((chapter) => chapter.number === state.chapter),
     [currentBook, state.chapter]
   );
   const passage = useMemo(() => {
     if (!translation) return LOADING_PASSAGE;
-    return currentChapter ? currentChapter.verses.map((v) => v.text) : MISSING_PASSAGE;
+    return currentChapter ? currentChapter.verses.map((verse) => verse.text) : MISSING_PASSAGE;
   }, [translation, currentChapter]);
-  const vnum = useCallback((i: number) => currentChapter?.verses[i]?.number ?? i + 1, [currentChapter]);
+  const vnum = useCallback((verseIndex: number) => currentChapter?.verses[verseIndex]?.number ?? verseIndex + 1, [currentChapter]);
 
   const allSongs = useMemo(() => [...SONGS, ...state.customSongs], [state.customSongs]);
 
   const song = useMemo(() => {
-    const base = allSongs.find((s) => s.id === state.songId) || allSongs[0];
-    const override = state.songOverrides[base.id];
-    return override ? { ...base, sections: override } : base;
+    const baseSong = allSongs.find((candidate) => candidate.id === state.songId) || allSongs[0];
+    const override = state.songOverrides[baseSong.id];
+    return override ? { ...baseSong, sections: override } : baseSong;
   }, [state.songId, state.songOverrides, allSongs]);
-  const look = useMemo(() => LOOKS.find((l) => l.id === state.look) || LOOKS[0], [state.look]);
+  const look = useMemo(() => LOOKS.find((lookEntry) => lookEntry.id === state.look) || LOOKS[0], [state.look]);
 
   const setSongs = useMemo(
-    () => state.setIds.map((id) => allSongs.find((s) => s.id === id)).filter((s): s is Song => !!s),
+    () => state.setIds.map((songId) => allSongs.find((candidate) => candidate.id === songId)).filter((maybeSong): maybeSong is Song => !!maybeSong),
     [state.setIds, allSongs]
   );
   const inSet = state.mode === "songs" && state.setIds.includes(song.id);
-  const toggleSetSong = useCallback((id: string) => {
-    patch((s) => ({
-      setIds: s.setIds.includes(id) ? s.setIds.filter((sid) => sid !== id) : [...s.setIds, id],
+  const toggleSetSong = useCallback((songId: string) => {
+    patch((previousState) => ({
+      setIds: previousState.setIds.includes(songId)
+        ? previousState.setIds.filter((existingSongId) => existingSongId !== songId)
+        : [...previousState.setIds, songId],
     }));
   }, [patch]);
 
   const createLineup = useCallback((name: string, songIds: string[]) => {
-    const id = "lineup-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const lineup: Lineup = { id, name, songIds };
+    const lineupId = "lineup-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const lineup: Lineup = { id: lineupId, name, songIds };
     getRepository().upsertLineup(lineup);
-    patch((s) => ({
-      lineups: [...s.lineups, lineup],
+    patch((previousState) => ({
+      lineups: [...previousState.lineups, lineup],
       setIds: songIds, setName: name,
       lineupModalOpen: false, editingLineupId: null,
     }));
   }, [patch]);
 
-  const updateLineup = useCallback((id: string, name: string, songIds: string[]) => {
-    getRepository().upsertLineup({ id, name, songIds });
-    patch((s) => ({
-      lineups: s.lineups.map((l) => (l.id === id ? { ...l, name, songIds } : l)),
+  const updateLineup = useCallback((lineupId: string, name: string, songIds: string[]) => {
+    getRepository().upsertLineup({ id: lineupId, name, songIds });
+    patch((previousState) => ({
+      lineups: previousState.lineups.map((lineup) => (lineup.id === lineupId ? { ...lineup, name, songIds } : lineup)),
       lineupModalOpen: false, editingLineupId: null,
     }));
   }, [patch]);
 
-  const deleteLineup = useCallback((id: string) => {
-    getRepository().deleteLineup(id);
-    patch((s) => ({ lineups: s.lineups.filter((l) => l.id !== id) }));
+  const deleteLineup = useCallback((lineupId: string) => {
+    getRepository().deleteLineup(lineupId);
+    patch((previousState) => ({ lineups: previousState.lineups.filter((lineup) => lineup.id !== lineupId) }));
   }, [patch]);
 
-  const activateLineup = useCallback((id: string) => {
-    patch((s) => {
-      const lineup = s.lineups.find((l) => l.id === id);
-      return lineup ? { setIds: lineup.songIds, setName: lineup.name, setPanelOpen: false } : {};
+  const activateLineup = useCallback((lineupId: string) => {
+    patch((previousState) => {
+      const targetLineup = previousState.lineups.find((entry) => entry.id === lineupId);
+      return targetLineup ? { setIds: targetLineup.songIds, setName: targetLineup.name, setPanelOpen: false } : {};
     });
+  }, [patch]);
+
+  const reorderLineupSongs = useCallback((lineupId: string, fromIndex: number, toIndex: number) => {
+    patch((previousState) => {
+      const targetLineup = previousState.lineups.find((lineup) => lineup.id === lineupId);
+      if (!targetLineup || fromIndex === toIndex) return {};
+      const reorderedSongIds = targetLineup.songIds.slice();
+      const [movedSongId] = reorderedSongIds.splice(fromIndex, 1);
+      reorderedSongIds.splice(toIndex, 0, movedSongId);
+      const updatedLineup = { ...targetLineup, songIds: reorderedSongIds };
+      getRepository().upsertLineup(updatedLineup);
+      return {
+        lineups: previousState.lineups.map((lineup) => (lineup.id === lineupId ? updatedLineup : lineup)),
+      };
+    });
+  }, [patch]);
+
+  const adjustLayoutSize = useCallback((sizeKey: keyof LayoutSizes, deltaPixels: number) => {
+    patch((previousState) => {
+      const sizeLimits = LAYOUT_SIZE_LIMITS[sizeKey];
+      const currentSize = previousState.layoutSizes[sizeKey];
+      const nextSize = Math.min(sizeLimits.max, Math.max(sizeLimits.min, currentSize + deltaPixels));
+      return { layoutSizes: { ...previousState.layoutSizes, [sizeKey]: nextSize } };
+    });
+  }, [patch]);
+
+  const toggleLayoutPanel = useCallback((panelId: LayoutPanelId) => {
+    patch((previousState) => ({
+      layoutVisibility: { ...previousState.layoutVisibility, [panelId]: !previousState.layoutVisibility[panelId] },
+    }));
+  }, [patch]);
+
+  const resetLayout = useCallback(() => {
+    patch({ layoutSizes: DEFAULT_LAYOUT_SIZES, layoutVisibility: DEFAULT_LAYOUT_VISIBILITY });
   }, [patch]);
 
   const saveLyrics = useCallback((sections: Section[]) => {
     getRepository().setSongOverride(song.id, sections);
-    patch((s) => ({ songOverrides: { ...s.songOverrides, [song.id]: sections } }));
+    patch((previousState) => ({ songOverrides: { ...previousState.songOverrides, [song.id]: sections } }));
   }, [patch, song.id]);
 
   const addSong = useCallback((parsed: ParsedSong) => {
-    const id = "custom-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const newSong: Song = { ...parsed, id, fav: false, when: "Just added" };
+    const newSongId = "custom-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const newSong: Song = { ...parsed, id: newSongId, fav: false, when: "Just added" };
     getRepository().upsertSong(newSong);
-    patch((s) => ({
-      customSongs: [...s.customSongs, newSong],
-      songId: id, idx: 0, mode: "songs", uploadOpen: false,
+    patch((previousState) => ({
+      customSongs: [...previousState.customSongs, newSong],
+      songId: newSongId, idx: 0, mode: "songs", uploadOpen: false,
     }));
   }, [patch]);
 
-  const toggleFavorite = useCallback((id: string) => {
-    patch((s) => ({ favs: { ...s.favs, [id]: !s.favs[id] } }));
+  const toggleFavorite = useCallback((songId: string) => {
+    patch((previousState) => ({ favs: { ...previousState.favs, [songId]: !previousState.favs[songId] } }));
   }, [patch]);
 
   const slides = useMemo<Slide[]>(() => {
     if (state.mode === "bible") {
-      return passage.map((t, i) => ({
-        label: "v" + vnum(i), lines: [t], n: i + 1,
-        caption: ref + ":" + vnum(i) + "  ·  " + shortTransLabel(state.trans),
+      return passage.map((verseText, verseIndex) => ({
+        label: "v" + vnum(verseIndex), lines: [verseText], slideNumber: verseIndex + 1,
+        caption: ref + ":" + vnum(verseIndex) + "  ·  " + shortTransLabel(state.trans),
       }));
     }
-    return song.sections.map((sec, i) => ({ label: sec.label, lines: sec.lines, n: i + 1, caption: "" }));
+    return song.sections.map((section, sectionIndex) => ({
+      label: section.label, lines: section.lines, slideNumber: sectionIndex + 1, caption: "",
+    }));
   }, [state.mode, passage, vnum, ref, state.trans, song]);
 
-  const go = useCallback((d: number) => {
-    setState((s) => {
-      const max = (s.mode === "bible" ? passage.length : song.sections.length) - 1;
-      return { ...s, idx: Math.min(max, Math.max(0, s.idx + d)), black: false, blank: false };
+  const go = useCallback((direction: number) => {
+    setState((previousState) => {
+      const maxIndex = (previousState.mode === "bible" ? passage.length : song.sections.length) - 1;
+      return { ...previousState, idx: Math.min(maxIndex, Math.max(0, previousState.idx + direction)), black: false, blank: false };
     });
   }, [passage.length, song.sections.length]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const k = e.key;
-      if (k === "F5") { e.preventDefault(); patch({ presenting: true }); return; }
-      if (k === "Escape") {
+    const onKey = (keyboardEvent: KeyboardEvent) => {
+      const pressedKey = keyboardEvent.key;
+      if (pressedKey === "F5") { keyboardEvent.preventDefault(); patch({ presenting: true }); return; }
+      if (pressedKey === "Escape") {
         patch({ presenting: false, settingsOpen: false, setPanelOpen: false, lyricsEditorOpen: false, uploadOpen: false, lineupModalOpen: false, editingLineupId: null });
         return;
       }
-      const target = e.target as HTMLElement | null;
+      const target = keyboardEvent.target as HTMLElement | null;
       const isTyping = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
       if (isTyping) return;
-      if (k === "ArrowRight" || k === " " || k === "PageDown") { e.preventDefault(); go(1); }
-      else if (k === "ArrowLeft" || k === "PageUp") { e.preventDefault(); go(-1); }
-      else if (k === "b" || k === "B") { patch((s) => ({ black: !s.black, blank: false })); }
-      else if (k === "w" || k === "W") { patch((s) => ({ blank: !s.blank, black: false })); }
+      if (pressedKey === "ArrowRight" || pressedKey === " " || pressedKey === "PageDown") { keyboardEvent.preventDefault(); go(1); }
+      else if (pressedKey === "ArrowLeft" || pressedKey === "PageUp") { keyboardEvent.preventDefault(); go(-1); }
+      else if (pressedKey === "b" || pressedKey === "B") { patch((previousState) => ({ black: !previousState.black, blank: false })); }
+      else if (pressedKey === "w" || pressedKey === "W") { patch((previousState) => ({ blank: !previousState.blank, black: false })); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -287,17 +334,17 @@ export function useLumen(props: LumenProps = {}) {
     on ? onClasses : "border-border bg-panel2 text-muted"
   );
 
-  let list = allSongs.filter((s) => {
-    const q = state.query.trim().toLowerCase();
-    const okQ = !q || (s.title + " " + s.artist + " " + s.tags.join(" ")).toLowerCase().includes(q);
-    const okC = state.chip === "All" || (state.chip === "Favorites" ? !!state.favs[s.id] : s.cat === state.chip);
-    return okQ && okC;
+  let list = allSongs.filter((songEntry) => {
+    const query = state.query.trim().toLowerCase();
+    const matchesQuery = !query || (songEntry.title + " " + songEntry.artist + " " + songEntry.tags.join(" ")).toLowerCase().includes(query);
+    const matchesChip = state.chip === "All" || (state.chip === "Favorites" ? !!state.favs[songEntry.id] : songEntry.cat === state.chip);
+    return matchesQuery && matchesChip;
   });
-  if (state.sort === "A–Z") list = list.slice().sort((a, b) => a.title.localeCompare(b.title));
-  if (state.sort === "Key") list = list.slice().sort((a, b) => a.key.localeCompare(b.key));
+  if (state.sort === "A–Z") list = list.slice().sort((songA, songB) => songA.title.localeCompare(songB.title));
+  if (state.sort === "Key") list = list.slice().sort((songA, songB) => songA.key.localeCompare(songB.key));
 
-  const longest = cur.lines.reduce((m, l) => Math.max(m, l.length), 0);
-  const fit = longest > 110 ? 0.62 : longest > 70 ? 0.78 : 1;
+  const longestLineLength = cur.lines.reduce((maxLength, line) => Math.max(maxLength, line.length), 0);
+  const fit = longestLineLength > 110 ? 0.62 : longestLineLength > 70 ? 0.78 : 1;
   const bigLine: CSSProperties = {
     fontSize: 26 * state.scale * fit + "px", lineHeight: 1.34, fontWeight: 600,
     letterSpacing: "-0.015em", color: "#fff", textShadow: "0 2px 24px rgba(0,0,0,.5)",
@@ -307,7 +354,8 @@ export function useLumen(props: LumenProps = {}) {
     state, patch, theme, accent, ref, passage, vnum, song, look, slides, go, idx, cur, nxt, prv, hidden,
     bible, list, chipBase, tabStyle, pill, toolBtn, canvas, lyricFamily, fit, bigLine,
     setSongs, inSet, toggleSetSong, saveLyrics, addSong, allSongs, toggleFavorite,
-    createLineup, updateLineup, deleteLineup, activateLineup,
+    createLineup, updateLineup, deleteLineup, activateLineup, reorderLineupSongs,
+    adjustLayoutSize, toggleLayoutPanel, resetLayout,
     bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel,
   };
 }

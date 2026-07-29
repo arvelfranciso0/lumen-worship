@@ -2,13 +2,14 @@
 
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
+import { ResizeHandle } from "./ResizeHandle";
 import type { UseLumen } from "./useLumen";
 
-export function MainPanel({ v }: { v: UseLumen }) {
+export function MainPanel({ lumen }: { lumen: UseLumen }) {
   const {
     state, patch, bible, song, cur, nxt, prv, idx, slides, hidden, look, canvas, pill, bigLine, lyricFamily,
-    vnum, ref, inSet, toggleSetSong, currentTransMeta, shortTransLabel,
-  } = v;
+    vnum, ref, inSet, toggleSetSong, currentTransMeta, shortTransLabel, adjustLayoutSize,
+  } = lumen;
 
   const loadedLabel = bible ? "Scripture" : "Now loaded";
   const editLabel = bible ? "Edit passage" : "Edit lyrics";
@@ -18,13 +19,14 @@ export function MainPanel({ v }: { v: UseLumen }) {
     ? shortTransLabel(state.trans) + " · " + (currentTransMeta?.license || "Loading…")
     : song.artist;
   const curMetaA = bible ? "v" + vnum(idx) : "Key " + song.key;
-  const curBpm = bible ? v.passage.length + " verses" : song.bpm;
+  const curBpm = bible ? lumen.passage.length + " verses" : song.bpm;
   const slideCounter = idx + 1 + " / " + slides.length;
   const liveState = state.black ? "BLACK" : state.blank ? "BLANK" : "LYRICS";
 
   const bgStyle = { background: state.black ? "#000" : look.css };
 
   const hasCaption = !!cur.caption && !hidden;
+  const previewVisible = state.layoutVisibility.preview;
 
   return (
     <>
@@ -82,8 +84,8 @@ export function MainPanel({ v }: { v: UseLumen }) {
           <div className="relative flex-none w-full aspect-video min-h-60 rounded-2xl overflow-hidden border border-border2 bg-black shadow-app">
             <div className="absolute inset-0" style={bgStyle} />
             <div className={cx(canvas, "gap-2.5 transition-opacity duration-180 ease-in-out", hidden ? "opacity-0" : "opacity-100")}>
-              {cur.lines.map((line, i) => (
-                <div key={i} className={lyricFamily} style={bigLine}>{line}</div>
+              {cur.lines.map((line, lineIndex) => (
+                <div key={lineIndex} className={lyricFamily} style={bigLine}>{line}</div>
               ))}
               {hasCaption && (
                 <div className="font-mono tracking-[.08em] mt-2.5 text-[rgba(255,255,255,.62)]" style={{ fontSize: 11 * state.scale + "px" }}>
@@ -98,49 +100,57 @@ export function MainPanel({ v }: { v: UseLumen }) {
           </div>
         </div>
 
-        <div className="w-88 flex-none flex flex-col gap-3.5">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Previous</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-            <div className="relative w-full aspect-video rounded-[10px] overflow-hidden border border-border bg-panel2 opacity-60">
-              <div className={cx(canvas, "gap-1")}>
-                {(prv ? prv.lines : ["— start of song —"]).map((line, i) => (
-                  <div key={i} className={cx(lyricFamily, "text-[11px] leading-[1.4] text-muted font-medium")}>{line}</div>
-                ))}
+        {previewVisible && (
+          <>
+            <ResizeHandle
+              axis="horizontal"
+              onResizeDelta={(deltaPixels) => adjustLayoutSize("previewWidth", -deltaPixels)}
+            />
+            <div className="flex-none flex flex-col gap-3.5" style={{ width: state.layoutSizes.previewWidth }}>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Previous</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+                <div className="relative w-full aspect-video rounded-[10px] overflow-hidden border border-border bg-panel2 opacity-60">
+                  <div className={cx(canvas, "gap-1")}>
+                    {(prv ? prv.lines : ["— start of song —"]).map((line, lineIndex) => (
+                      <div key={lineIndex} className={cx(lyricFamily, "text-[11px] leading-[1.4] text-muted font-medium")}>{line}</div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center text-faint text-[14px]">↓</div>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-accent">Next up</span>
+                  <div className="flex-1 h-px bg-border" />
+                  <span className={pill(false)}>{nxt ? nxt.label : "End"}</span>
+                </div>
+                <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-accent bg-black shadow-[0_0_0_3px_var(--accent-soft)]">
+                  <div className="absolute inset-0" style={bgStyle} />
+                  <div className={cx(canvas, "gap-1.25")}>
+                    {(nxt ? nxt.lines : ["— end of song —"]).map((line, lineIndex) => (
+                      <div key={lineIndex} className={cx(lyricFamily, "text-[13px] leading-[1.4] font-semibold text-white")}>{line}</div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-auto border border-border rounded-xl bg-panel p-[12px_13px] flex flex-col gap-2.25">
+                <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Shortcuts</div>
+                <div className="flex flex-col gap-1.75 text-[12px] text-muted">
+                  <div className="flex items-center justify-between"><span>Next / Previous slide</span><span className="font-mono text-[10.5px] text-text">← →</span></div>
+                  <div className="flex items-center justify-between"><span>Black screen</span><span className="font-mono text-[10.5px] text-text">B</span></div>
+                  <div className="flex items-center justify-between"><span>Blank (background only)</span><span className="font-mono text-[10.5px] text-text">W</span></div>
+                  <div className="flex items-center justify-between"><span>Present / exit</span><span className="font-mono text-[10.5px] text-text">F5 · Esc</span></div>
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="flex items-center justify-center text-faint text-[14px]">↓</div>
-
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-accent">Next up</span>
-              <div className="flex-1 h-px bg-border" />
-              <span className={pill(false)}>{nxt ? nxt.label : "End"}</span>
-            </div>
-            <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-accent bg-black shadow-[0_0_0_3px_var(--accent-soft)]">
-              <div className="absolute inset-0" style={bgStyle} />
-              <div className={cx(canvas, "gap-1.25")}>
-                {(nxt ? nxt.lines : ["— end of song —"]).map((line, i) => (
-                  <div key={i} className={cx(lyricFamily, "text-[13px] leading-[1.4] font-semibold text-white")}>{line}</div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-auto border border-border rounded-xl bg-panel p-[12px_13px] flex flex-col gap-2.25">
-            <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Shortcuts</div>
-            <div className="flex flex-col gap-1.75 text-[12px] text-muted">
-              <div className="flex items-center justify-between"><span>Next / Previous slide</span><span className="font-mono text-[10.5px] text-text">← →</span></div>
-              <div className="flex items-center justify-between"><span>Black screen</span><span className="font-mono text-[10.5px] text-text">B</span></div>
-              <div className="flex items-center justify-between"><span>Blank (background only)</span><span className="font-mono text-[10.5px] text-text">W</span></div>
-              <div className="flex items-center justify-between"><span>Present / exit</span><span className="font-mono text-[10.5px] text-text">F5 · Esc</span></div>
-            </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </>
   );

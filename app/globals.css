@@ -83,9 +83,11 @@ a:hover {
   color: var(--text);
 }
 
-input, button {
-  font: inherit;
-  color: inherit;
+@layer base {
+  input, button {
+    font: inherit;
+    color: inherit;
+  }
 }
 
 ::-webkit-scrollbar {

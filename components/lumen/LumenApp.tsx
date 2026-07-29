@@ -6,6 +6,7 @@ import { LineupModal } from "./LineupModal";
 import { LyricsEditorModal } from "./LyricsEditorModal";
 import { MainPanel } from "./MainPanel";
 import { PresentationOverlay } from "./PresentationOverlay";
+import { ResizeHandle } from "./ResizeHandle";
 import { Sidebar } from "./Sidebar";
 import { SettingsModal } from "./SettingsModal";
 import { SlidesStrip } from "./SlidesStrip";
@@ -14,29 +15,37 @@ import { Toolbar } from "./Toolbar";
 import { useLumen, type LumenProps } from "./useLumen";
 
 export function LumenApp(props: LumenProps) {
-  const v = useLumen(props);
+  const lumen = useLumen(props);
 
   const accentVars: CSSProperties = {
-    ["--accent" as string]: v.accent,
-    ["--accent-soft" as string]: v.accent + "26",
+    ["--accent" as string]: lumen.accent,
+    ["--accent-soft" as string]: lumen.accent + "26",
   };
 
   return (
-    <div data-theme={v.theme} style={accentVars} className="h-screen min-w-[1280px] flex flex-col bg-bg text-text overflow-hidden">
-      <Header v={v} />
+    <div data-theme={lumen.theme} style={accentVars} className="h-screen min-w-[1280px] flex flex-col bg-bg text-text overflow-hidden">
+      <Header lumen={lumen} />
       <div className="flex-1 flex min-h-0">
-        <Sidebar v={v} />
+        {lumen.state.layoutVisibility.sidebar && (
+          <>
+            <Sidebar lumen={lumen} />
+            <ResizeHandle
+              axis="horizontal"
+              onResizeDelta={(deltaPixels) => lumen.adjustLayoutSize("sidebarWidth", deltaPixels)}
+            />
+          </>
+        )}
         <main className="flex-1 flex flex-col min-w-0 min-h-0">
-          <MainPanel v={v} />
-          <SlidesStrip v={v} />
-          <Toolbar v={v} />
+          <MainPanel lumen={lumen} />
+          {lumen.state.layoutVisibility.slidesStrip && <SlidesStrip lumen={lumen} />}
+          <Toolbar lumen={lumen} />
         </main>
       </div>
-      <SettingsModal v={v} />
-      <LyricsEditorModal v={v} />
-      <LineupModal v={v} />
-      <SongUploadModal v={v} />
-      <PresentationOverlay v={v} />
+      <SettingsModal lumen={lumen} />
+      <LyricsEditorModal lumen={lumen} />
+      <LineupModal lumen={lumen} />
+      <SongUploadModal lumen={lumen} />
+      <PresentationOverlay lumen={lumen} />
     </div>
   );
 }

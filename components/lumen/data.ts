@@ -22,6 +22,40 @@ export type Lineup = {
   songIds: string[];
 };
 
+export type LayoutPanelId = "sidebar" | "preview" | "slidesStrip";
+
+export type LayoutSizes = {
+  sidebarWidth: number;
+  previewWidth: number;
+  slidesStripHeight: number;
+};
+
+export type LayoutVisibility = Record<LayoutPanelId, boolean>;
+
+export const DEFAULT_LAYOUT_SIZES: LayoutSizes = {
+  sidebarWidth: 328,
+  previewWidth: 352,
+  slidesStripHeight: 154,
+};
+
+export const DEFAULT_LAYOUT_VISIBILITY: LayoutVisibility = {
+  sidebar: true,
+  preview: true,
+  slidesStrip: true,
+};
+
+export const LAYOUT_SIZE_LIMITS: Record<keyof LayoutSizes, { min: number; max: number }> = {
+  sidebarWidth: { min: 240, max: 480 },
+  previewWidth: { min: 260, max: 460 },
+  slidesStripHeight: { min: 120, max: 260 },
+};
+
+export const LAYOUT_PANELS: { id: LayoutPanelId; label: string; description: string }[] = [
+  { id: "sidebar", label: "Library sidebar", description: "Songs, Bible, and lineups browser on the left." },
+  { id: "preview", label: "Previous / Next preview", description: "The upcoming and prior slide column." },
+  { id: "slidesStrip", label: "Slides strip", description: "The horizontal slide thumbnails above the toolbar." },
+];
+
 export type Look = {
   id: string;
   name: string;

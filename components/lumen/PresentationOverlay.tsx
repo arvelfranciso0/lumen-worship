@@ -3,23 +3,23 @@
 import { cx } from "./cx";
 import type { UseLumen } from "./useLumen";
 
-export function PresentationOverlay({ v }: { v: UseLumen }) {
-  const { state, cur, hidden, look } = v;
+export function PresentationOverlay({ lumen }: { lumen: UseLumen }) {
+  const { state, cur, hidden, look } = lumen;
   if (!state.presenting) return null;
 
   const stageLines = hidden ? [] : cur.lines;
   const hasStageCaption = !!cur.caption && !hidden;
-  const fit = cur.lines.reduce((m, l) => Math.max(m, l.length), 0) > 110 ? 0.62
-    : cur.lines.reduce((m, l) => Math.max(m, l.length), 0) > 70 ? 0.78 : 1;
+  const longestLineLength = cur.lines.reduce((maxLength, line) => Math.max(maxLength, line.length), 0);
+  const fit = longestLineLength > 110 ? 0.62 : longestLineLength > 70 ? 0.78 : 1;
 
   return (
     <div className="fixed inset-0 z-[200] bg-black overflow-hidden">
       <div className="absolute inset-0" style={{ background: state.black ? "#000" : look.css }} />
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-[2.2vh] p-[8vh_10vw] text-center z-[1]">
-        {stageLines.map((line, i) => (
+        {stageLines.map((line, lineIndex) => (
           <div
-            key={i}
-            className={cx(v.lyricFamily, "font-semibold tracking-[-0.02em] text-white leading-[1.24] [text-shadow:0_4px_60px_rgba(0,0,0,.55)]")}
+            key={lineIndex}
+            className={cx(lumen.lyricFamily, "font-semibold tracking-[-0.02em] text-white leading-[1.24] [text-shadow:0_4px_60px_rgba(0,0,0,.55)]")}
             style={{ fontSize: 4.4 * state.scale * fit + "vw" }}
           >
             {line}

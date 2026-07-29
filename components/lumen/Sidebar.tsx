@@ -9,30 +9,34 @@ import type { UseLumen } from "./useLumen";
 const RECENT = SONGS.slice(0, 3);
 const BIBLE_LANGUAGES = ["English", "Cebuano", "Tagalog"] as const;
 
-export function Sidebar({ v }: { v: UseLumen }) {
+export function Sidebar({ lumen }: { lumen: UseLumen }) {
   const {
     state, patch, bible, list, chipBase, tabStyle, ref, passage, vnum, idx,
     bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel,
-    allSongs, deleteLineup, toggleFavorite,
-  } = v;
+    allSongs, deleteLineup, toggleFavorite, reorderLineupSongs,
+  } = lumen;
   const [transLang, setTransLang] = useState<(typeof BIBLE_LANGUAGES)[number]>("English");
   const [viewingLineupId, setViewingLineupId] = useState<string | null>(null);
+  const [draggedSongIndex, setDraggedSongIndex] = useState<number | null>(null);
   const lineupsMode = state.mode === "lineups";
 
   useEffect(() => {
     if (!lineupsMode) setViewingLineupId(null);
   }, [lineupsMode]);
 
-  const viewingLineup = state.lineups.find((l) => l.id === viewingLineupId) || null;
+  const viewingLineup = state.lineups.find((lineup) => lineup.id === viewingLineupId) || null;
   const lineupSongs = (viewingLineup?.songIds ?? [])
-    .map((id) => allSongs.find((s) => s.id === id))
-    .filter((s): s is (typeof allSongs)[number] => !!s);
+    .map((songId) => allSongs.find((candidate) => candidate.id === songId))
+    .filter((maybeSong): maybeSong is (typeof allSongs)[number] => !!maybeSong);
 
   const resultCount = bible ? passage.length + " verses" : list.length + " songs";
   const showRecent = state.chip === "All" && !state.query;
 
   return (
-    <aside className="w-82 flex-none border-r border-border bg-panel flex flex-col min-h-0">
+    <aside
+      className="flex-none border-r border-border bg-panel flex flex-col min-h-0"
+      style={{ width: state.layoutSizes.sidebarWidth }}
+    >
       <div className="p-[14px_14px_10px] flex flex-col gap-2.5 border-b border-border">
         <div className="flex p-0.75 gap-0.75 rounded-[10px] bg-panel2 border border-border">
           <button onClick={() => patch({ mode: "songs", idx: 0, black: false, blank: false })} className={tabStyle(state.mode === "songs")}>Songs</button>
@@ -46,40 +50,42 @@ export function Sidebar({ v }: { v: UseLumen }) {
           <span className="absolute left-2.75 text-[13px] text-faint">⌕</span>
           <InteractiveInput
             value={state.query}
-            onChange={(e) => patch({ query: e.target.value })}
+            onChange={(changeEvent) => patch({ query: changeEvent.target.value })}
             placeholder={bible ? "Go to reference — e.g. John 3:16" : "Search songs, lyrics, tags"}
             className="w-full h-9 p-[0_44px_0_28px] rounded-[10px] border border-border bg-panel2 text-[13px] outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-soft)]"
           />
           <span className="absolute right-2.5 font-mono text-[10px] text-faint border border-border rounded-[5px] p-[2px_5px]">⌘K</span>
         </div>
 
-        {bible && (
-          <div className="flex flex-wrap gap-1.5">
-            {BIBLE_LANGUAGES.map((lang) => (
-              <button key={lang} onClick={() => setTransLang(lang)} className={chipBase(transLang === lang)}>
-                {lang}
+        <div className=" border-b border-border ">
+          {bible && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {BIBLE_LANGUAGES.map((language) => (
+              <button key={language} onClick={() => setTransLang(language)} className={chipBase(transLang === language)}>
+                {language}
               </button>
             ))}
           </div>
         )}
+        </div>
 
         <div className="flex flex-wrap gap-1.5">
           {bible
             ? bibleManifest
-                .filter((m) => m.language === transLang)
-                .map((m) => (
+                .filter((meta) => meta.language === transLang)
+                .map((meta) => (
                   <button
-                    key={m.code}
-                    onClick={() => patch({ trans: m.code })}
-                    className={chipBase(state.trans === m.code)}
-                    title={m.name}
+                    key={meta.code}
+                    onClick={() => patch({ trans: meta.code })}
+                    className={chipBase(state.trans === meta.code)}
+                    title={meta.name}
                   >
-                    {shortTransLabel(m.code)}
+                    {shortTransLabel(meta.code)}
                   </button>
                 ))
-            : CHIPS.map((c) => (
-                <button key={c} onClick={() => patch({ chip: c })} className={chipBase(state.chip === c)}>
-                  {c}
+            : CHIPS.map((chip) => (
+                <button key={chip} onClick={() => patch({ chip })} className={chipBase(state.chip === chip)}>
+                  {chip}
                 </button>
               ))}
         </div>
@@ -90,7 +96,7 @@ export function Sidebar({ v }: { v: UseLumen }) {
           </div>
           {!bible && (
             <InteractiveButton
-              onClick={() => patch((s) => ({ sort: SORTS[(SORTS.indexOf(s.sort) + 1) % SORTS.length] }))}
+              onClick={() => patch((previousState) => ({ sort: SORTS[(SORTS.indexOf(previousState.sort) + 1) % SORTS.length] }))}
               className="text-[12px] text-muted border-none cursor-pointer px-1 py-0.5 flex items-center gap-1.25 hover:text-text"
             >
               Sort: {state.sort} <span className="text-faint">⇅</span>
@@ -113,16 +119,16 @@ export function Sidebar({ v }: { v: UseLumen }) {
         <>
           <div className="flex-none flex border-b border-border h-43">
             <div className="w-29.5 flex-none border-r border-border overflow-y-auto p-1.5">
-              {bibleBooks.map((b) => (
+              {bibleBooks.map((book) => (
                 <button
-                  key={b.number}
-                  onClick={() => patch({ book: b.name, chapter: 1, idx: 0 })}
+                  key={book.number}
+                  onClick={() => patch({ book: book.name, chapter: 1, idx: 0 })}
                   className={cx(
                     "block w-full text-left p-[6px_8px] rounded-[7px] border-none cursor-pointer text-[12px]",
-                    b.name === state.book ? "bg-accent-soft text-text font-semibold" : "bg-transparent text-muted font-normal"
+                    book.name === state.book ? "bg-accent-soft text-text font-semibold" : "bg-transparent text-muted font-normal"
                   )}
                 >
-                  {b.name}
+                  {book.name}
                 </button>
               ))}
             </div>
@@ -131,16 +137,16 @@ export function Sidebar({ v }: { v: UseLumen }) {
                 Chapter
               </div>
               <div className="grid grid-cols-5 gap-1.25">
-                {Array.from({ length: currentBook?.chapters.length || 1 }, (_, i) => i + 1).map((n) => (
+                {Array.from({ length: currentBook?.chapters.length || 1 }, (_, chapterOffset) => chapterOffset + 1).map((chapterNumber) => (
                   <button
-                    key={n}
-                    onClick={() => patch({ chapter: n, idx: 0 })}
+                    key={chapterNumber}
+                    onClick={() => patch({ chapter: chapterNumber, idx: 0 })}
                     className={cx(
                       "h-6.5 rounded-[7px] cursor-pointer text-[11px] font-mono border",
-                      n === state.chapter ? "border-accent bg-accent-soft text-text" : "border-border bg-panel2 text-muted"
+                      chapterNumber === state.chapter ? "border-accent bg-accent-soft text-text" : "border-border bg-panel2 text-muted"
                     )}
                   >
-                    {n}
+                    {chapterNumber}
                   </button>
                 ))}
               </div>
@@ -162,19 +168,19 @@ export function Sidebar({ v }: { v: UseLumen }) {
               )}
             </div>
             <div className="flex flex-col gap-1">
-              {passage.map((t, i) => (
+              {passage.map((verseText, verseIndex) => (
                 <div
-                  key={i}
-                  onClick={() => patch({ idx: i, black: false, blank: false })}
+                  key={verseIndex}
+                  onClick={() => patch({ idx: verseIndex, black: false, blank: false })}
                   className={cx(
                     "flex gap-2.25 p-[8px_9px] rounded-2.25 cursor-pointer border",
-                    i === idx ? "border-accent bg-accent-soft" : "border-transparent bg-panel2"
+                    verseIndex === idx ? "border-accent bg-accent-soft" : "border-transparent bg-panel2"
                   )}
                 >
-                  <span className={cx("font-mono text-[10px] pt-0.75", i === idx ? "text-accent" : "text-faint")}>
-                    {vnum(i)}
+                  <span className={cx("font-mono text-[10px] pt-0.75", verseIndex === idx ? "text-accent" : "text-faint")}>
+                    {vnum(verseIndex)}
                   </span>
-                  <span className="flex-1 text-[12.5px] leading-normal">{t}</span>
+                  <span className="flex-1 text-[12.5px] leading-normal">{verseText}</span>
                 </div>
               ))}
             </div>
@@ -190,18 +196,18 @@ export function Sidebar({ v }: { v: UseLumen }) {
                 Recently used
               </div>
               <div className="flex flex-col gap-0.5 mb-2.5">
-                {RECENT.map((s) => (
+                {RECENT.map((recentSong) => (
                   <button
-                    key={s.id}
-                    onClick={() => patch({ songId: s.id, idx: 0 })}
+                    key={recentSong.id}
+                    onClick={() => patch({ songId: recentSong.id, idx: 0 })}
                     className={cx(
                       "flex items-center gap-2.25 w-full p-[7px_8px] rounded-2 border border-transparent text-text cursor-pointer",
-                      s.id === state.songId ? "bg-raise" : "bg-transparent"
+                      recentSong.id === state.songId ? "bg-raise" : "bg-transparent"
                     )}
                   >
-                    <span className="font-mono text-[10px] text-faint w-8.5 text-left">{s.when}</span>
-                    <span className="flex-1 text-left text-[13px] truncate">{s.title}</span>
-                    <span className="font-mono text-[10px] text-faint">{s.key}</span>
+                    <span className="font-mono text-[10px] text-faint w-8.5 text-left">{recentSong.when}</span>
+                    <span className="flex-1 text-left text-[13px] truncate">{recentSong.title}</span>
+                    <span className="font-mono text-[10px] text-faint">{recentSong.key}</span>
                   </button>
                 ))}
               </div>
@@ -241,13 +247,13 @@ export function Sidebar({ v }: { v: UseLumen }) {
             </div>
           ) : (
           <div className="flex flex-col gap-1.5">
-            {list.map((s) => {
-              const on = s.id === state.songId;
-              const fav = !!state.favs[s.id];
+            {list.map((songEntry) => {
+              const on = songEntry.id === state.songId;
+              const fav = !!state.favs[songEntry.id];
               return (
                 <div
-                  key={s.id}
-                  onClick={() => patch({ songId: s.id, idx: 0, black: false, blank: false })}
+                  key={songEntry.id}
+                  onClick={() => patch({ songId: songEntry.id, idx: 0, black: false, blank: false })}
                   className={cx(
                     "p-[11px_12px_10px] rounded-xl cursor-pointer border",
                     on ? "border-accent bg-accent-soft shadow-[0_0_0_3px_var(--accent-soft)]" : "border-border bg-panel2 shadow-none"
@@ -256,14 +262,14 @@ export function Sidebar({ v }: { v: UseLumen }) {
                   <div className="flex items-start gap-2.5">
                     <div className="flex-1 min-w-0">
                       <div className="text-[13.5px] font-semibold tracking-[-0.01em] truncate">
-                        {s.title}
+                        {songEntry.title}
                       </div>
                       <div className="text-[12px] text-muted mt-0.5 truncate">
-                        {s.artist}
+                        {songEntry.artist}
                       </div>
                     </div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); toggleFavorite(s.id); }}
+                      onClick={(clickEvent) => { clickEvent.stopPropagation(); toggleFavorite(songEntry.id); }}
                       className={cx("border-none cursor-pointer text-[14px] leading-none p-0.5", fav ? "text-warn" : "text-faint")}
                     >
                       ★
@@ -271,11 +277,11 @@ export function Sidebar({ v }: { v: UseLumen }) {
                   </div>
                   <div className="flex items-center gap-1.5 mt-2.25">
                     <span className="font-mono text-[10px] text-text bg-raise border border-border p-[2px_6px] rounded-[5px]">
-                      {s.key}
+                      {songEntry.key}
                     </span>
-                    <span className="font-mono text-[10px] text-faint">{s.bpm}</span>
+                    <span className="font-mono text-[10px] text-faint">{songEntry.bpm}</span>
                     <div className="flex-1" />
-                    {s.tags.slice(0, 2).map((tag) => (
+                    {songEntry.tags.slice(0, 2).map((tag) => (
                       <span key={tag} className="text-[10.5px] text-muted bg-panel2 border border-border p-[2px_7px] rounded-5">
                         {tag}
                       </span>
@@ -310,28 +316,28 @@ export function Sidebar({ v }: { v: UseLumen }) {
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
-              {state.lineups.map((lu) => (
+              {state.lineups.map((lineup) => (
                 <div
-                  key={lu.id}
-                  onClick={() => setViewingLineupId(lu.id)}
+                  key={lineup.id}
+                  onClick={() => setViewingLineupId(lineup.id)}
                   className="flex items-center gap-2.5 p-[11px_12px] rounded-xl cursor-pointer border border-border bg-panel2"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-[13.5px] font-semibold tracking-[-0.01em] truncate">
-                      {lu.name}
+                      {lineup.name}
                     </div>
                     <div className="text-[12px] text-muted mt-0.5">
-                      {lu.songIds.length === 1 ? "1 song" : lu.songIds.length + " songs"}
+                      {lineup.songIds.length === 1 ? "1 song" : lineup.songIds.length + " songs"}
                     </div>
                   </div>
                   <button
-                    onClick={(e) => { e.stopPropagation(); patch({ lineupModalOpen: true, editingLineupId: lu.id }); }}
+                    onClick={(clickEvent) => { clickEvent.stopPropagation(); patch({ lineupModalOpen: true, editingLineupId: lineup.id }); }}
                     className="border-none cursor-pointer text-[12.5px] text-muted p-1"
                   >
                     Edit
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); deleteLineup(lu.id); }}
+                    onClick={(clickEvent) => { clickEvent.stopPropagation(); deleteLineup(lineup.id); }}
                     className="border-none cursor-pointer text-[12.5px] text-faint p-1"
                   >
                     ✕
@@ -359,6 +365,7 @@ export function Sidebar({ v }: { v: UseLumen }) {
               </div>
               <div className="text-[11.5px] text-faint mt-0.5">
                 {viewingLineup.songIds.length === 1 ? "1 song" : viewingLineup.songIds.length + " songs"}
+                {viewingLineup.songIds.length > 1 && " · drag ⠿ to reorder"}
               </div>
             </div>
             <InteractiveButton
@@ -382,28 +389,43 @@ export function Sidebar({ v }: { v: UseLumen }) {
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
-              {lineupSongs.map((s) => {
-                const on = s.id === state.songId;
+              {lineupSongs.map((lineupSong, lineupSongIndex) => {
+                const on = lineupSong.id === state.songId;
+                const isDragging = draggedSongIndex === lineupSongIndex;
                 return (
                   <div
-                    key={s.id}
-                    onClick={() => patch({ songId: s.id, idx: 0, black: false, blank: false })}
+                    key={lineupSong.id}
+                    draggable
+                    onDragStart={() => setDraggedSongIndex(lineupSongIndex)}
+                    onDragOver={(dragEvent) => dragEvent.preventDefault()}
+                    onDrop={() => {
+                      if (draggedSongIndex !== null) {
+                        reorderLineupSongs(viewingLineup.id, draggedSongIndex, lineupSongIndex);
+                      }
+                      setDraggedSongIndex(null);
+                    }}
+                    onDragEnd={() => setDraggedSongIndex(null)}
+                    onClick={() => patch({ songId: lineupSong.id, idx: 0, black: false, blank: false })}
                     className={cx(
-                      "p-[11px_12px_10px] rounded-xl cursor-pointer border",
-                      on ? "border-accent bg-accent-soft shadow-[0_0_0_3px_var(--accent-soft)]" : "border-border bg-panel2 shadow-none"
+                      "flex items-start gap-2 p-[11px_12px_10px] rounded-xl cursor-pointer border",
+                      on ? "border-accent bg-accent-soft shadow-[0_0_0_3px_var(--accent-soft)]" : "border-border bg-panel2 shadow-none",
+                      isDragging && "opacity-40"
                     )}
                   >
-                    <div className="text-[13.5px] font-semibold tracking-[-0.01em] truncate">
-                      {s.title}
-                    </div>
-                    <div className="text-[12px] text-muted mt-0.5 truncate">
-                      {s.artist}
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-2.25">
-                      <span className="font-mono text-[10px] text-text bg-raise border border-border p-[2px_6px] rounded-[5px]">
-                        {s.key}
-                      </span>
-                      <span className="font-mono text-[10px] text-faint">{s.bpm}</span>
+                    <span className="flex-none cursor-grab active:cursor-grabbing text-faint text-[13px] pt-0.5">⠿</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13.5px] font-semibold tracking-[-0.01em] truncate">
+                        {lineupSong.title}
+                      </div>
+                      <div className="text-[12px] text-muted mt-0.5 truncate">
+                        {lineupSong.artist}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-2.25">
+                        <span className="font-mono text-[10px] text-text bg-raise border border-border p-[2px_6px] rounded-[5px]">
+                          {lineupSong.key}
+                        </span>
+                        <span className="font-mono text-[10px] text-faint">{lineupSong.bpm}</span>
+                      </div>
                     </div>
                   </div>
                 );
