@@ -10,6 +10,10 @@ function formatClock(date: Date) {
   return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
+function formatDateLabel(date: Date) {
+  return date.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+}
+
 export function Header({ lumen }: { lumen: UseLumen }) {
   const { state, patch, theme, hidden, setSongs, outputStatus } = lumen;
   const themeLabel = theme === "dark" ? "☾ Dark" : "☀ Light";
@@ -27,9 +31,15 @@ export function Header({ lumen }: { lumen: UseLumen }) {
   // (static export, built at a fixed time) and the first client render match
   // — avoiding a hydration mismatch — then ticks for real from there on.
   const [clock, setClock] = useState("");
+  const [dateLabel, setDateLabel] = useState("");
   useEffect(() => {
-    setClock(formatClock(new Date()));
-    const interval = setInterval(() => setClock(formatClock(new Date())), 15_000);
+    const tick = () => {
+      const now = new Date();
+      setClock(formatClock(now));
+      setDateLabel(formatDateLabel(now));
+    };
+    tick();
+    const interval = setInterval(tick, 15_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -50,7 +60,7 @@ export function Header({ lumen }: { lumen: UseLumen }) {
 
       <div className="relative flex items-center gap-2 text-[13px] text-muted">
         <span className="w-1.75 h-1.75 rounded-full bg-ok shadow-[0_0_0_3px_rgba(52,211,153,.16)]" />
-        <span className="text-text font-medium">Sunday Gathering</span>
+        <span className="text-text font-medium">{dateLabel}</span>
         {hasActiveLineup && (
           <>
             <span className="text-faint">·</span>

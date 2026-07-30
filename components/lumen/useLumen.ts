@@ -174,11 +174,14 @@ export function useLumen(props: LumenProps = {}) {
     let cancelled = false;
     getRepository().loadAll().then((data) => {
       if (cancelled) return;
+      // The repository returns these in insertion order (oldest first) —
+      // reversed here so the most recently added/downloaded item is always
+      // first, matching how new items get prepended in-session below.
       patch({
-        customSongs: data.customSongs,
-        lineups: data.lineups,
-        customBackgrounds: data.customBackgrounds,
-        downloadedTranslations: data.downloadedBibleTranslations,
+        customSongs: [...data.customSongs].reverse(),
+        lineups: [...data.lineups].reverse(),
+        customBackgrounds: [...data.customBackgrounds].reverse(),
+        downloadedTranslations: [...data.downloadedBibleTranslations].reverse(),
         songOverrides: data.songOverrides,
         ...data.prefs,
       });
@@ -270,14 +273,14 @@ export function useLumen(props: LumenProps = {}) {
   }, [translation, currentChapter, bibleLoadFailed, state.trans]);
   const vnum = useCallback((verseIndex: number) => currentChapter?.verses[verseIndex]?.number ?? verseIndex + 1, [currentChapter]);
 
-  const allSongs = useMemo(() => [...SONGS, ...state.customSongs], [state.customSongs]);
+  const allSongs = useMemo(() => [...state.customSongs, ...SONGS], [state.customSongs]);
 
   const song = useMemo(() => {
     const baseSong = allSongs.find((candidate) => candidate.id === state.songId) || allSongs[0];
     const override = state.songOverrides[baseSong.id];
     return override ? { ...baseSong, sections: override } : baseSong;
   }, [state.songId, state.songOverrides, allSongs]);
-  const allLooks = useMemo(() => [...LOOKS, ...state.customBackgrounds], [state.customBackgrounds]);
+  const allLooks = useMemo(() => [...state.customBackgrounds, ...LOOKS], [state.customBackgrounds]);
   const look = useMemo(() => allLooks.find((lookEntry) => lookEntry.id === state.look) || LOOKS[0], [allLooks, state.look]);
 
   const setSongs = useMemo(
@@ -302,7 +305,7 @@ export function useLumen(props: LumenProps = {}) {
     const lineup: Lineup = { id: lineupId, name, songIds };
     getRepository().upsertLineup(lineup);
     patch((previousState) => ({
-      lineups: [...previousState.lineups, lineup],
+      lineups: [lineup, ...previousState.lineups],
       setIds: songIds, setName: name, activeLineupId: lineupId,
       lineupModalOpen: false, editingLineupId: null,
     }));
@@ -385,7 +388,7 @@ export function useLumen(props: LumenProps = {}) {
       const fileData = await downscaledBlob.arrayBuffer();
       getRepository().addBackground({ id: backgroundId, name: file.name, mediaType, mimeType, data: fileData });
       patch((previousState) => ({
-        customBackgrounds: [...previousState.customBackgrounds, { id: backgroundId, name: file.name, mediaType, url: objectUrl }],
+        customBackgrounds: [{ id: backgroundId, name: file.name, mediaType, url: objectUrl }, ...previousState.customBackgrounds],
         look: backgroundId,
       }));
       return;
@@ -402,7 +405,7 @@ export function useLumen(props: LumenProps = {}) {
       return undefined;
     });
     patch((previousState) => ({
-      customBackgrounds: [...previousState.customBackgrounds, { id: backgroundId, name: file.name, mediaType, url: objectUrl, posterUrl }],
+      customBackgrounds: [{ id: backgroundId, name: file.name, mediaType, url: objectUrl, posterUrl }, ...previousState.customBackgrounds],
       look: backgroundId,
     }));
   }, [patch]);
@@ -443,8 +446,8 @@ export function useLumen(props: LumenProps = {}) {
     getRepository().addBibleTranslation({ code, language, name, license, link, data });
     patch((previousState) => ({
       downloadedTranslations: [
-        ...previousState.downloadedTranslations.filter((entry) => entry.code !== code),
         { code, language, name, license, link, downloadedAt: Date.now(), sizeBytes: data.byteLength },
+        ...previousState.downloadedTranslations.filter((entry) => entry.code !== code),
       ],
     }));
     setBibleCache((previousCache) => ({ ...previousCache, [code]: parsed }));
@@ -479,7 +482,7 @@ export function useLumen(props: LumenProps = {}) {
     const newSong: Song = { ...parsed, id: newSongId, fav: false, when: "Just added" };
     getRepository().upsertSong(newSong);
     patch((previousState) => ({
-      customSongs: [...previousState.customSongs, newSong],
+      customSongs: [newSong, ...previousState.customSongs],
       songId: newSongId, idx: 0, mode: "songs", uploadOpen: false,
     }));
   }, [patch]);
