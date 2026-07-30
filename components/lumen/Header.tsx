@@ -15,7 +15,7 @@ function formatDateLabel(date: Date) {
 }
 
 export function Header({ lumen }: { lumen: UseLumen }) {
-  const { state, patch, theme, hidden, setSongs, outputStatus } = lumen;
+  const { state, patch, theme, hidden, setSongs, outputStatus, updateStatus, installUpdate } = lumen;
   const themeLabel = theme === "dark" ? "☾ Dark" : "☀ Light";
   const setCountLabel = setSongs.length === 1 ? "1 song" : setSongs.length + " songs";
   const hasActiveLineup = !!state.activeLineupId;
@@ -26,6 +26,19 @@ export function Header({ lumen }: { lumen: UseLumen }) {
     : state.outputEnabled
       ? "Output · Waiting…"
       : "Output · Off";
+
+  // "available"/"downloading"/"downloaded" all mean "there's a pending update
+  // worth flagging"; only "downloaded" is actually clickable (quitAndInstall
+  // needs the download to have finished) — the other states are informational.
+  const updatePending = updateStatus.status === "available" || updateStatus.status === "downloading" || updateStatus.status === "downloaded";
+  const updateReady = updateStatus.status === "downloaded";
+  const updateLabel =
+    updateStatus.status === "downloaded" ? "Update " + updateStatus.version + " ready — click to install & restart"
+    : updateStatus.status === "downloading" ? "Downloading update… " + Math.round(updateStatus.percent) + "%"
+    : updateStatus.status === "available" ? "Update " + updateStatus.version + " available"
+    : updateStatus.status === "checking" ? "Checking for updates…"
+    : updateStatus.status === "error" ? "Update check failed"
+    : "No updates available";
 
   // Starts empty and fills in after mount so the server-prerendered markup
   // (static export, built at a fixed time) and the first client render match
@@ -115,6 +128,23 @@ export function Header({ lumen }: { lumen: UseLumen }) {
       <div className="flex-1" />
 
       <div className="flex items-center gap-2">
+        <InteractiveButton
+          onClick={() => { if (updateReady) installUpdate(); }}
+          title={updateLabel}
+          className={cx(
+            "relative h-8.5 w-8.5 flex-none flex items-center justify-center rounded-2.25 border border-border bg-panel2 text-[14px]",
+            updateReady ? "cursor-pointer hover:bg-raise hover:text-text" : "cursor-default text-muted"
+          )}
+        >
+          🔔
+          {updatePending && (
+            <span className={cx(
+              "absolute top-1 right-1 w-2 h-2 rounded-full ring-2 ring-panel2",
+              updateReady ? "bg-ok" : "bg-accent"
+            )} />
+          )}
+        </InteractiveButton>
+
         <InteractiveButton
           onClick={() => patch({ settingsOpen: true })}
           title="Configure second-monitor output"

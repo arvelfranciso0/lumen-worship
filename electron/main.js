@@ -3,12 +3,31 @@ const fs = require("node:fs");
 const http = require("node:http");
 const { pathToFileURL } = require("node:url");
 const { app, BrowserWindow, ipcMain, protocol, net, screen, shell } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const { createDb } = require("./db.js");
 
 let db;
 let staticServer;
 let operatorWindow;
 let outputWindow = null;
+let updateStatus = { status: "idle" };
+
+// Tracked here (not just fired as one-off IPC events) so a freshly opened/
+// reloaded operator window can ask for the current status instead of only
+// ever seeing whichever event happened to fire while nothing was listening.
+function setUpdateStatus(next) {
+  updateStatus = next;
+  if (operatorWindow && !operatorWindow.isDestroyed()) {
+    operatorWindow.webContents.send("update:status", updateStatus);
+  }
+}
+
+autoUpdater.on("checking-for-update", () => setUpdateStatus({ status: "checking" }));
+autoUpdater.on("update-not-available", () => setUpdateStatus({ status: "idle" }));
+autoUpdater.on("update-available", (info) => setUpdateStatus({ status: "available", version: info.version }));
+autoUpdater.on("download-progress", (progress) => setUpdateStatus({ status: "downloading", percent: progress.percent }));
+autoUpdater.on("update-downloaded", (info) => setUpdateStatus({ status: "downloaded", version: info.version }));
+autoUpdater.on("error", (error) => setUpdateStatus({ status: "error", error: error.message }));
 // "auto" picks the first non-primary display; a number pins to that specific
 // display's id. Persisted through the same generic prefs mechanism as any
 // other setting (see repo:setPrefs), keyed as outputDisplayId.
@@ -276,6 +295,9 @@ app.whenReady().then(() => {
 
   registerIpcHandlers();
   createWindow();
+  // Only meaningful in a packaged build published to GitHub releases — a
+  // dev run has no update feed to check against.
+  if (app.isPackaged) autoUpdater.checkForUpdatesAndNotify();
 
   screen.on("display-added", handleDisplaysChanged);
   screen.on("display-removed", handleDisplayRemoved);
@@ -311,6 +333,11 @@ function registerIpcHandlers() {
 
   ipcMain.handle("display:list", () => listDisplays());
   ipcMain.handle("display:status", () => outputStatusPayload());
+
+  ipcMain.handle("update:status", () => updateStatus);
+  // Only meaningful once updateStatus.status is "downloaded" — quitAndInstall
+  // is a no-op (electron-updater just resolves/ignores it) otherwise.
+  ipcMain.handle("update:install", () => autoUpdater.quitAndInstall());
 
   ipcMain.handle("output:open", async (_event, displayId) => {
     selectedOutputDisplayId = displayId ?? "auto";

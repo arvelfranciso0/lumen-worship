@@ -14,8 +14,10 @@
     "electron:dev": "concurrently -k \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "next build && electron-builder"
   },
+  "repository": "https://github.com/arvelfranciso0/lumen-worhsip",
   "dependencies": {
     "axios": "^1.18.1",
+    "electron-updater": "^6.8.9",
     "next": "16.2.12",
     "react": "19.2.4",
     "react-dom": "19.2.4"
@@ -55,6 +57,10 @@
       "createDesktopShortcut": true,
       "installerIcon": "public/lumen.ico",
       "uninstallerIcon": "public/lumen.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "releaseType": "release"
     }
   }
 }

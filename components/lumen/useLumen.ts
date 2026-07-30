@@ -14,9 +14,11 @@ import {
 } from "./data";
 import { getElectronDisplay, type OutputState, type OutputStatus } from "./electronDisplay";
 import { getElectronShell } from "./electronShell";
+import { getElectronUpdater, type UpdateStatus } from "./electronUpdater";
 import type { ParsedSong } from "./songImport";
 
 const DEFAULT_OUTPUT_STATUS: OutputStatus = { active: false, selectedDisplayId: "auto", display: null, displays: [] };
+const DEFAULT_UPDATE_STATUS: UpdateStatus = { status: "idle" };
 
 const shortTransLabel = (code: string) => code.replace(/^(English|Cebuano)/, "") || code;
 
@@ -717,6 +719,22 @@ export function useLumen(props: LumenProps = {}) {
     electronDisplay.sendState(payload);
   }, [outputStatus.active, cur, look, state.black, hidden, state.lyricStyle, lyricFamily, state.scale, fit]);
 
+  // ---- Update-notification bell (Electron only; a no-op in the plain
+  // browser build, since getElectronUpdater() returns null there) ----
+
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>(DEFAULT_UPDATE_STATUS);
+
+  useEffect(() => {
+    const electronUpdater = getElectronUpdater();
+    if (!electronUpdater) return;
+    electronUpdater.getStatus().then(setUpdateStatus).catch(() => {});
+    return electronUpdater.onStatusChanged(setUpdateStatus);
+  }, []);
+
+  const installUpdate = useCallback(() => {
+    getElectronUpdater()?.installUpdate();
+  }, []);
+
   return {
     state, patch, theme, accent, ref, passage, vnum, song, look, allLooks, slides, go, idx, cur, nxt, prv, hidden,
     bible, list, chipBase, tabStyle, pill, toolBtn, canvas, lyricFamily, fit, bigLine,
@@ -725,6 +743,7 @@ export function useLumen(props: LumenProps = {}) {
     adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
     bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus,
     importBibleTranslation, removeBibleTranslation, openBibleDownloadsPage, bibleImportError,
+    updateStatus, installUpdate,
   };
 }
 

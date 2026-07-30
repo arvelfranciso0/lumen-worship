@@ -49,3 +49,17 @@ contextBridge.exposeInMainWorld("electronDisplay", {
 contextBridge.exposeInMainWorld("electronShell", {
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
 });
+
+// Bridge for the header's update-notification bell (see
+// components/lumen/electronUpdater.ts) — surfaces electron-updater's status
+// (checking/available/downloading/downloaded/error) to the renderer and lets
+// it trigger the quit-and-install step once a download has finished.
+contextBridge.exposeInMainWorld("electronUpdater", {
+  getStatus: () => ipcRenderer.invoke("update:status"),
+  onStatusChanged: (callback) => {
+    const handler = (_event, status) => callback(status);
+    ipcRenderer.on("update:status", handler);
+    return () => ipcRenderer.removeListener("update:status", handler);
+  },
+  installUpdate: () => ipcRenderer.invoke("update:install"),
+});
