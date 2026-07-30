@@ -15,7 +15,7 @@ function formatDateLabel(date: Date) {
 }
 
 export function Header({ lumen }: { lumen: UseLumen }) {
-  const { state, patch, theme, hidden, setSongs, outputStatus, updateStatus, installUpdate } = lumen;
+  const { state, patch, theme, hidden, setSongs, outputStatus, updateStatus, installUpdate, startPresenting } = lumen;
   const themeLabel = theme === "dark" ? "☾ Dark" : "☀ Light";
   const setCountLabel = setSongs.length === 1 ? "1 song" : setSongs.length + " songs";
   const hasActiveLineup = !!state.activeLineupId;
@@ -169,7 +169,7 @@ export function Header({ lumen }: { lumen: UseLumen }) {
         </InteractiveButton>
 
         <InteractiveButton
-          onClick={() => patch({ presenting: true })}
+          onClick={startPresenting}
           className="h-8.5 px-4 rounded-2.25 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer shadow-app-sm flex items-center gap-2 hover:brightness-110"
         >
           Present

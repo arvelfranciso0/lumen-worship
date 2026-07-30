@@ -111,6 +111,14 @@ async function createWindow() {
     width: 1440,
     height: 900,
     icon: path.join(__dirname, "..", "public", "lumen.ico"),
+    // Hides the default File/Edit/View/Window/Help menu bar strip (this app
+    // has an entirely custom UI and never uses it) without actually removing
+    // the underlying Menu — setApplicationMenu(null) would also silently
+    // kill the OS-provided Ctrl+C/V/X/A accelerators in text inputs on
+    // Windows/Linux, since those are normally supplied by the default Edit
+    // menu's roles, not by Chromium itself. Alt still reveals it if ever
+    // needed.
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -333,6 +341,14 @@ function registerIpcHandlers() {
 
   ipcMain.handle("display:list", () => listDisplays());
   ipcMain.handle("display:status", () => outputStatusPayload());
+
+  // Real OS-level fullscreen for the operator window — used only for the
+  // single-monitor "Present" fallback (see useLumen.ts's startPresenting);
+  // when a second display handles the audience view instead, this is never
+  // called and the operator's own window stays a normal window.
+  ipcMain.handle("window:setFullScreen", (_event, fullScreen) => {
+    if (operatorWindow && !operatorWindow.isDestroyed()) operatorWindow.setFullScreen(fullScreen);
+  });
 
   ipcMain.handle("update:status", () => updateStatus);
   // Only meaningful once updateStatus.status is "downloaded" — quitAndInstall

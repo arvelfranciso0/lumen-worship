@@ -266,15 +266,15 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
         </button>
       </div>
 
-      <div className="flex-1 flex gap-4.5 p-[18px_22px] min-h-0 overflow-y-auto">
-        <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-80">
+      <div className="flex-1 flex gap-4.5 p-[18px_22px] min-h-0">
+        <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0">
           <div className="flex-none flex items-center gap-2.5">
             <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Live output</span>
             <span className={pill(true)}>{cur.label}</span>
             <div className="flex-1" />
             <span className="font-mono text-[11px] text-faint">{liveState}</span>
           </div>
-          <div className="relative flex-none w-full aspect-video min-h-60 rounded-2xl overflow-hidden border border-border2 bg-black shadow-app">
+          <div className="relative flex-1 min-h-60 w-full rounded-2xl overflow-hidden border border-border2 bg-black shadow-app">
             <LookBackground look={look} black={state.black} />
             <div ref={liveOutputRef} className={cx(canvas, "gap-2.5 transition-opacity duration-180 ease-in-out", hidden ? "opacity-0" : "opacity-100")}>
               {cur.lines.map((line, lineIndex) => (
@@ -301,7 +301,7 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
               axis="horizontal"
               onResizeDelta={(deltaPixels) => adjustLayoutSize("previewWidth", -deltaPixels)}
             />
-            <div className="flex-none flex flex-col gap-3.5" style={{ width: state.layoutSizes.previewWidth }}>
+            <div className="flex-none flex flex-col gap-3.5 min-h-0 overflow-y-auto" style={{ width: state.layoutSizes.previewWidth }}>
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Previous</span>

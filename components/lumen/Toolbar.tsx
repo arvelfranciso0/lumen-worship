@@ -7,7 +7,7 @@ import { LookBackground } from "./LookBackground";
 import type { UseLumen } from "./useLumen";
 
 export function Toolbar({ lumen }: { lumen: UseLumen }) {
-  const { state, patch, go, toolBtn, allLooks } = lumen;
+  const { state, patch, go, toolBtn, allLooks, startPresenting } = lumen;
 
   const smaller = () =>
     patch((s) => ({ scale: Math.max(0.7, +(s.scale - 0.1).toFixed(2)) }));
@@ -111,7 +111,7 @@ export function Toolbar({ lumen }: { lumen: UseLumen }) {
       <div className="flex-1" />
 
       <InteractiveButton
-        onClick={() => patch({ presenting: true })}
+        onClick={startPresenting}
         className="h-13 px-5.5 rounded-3 border border-border2 bg-panel2 text-[14px] font-semibold cursor-pointer flex items-center gap-2.5 hover:border-accent hover:text-accent"
       >
         ⛶ Fullscreen

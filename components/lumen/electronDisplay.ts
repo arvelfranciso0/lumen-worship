@@ -42,6 +42,7 @@ export type ElectronDisplayBridge = {
   sendState: (payload: OutputState) => void;
   onState: (callback: (payload: OutputState) => void) => () => void;
   notifyReady: () => void;
+  setOperatorFullScreen: (fullScreen: boolean) => Promise<void>;
 };
 
 declare global {

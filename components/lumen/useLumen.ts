@@ -528,26 +528,6 @@ export function useLumen(props: LumenProps = {}) {
     });
   }, [passage.length, song.sections.length]);
 
-  useEffect(() => {
-    const onKey = (keyboardEvent: KeyboardEvent) => {
-      const pressedKey = keyboardEvent.key;
-      if (pressedKey === "F5") { keyboardEvent.preventDefault(); patch({ presenting: true }); return; }
-      if (pressedKey === "Escape") {
-        patch({ presenting: false, settingsOpen: false, setPanelOpen: false, lyricsEditorOpen: false, uploadOpen: false, lineupModalOpen: false, editingLineupId: null });
-        return;
-      }
-      const target = keyboardEvent.target as HTMLElement | null;
-      const isTyping = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
-      if (isTyping) return;
-      if (pressedKey === "ArrowRight" || pressedKey === " " || pressedKey === "PageDown") { keyboardEvent.preventDefault(); go(1); }
-      else if (pressedKey === "ArrowLeft" || pressedKey === "PageUp") { keyboardEvent.preventDefault(); go(-1); }
-      else if (pressedKey === "b" || pressedKey === "B") { patch((previousState) => ({ black: !previousState.black, blank: false })); }
-      else if (pressedKey === "w" || pressedKey === "W") { patch((previousState) => ({ blank: !previousState.blank, black: false })); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [go, patch]);
-
   const lyricFamily = (LYRIC_FONTS.find((font) => font.id === (state.font || props.lyricFont)) ?? LYRIC_FONTS[0]).className;
 
   const canvas = "absolute inset-0 flex flex-col items-center justify-center p-[6%_8%] text-center z-[1]";
@@ -703,6 +683,55 @@ export function useLumen(props: LumenProps = {}) {
     }
   }, [state.outputEnabled, state.outputDisplayId]);
 
+  // Present/F5/Fullscreen: if a second monitor is available, route the
+  // audience view there (same mechanism as the Settings output toggle) and
+  // leave the operator's own window alone; only fall back to taking over the
+  // operator's own screen (the same-window overlay below, real OS fullscreen
+  // and all) when there's nowhere else to send it.
+  const secondaryDisplayAvailable = useMemo(
+    () => outputStatus.displays.some((display) => !display.isPrimary),
+    [outputStatus.displays]
+  );
+
+  const startPresenting = useCallback(() => {
+    if (secondaryDisplayAvailable) {
+      patch((previousState) => (previousState.outputEnabled ? {} : { outputEnabled: true }));
+      return;
+    }
+    patch({ presenting: true });
+  }, [patch, secondaryDisplayAvailable]);
+
+  // Mirrors state.presenting into the operator BrowserWindow's real OS
+  // fullscreen state (a no-op in the plain browser build). Only reached in
+  // the single-screen fallback above — when a second display is doing the
+  // presenting instead, state.presenting is never set, so the operator's own
+  // window stays a normal window with full desktop access.
+  useEffect(() => {
+    const electronDisplay = getElectronDisplay();
+    if (!electronDisplay) return;
+    electronDisplay.setOperatorFullScreen(state.presenting).catch(() => {});
+  }, [state.presenting]);
+
+  useEffect(() => {
+    const onKey = (keyboardEvent: KeyboardEvent) => {
+      const pressedKey = keyboardEvent.key;
+      if (pressedKey === "F5") { keyboardEvent.preventDefault(); startPresenting(); return; }
+      if (pressedKey === "Escape") {
+        patch({ presenting: false, settingsOpen: false, setPanelOpen: false, lyricsEditorOpen: false, uploadOpen: false, lineupModalOpen: false, editingLineupId: null });
+        return;
+      }
+      const target = keyboardEvent.target as HTMLElement | null;
+      const isTyping = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (isTyping) return;
+      if (pressedKey === "ArrowRight" || pressedKey === " " || pressedKey === "PageDown") { keyboardEvent.preventDefault(); go(1); }
+      else if (pressedKey === "ArrowLeft" || pressedKey === "PageUp") { keyboardEvent.preventDefault(); go(-1); }
+      else if (pressedKey === "b" || pressedKey === "B") { patch((previousState) => ({ black: !previousState.black, blank: false })); }
+      else if (pressedKey === "w" || pressedKey === "W") { patch((previousState) => ({ blank: !previousState.blank, black: false })); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [go, patch, startPresenting]);
+
   // Pushes the current live slide to the output window on every change —
   // this is the one place that assembles exactly what OutputWindowApp needs,
   // so the audience screen never has to run useLumen or touch the DB itself.
@@ -743,7 +772,7 @@ export function useLumen(props: LumenProps = {}) {
     adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
     bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus,
     importBibleTranslation, removeBibleTranslation, openBibleDownloadsPage, bibleImportError,
-    updateStatus, installUpdate,
+    updateStatus, installUpdate, startPresenting,
   };
 }
 

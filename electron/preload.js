@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld("electronDisplay", {
     return () => ipcRenderer.removeListener("output:state", handler);
   },
   notifyReady: () => ipcRenderer.send("output:ready"),
+  setOperatorFullScreen: (fullScreen) => ipcRenderer.invoke("window:setFullScreen", fullScreen),
 });
 
 // A tiny, separate bridge (see components/lumen/electronShell.ts) for the one
