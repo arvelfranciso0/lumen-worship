@@ -488,6 +488,18 @@ export function useLumen(props: LumenProps = {}) {
     patch((previousState) => ({ favs: { ...previousState.favs, [songId]: !previousState.favs[songId] } }));
   }, [patch]);
 
+  // Only ever called on a custom (user-created) song — the built-in SONGS
+  // sample data isn't persisted anywhere, so there's nothing to delete there.
+  const deleteSong = useCallback((songId: string) => {
+    getRepository().deleteSong(songId);
+    patch((previousState) => ({
+      customSongs: previousState.customSongs.filter((customSong) => customSong.id !== songId),
+      // Falls back to the first built-in song if the deleted one was active —
+      // same reasoning as deleteBackground falling back to LOOKS[0].
+      ...(previousState.songId === songId ? { songId: SONGS[0].id, idx: 0 } : {}),
+    }));
+  }, [patch]);
+
   const slides = useMemo<Slide[]>(() => {
     if (state.mode === "bible") {
       return passage.map((verseText, verseIndex) => {
@@ -705,7 +717,7 @@ export function useLumen(props: LumenProps = {}) {
   return {
     state, patch, theme, accent, ref, passage, vnum, song, look, allLooks, slides, go, idx, cur, nxt, prv, hidden,
     bible, list, chipBase, tabStyle, pill, toolBtn, canvas, lyricFamily, fit, bigLine,
-    setSongs, inSet, toggleSetSong, saveLyrics, applyLiveHighlight, removeLiveHighlight, addSong, allSongs, toggleFavorite,
+    setSongs, inSet, toggleSetSong, saveLyrics, applyLiveHighlight, removeLiveHighlight, addSong, deleteSong, allSongs, toggleFavorite,
     createLineup, updateLineup, deleteLineup, activateLineup, reorderLineupSongs,
     adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
     bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus,

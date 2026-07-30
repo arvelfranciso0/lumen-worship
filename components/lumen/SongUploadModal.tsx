@@ -1,13 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { Section } from "./data";
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
-import { parseSongText } from "./songImport";
+import { extractMetadataHeader, parseLyricsBlock } from "./songImport";
 import type { UseLumen } from "./useLumen";
-
-const EMPTY_SECTIONS: Section[] = [{ label: "Verse 1", lines: [""] }];
 
 const fieldClass = "h-9 px-2.5 rounded-2 border border-border bg-panel2 text-text text-[13px] outline-none";
 
@@ -19,7 +16,7 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
   const [bpm, setBpm] = useState("");
   const [cat, setCat] = useState("");
   const [tagsText, setTagsText] = useState("");
-  const [sections, setSections] = useState<Section[]>(EMPTY_SECTIONS);
+  const [lyricsText, setLyricsText] = useState("");
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -27,7 +24,7 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
 
   const reset = () => {
     setTitle(""); setArtist(""); setKey(""); setBpm(""); setCat(""); setTagsText("");
-    setSections(EMPTY_SECTIONS); setError("");
+    setLyricsText(""); setError("");
   };
   const close = () => { patch({ uploadOpen: false }); reset(); };
 
@@ -35,30 +32,17 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const parsed = parseSongText(String(reader.result || ""));
-      setTitle(parsed.title === "Untitled Song" ? "" : parsed.title);
+      const parsed = extractMetadataHeader(String(reader.result || ""));
+      setTitle(parsed.title);
       setArtist(parsed.artist);
       setKey(parsed.key);
       setBpm(parsed.bpm);
       setCat(parsed.cat);
       setTagsText(parsed.tags.join(", "));
-      setSections(parsed.sections);
+      setLyricsText(parsed.body);
       setError("");
     };
     reader.readAsText(file);
-  };
-
-  const updateLabel = (i: number, label: string) => {
-    setSections((d) => d.map((sec, j) => (j === i ? { ...sec, label } : sec)));
-  };
-  const updateLines = (i: number, text: string) => {
-    setSections((d) => d.map((sec, j) => (j === i ? { ...sec, lines: text.split("\n") } : sec)));
-  };
-  const removeSection = (i: number) => {
-    setSections((d) => d.filter((_, j) => j !== i));
-  };
-  const addSection = () => {
-    setSections((d) => [...d, { label: "New section", lines: [""] }]);
   };
 
   const submit = () => {
@@ -70,7 +54,7 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
       bpm: bpm.trim(),
       cat: cat.trim() || "Contemporary",
       tags: tagsText.split(",").map((t) => t.trim()).filter(Boolean),
-      sections: sections.map((sec) => ({ ...sec, lines: sec.lines.filter((l) => l.trim() !== "") })),
+      sections: parseLyricsBlock(lyricsText),
     });
     reset();
   };
@@ -111,10 +95,6 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
           >
             Choose .txt file to prefill…
           </InteractiveButton>
-          <div className="text-[12px] text-muted leading-[1.6]">
-            Start with <code>Title:</code>, <code>Artist:</code>, <code>Key:</code>, <code>BPM:</code>, <code>Tags:</code> lines, then mark
-            each section with <code>[Verse 1]</code>, <code>[Chorus]</code>, etc. A blank line starts a new slide within a section.
-          </div>
 
           <div className="flex flex-col gap-2">
             <input value={title} onChange={(e) => { setTitle(e.target.value); setError(""); }} placeholder="Title" className={fieldClass} />
@@ -130,38 +110,17 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
           </div>
 
           <div className="flex flex-col gap-2">
-            {sections.map((sec, i) => (
-              <div key={i} className="border border-border rounded-xl bg-panel2 p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    value={sec.label}
-                    onChange={(e) => updateLabel(i, e.target.value)}
-                    className="flex-1 h-7.5 px-2.5 rounded-2 border border-border bg-panel text-text text-[12.5px] font-semibold outline-none"
-                  />
-                  <button
-                    onClick={() => removeSection(i)}
-                    disabled={sections.length <= 1}
-                    className="w-7.5 h-7.5 rounded-2 border border-border bg-panel text-muted disabled:cursor-not-allowed disabled:opacity-50 not-disabled:cursor-pointer not-disabled:opacity-100"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <textarea
-                  value={sec.lines.join("\n")}
-                  onChange={(e) => updateLines(i, e.target.value)}
-                  rows={Math.max(2, sec.lines.length)}
-                  placeholder="One line per row"
-                  className="w-full p-2.5 rounded-2 border border-border bg-panel text-text text-[13px] leading-normal resize-y outline-none font-[inherit]"
-                />
-              </div>
-            ))}
-
-            <InteractiveButton
-              onClick={addSection}
-              className="h-9 rounded-2.25 border border-dashed border-border2 bg-transparent text-[12.5px] text-muted cursor-pointer hover:border-accent hover:text-accent"
-            >
-              + Add section
-            </InteractiveButton>
+            <div className="text-[12px] text-muted leading-[1.6]">
+              Type a section name on its own line — like <code>Verse 1</code>, <code>Chorus</code>, or <code>Bridge</code> —
+              to start a new section. Leave a blank line between slides.
+            </div>
+            <textarea
+              value={lyricsText}
+              onChange={(e) => setLyricsText(e.target.value)}
+              rows={12}
+              placeholder={"Verse 1\nAmazing grace, how sweet the sound\nThat saved a wretch like me\n\nChorus\n..."}
+              className="w-full p-2.5 rounded-2 border border-border bg-panel2 text-text text-[13px] leading-normal resize-y outline-none font-[inherit]"
+            />
           </div>
 
           {error && <div className="text-[12px] text-danger">{error}</div>}

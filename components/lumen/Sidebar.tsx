@@ -12,7 +12,7 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
   const {
     state, patch, bible, list, chipBase, tabStyle, ref, passage, vnum, idx,
     bibleBooks, currentBook, currentTransMeta, shortTransLabel,
-    allSongs, deleteLineup, activateLineup, toggleFavorite, reorderLineupSongs,
+    allSongs, deleteLineup, activateLineup, toggleFavorite, deleteSong, reorderLineupSongs,
   } = lumen;
   // Driven entirely by what's been imported (Settings > Bible Translations)
   // — this app bundles no Bible data at all, so there's no fixed language
@@ -308,6 +308,15 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
                     >
                       ★
                     </button>
+                    {songEntry.id.startsWith("custom-") && (
+                      <button
+                        onClick={(clickEvent) => { clickEvent.stopPropagation(); deleteSong(songEntry.id); }}
+                        className="border-none cursor-pointer text-[13px] leading-none p-0.5 text-faint hover:text-danger"
+                        title="Delete song"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 mt-2.25">
                     <span className="font-mono text-[10px] text-text bg-raise border border-border p-[2px_6px] rounded-[5px]">
