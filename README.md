@@ -1,36 +1,113 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lumen
 
-## Getting Started
+Lumen is a live worship lyrics and Bible presentation app: an operator screen for picking
+songs/passages and driving what the audience sees, with a dedicated fullscreen output for the
+audience — either the same window (single monitor) or a real second-monitor window (projector/TV
+setup). It ships from a single Next.js codebase to two targets:
 
-First, run the development server:
+- **Browser** — a static export, persisted with IndexedDB.
+- **Desktop (Windows)** — an Electron app around the same UI, persisted with SQLite, with extra
+  capabilities the browser can't offer (a real second-monitor output window, auto-update).
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+There is effectively one route/page (`app/page.tsx` → `LumenApp`); everything else is client
+components under `components/lumen/`.
+
+## Features
+
+- Song lyrics and Bible passages, presented slide-by-slide with keyboard control
+  (`← →` navigate, `B` black screen, `W` blank/background-only, `F5` present, `Esc` exit).
+- **Present / Fullscreen**: if a second display is connected, the audience view opens there
+  automatically and the operator's own window stays usable; otherwise the operator window itself
+  goes fullscreen.
+- Per-selection text highlighting, custom fonts, bold/italic/outline/color styling — applied live
+  by selecting text directly on the output preview.
+- Custom backgrounds (images/video) and built-in gradient "Looks."
+- Bible translations are imported as downloaded `.json` files (Settings → Bible Translations) —
+  none are bundled with the app.
+- Song lineups/sets, favorites, free-typing lyrics editor with automatic section parsing.
+- Resizable, show/hideable layout panels (sidebar, preview column, slides strip).
+- Desktop build only: auto-update (checks GitHub Releases, notifies via a bell in the header,
+  installs on restart).
+
+## Architecture
+
+- **State** — `components/lumen/useLumen.ts` is the single source of truth for the entire app:
+  all state, derived values, and actions live in this one hook. `LumenApp.tsx` calls it once and
+  passes the result down as a `lumen` prop to every child component. No context provider, no
+  separate state library.
+- **Persistence** — `lib/repository/` defines an `AppRepository` interface with two backends,
+  picked at runtime by `getRepository()`:
+  - `indexeddb.ts` — browser backend, raw `indexedDB`.
+  - `electron.ts` — pass-through to `window.electronAPI` (injected by `electron/preload.js`,
+    backed by `electron/db.js`, using Node's built-in `node:sqlite`).
+- **Electron shell** (`electron/main.js` + `preload.js` + `db.js`) — in production, serves the
+  static export (`out/`) via a small local HTTP server rather than `file://`, since Next's static
+  export emits absolute asset paths. Also owns the second-monitor "audience output" window and
+  the `electron-updater` auto-update flow.
+- **Styling** — Tailwind v4, CSS-first config (no `tailwind.config.js`); theme tokens live in
+  `app/globals.css` via `@theme inline`, aliasing the app's own CSS custom properties so
+  light/dark theme switching keeps working.
+- **Bible data** — nothing is bundled. Translations are converted from XML with
+  `scripts/convert-bible.mjs` on a *separate* landing-page project, downloaded by the user as a
+  `.json` file, and imported via Settings — fully offline once imported.
+
+See `CLAUDE.md` for the full breakdown (state/persistence details, Tailwind gotchas, layout
+panels, conventions) — it's the canonical reference for working in this codebase.
+
+## Project structure
+
+```
+app/page.tsx              single route, renders LumenApp
+components/lumen/          all UI + the useLumen state hook
+  useLumen.ts               the app's one state hook (state, derived values, actions)
+  LumenApp.tsx               top-level layout, wires everything to `lumen`
+  MainPanel.tsx               live output preview, text styling, previous/next
+  Sidebar.tsx / Toolbar.tsx / SlidesStrip.tsx / Header.tsx   the rest of the operator UI
+  PresentationOverlay.tsx    single-window fullscreen presentation fallback
+  OutputWindowApp.tsx        renders in the second-monitor output window (Electron)
+  electronDisplay.ts / electronShell.ts / electronUpdater.ts   typed window.electronAPI-style bridges
+lib/repository/            AppRepository interface + IndexedDB/Electron backends
+electron/                  main.js (window/IPC/updater), preload.js (bridges), db.js (SQLite)
+scripts/convert-bible.mjs  XML → JSON Bible conversion (run outside this repo now)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Getting started
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev          # Next.js dev server (Turbopack), http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+There is no test suite configured — verify changes by running the app (`npm run dev` for the
+browser build, `npm run electron:dev` for the desktop shell) and checking `npm run lint` /
+`npx tsc --noEmit`.
 
-## Learn More
+## Commands
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run dev              # Next.js dev server
+npm run build             # next build — static export to out/ (output: "export")
+npm run start             # serve the static export: npx serve@latest out (next start doesn't work — export mode)
+npm run lint               # eslint
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+npm run electron:dev       # next dev + electron concurrently, live reload
+npm run electron:build     # next build, then electron-builder -> release/*.exe (NSIS installer)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+npm run bible:convert      # node scripts/convert-bible.mjs — converts public/bible/*.xml into public/bible/json/
+```
 
-## Deploy on Vercel
+## Releasing the desktop app
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Releases publish to a **separate** GitHub repo from the source (`build.publish.owner`/`repo` in
+`package.json`) so large installer binaries never land in this repo's history. `repository` in
+`package.json` points at the source repo; it's unrelated to where builds get published.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+$env:GH_TOKEN = "ghp_..."          # classic PAT with the `repo` scope
+npm run electron:build -- --publish always
+```
+
+This builds, packages, and uploads the installer `.exe`, its `.blockmap`, and `latest.yml` to a
+new GitHub Release in one step — `electron-updater` needs all three to detect and install updates
+on end-user machines. Bump `version` in `package.json` first; that value becomes the release tag.
+The `release/` folder is safe to leave between builds (gitignored, gets overwritten per version).
