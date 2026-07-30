@@ -22,7 +22,26 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS backgrounds (
     id TEXT PRIMARY KEY, name TEXT, media_type TEXT, mime_type TEXT, file_name TEXT
   );
+  CREATE TABLE IF NOT EXISTS bible_translations (
+    code TEXT PRIMARY KEY, language TEXT, name TEXT, license TEXT, link TEXT,
+    file_name TEXT, downloaded_at INTEGER, size_bytes INTEGER
+  );
 `;
+
+// Guards a schema change made after bible_translations may have already
+// shipped once (an earlier build) — CREATE TABLE IF NOT EXISTS is a no-op
+// against an already-created table, so a fresh column needs an explicit
+// ALTER TABLE. Each is wrapped since SQLite errors on adding a column that
+// already exists.
+function migrateSchema(db) {
+  for (const statement of [
+    "ALTER TABLE bible_translations ADD COLUMN language TEXT DEFAULT ''",
+    "ALTER TABLE bible_translations ADD COLUMN license TEXT DEFAULT ''",
+    "ALTER TABLE bible_translations ADD COLUMN link TEXT",
+  ]) {
+    try { db.exec(statement); } catch { /* column already exists */ }
+  }
+}
 
 function rowToSong(row) {
   return {
@@ -45,11 +64,21 @@ function rowToBackground(row) {
   return { id: row.id, name: row.name, mediaType: row.media_type, url: "lumen-media://local/" + encodeURIComponent(row.file_name) };
 }
 
+function rowToDownloadedBibleTranslation(row) {
+  return {
+    code: row.code, language: row.language, name: row.name, license: row.license, link: row.link,
+    downloadedAt: row.downloaded_at, sizeBytes: row.size_bytes,
+  };
+}
+
 function createDb(dbPath) {
   const db = new DatabaseSync(dbPath);
   db.exec(SCHEMA);
+  migrateSchema(db);
   const backgroundsDir = path.join(path.dirname(dbPath), "backgrounds");
   fs.mkdirSync(backgroundsDir, { recursive: true });
+  const bibleTranslationsDir = path.join(path.dirname(dbPath), "bibleTranslations");
+  fs.mkdirSync(bibleTranslationsDir, { recursive: true });
 
   return {
     loadAll() {
@@ -62,7 +91,8 @@ function createDb(dbPath) {
       const prefRows = db.prepare("SELECT * FROM prefs").all();
       const prefs = Object.fromEntries(prefRows.map((r) => [r.key, JSON.parse(r.value)]));
       const customBackgrounds = db.prepare("SELECT * FROM backgrounds").all().map(rowToBackground);
-      return { customSongs, lineups, customBackgrounds, songOverrides, prefs };
+      const downloadedBibleTranslations = db.prepare("SELECT * FROM bible_translations").all().map(rowToDownloadedBibleTranslation);
+      return { customSongs, lineups, customBackgrounds, downloadedBibleTranslations, songOverrides, prefs };
     },
 
     upsertSong(song) {
@@ -127,6 +157,36 @@ function createDb(dbPath) {
         try { fs.unlinkSync(path.join(backgroundsDir, row.file_name)); } catch { /* already gone */ }
       }
       db.prepare("DELETE FROM backgrounds WHERE id = ?").run(id);
+    },
+
+    addBibleTranslation({ code, language, name, license, link, data }) {
+      const fileName = code + ".json";
+      fs.writeFileSync(path.join(bibleTranslationsDir, fileName), Buffer.from(data));
+      db.prepare(
+        `INSERT INTO bible_translations (code, language, name, license, link, file_name, downloaded_at, size_bytes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(code) DO UPDATE SET
+           language=excluded.language, name=excluded.name, license=excluded.license, link=excluded.link,
+           file_name=excluded.file_name, downloaded_at=excluded.downloaded_at, size_bytes=excluded.size_bytes`
+      ).run(code, language, name, license, link, fileName, Date.now(), data.byteLength);
+    },
+
+    deleteBibleTranslation(code) {
+      const row = db.prepare("SELECT file_name FROM bible_translations WHERE code = ?").get(code);
+      if (row) {
+        try { fs.unlinkSync(path.join(bibleTranslationsDir, row.file_name)); } catch { /* already gone */ }
+      }
+      db.prepare("DELETE FROM bible_translations WHERE code = ?").run(code);
+    },
+
+    getBibleTranslationData(code) {
+      const row = db.prepare("SELECT file_name FROM bible_translations WHERE code = ?").get(code);
+      if (!row) return null;
+      try {
+        return JSON.parse(fs.readFileSync(path.join(bibleTranslationsDir, row.file_name), "utf-8"));
+      } catch {
+        return null;
+      }
     },
 
     close() {

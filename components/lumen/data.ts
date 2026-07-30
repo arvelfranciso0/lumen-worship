@@ -320,10 +320,42 @@ export type BibleChapter = { number: number; verses: BibleVerse[] };
 export type BibleBook = { number: number; name: string; testament: "Old" | "New"; chapters: BibleChapter[] };
 export type BibleTranslation = { meta: BibleMeta; books: BibleBook[] };
 
+// A translation the user has manually imported (see BIBLE_DOWNLOADS_URL
+// below) — carries the same descriptive fields as BibleMeta (minus `path`,
+// which only made sense for a bundled static file) plus import bookkeeping.
+// The actual verse data lives in the repository and is fetched lazily via
+// getBibleTranslationData(), never eagerly loaded here, since each
+// translation's JSON can be several megabytes. This app has no bundled
+// Bible data at all (public/bible/ was removed — translations live in a
+// separate landing-page project) — this list is the sole source of truth
+// for which translations/languages are available to view.
+export type DownloadedBibleTranslation = {
+  code: string;
+  language: string;
+  name: string;
+  license: string;
+  link: string | null;
+  downloadedAt: number;
+  sizeBytes: number;
+};
+
 export const DEFAULT_TRANSLATION = "EnglishKJ";
 
 export const LOADING_PASSAGE = ["Loading translation…"];
 export const MISSING_PASSAGE = ["This chapter isn't available in this translation."];
+// A single blank line, not a message — a translation that hasn't been
+// downloaded yet must never show explanatory text on the actual live/preview
+// output (Sidebar has its own "Import" placeholder for that). Kept as a
+// single-item array (like LOADING_PASSAGE/MISSING_PASSAGE) rather than `[]`
+// so `slides`/`cur` downstream always has a real, defined current slide.
+export const NOT_DOWNLOADED_PASSAGE = [""];
+
+// Where the public Bible-translation download page (a separate project,
+// deployed independently) is hosted — update this once that site is live.
+// Used to open the page from Settings > Bible Translations, since this app
+// bundles no translation data at all; every translation comes from a
+// manual download-then-import there.
+export const BIBLE_DOWNLOADS_URL = "https://lumen-worship.netlify.app/";
 
 export const CHIPS = ["All", "Favorites", "Hymn", "Contemporary", "Español"];
 export const SORTS = ["Recent", "A–Z", "Key"];

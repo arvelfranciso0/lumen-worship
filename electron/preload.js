@@ -14,6 +14,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setPrefs: (patch) => ipcRenderer.invoke("repo:setPrefs", patch),
   addBackground: (input) => ipcRenderer.invoke("repo:addBackground", input),
   deleteBackground: (id) => ipcRenderer.invoke("repo:deleteBackground", id),
+  addBibleTranslation: (input) => ipcRenderer.invoke("repo:addBibleTranslation", input),
+  deleteBibleTranslation: (code) => ipcRenderer.invoke("repo:deleteBibleTranslation", code),
+  getBibleTranslationData: (code) => ipcRenderer.invoke("repo:getBibleTranslationData", code),
 });
 
 // Separate bridge for the second-monitor "audience output" feature — kept
@@ -37,4 +40,12 @@ contextBridge.exposeInMainWorld("electronDisplay", {
     return () => ipcRenderer.removeListener("output:state", handler);
   },
   notifyReady: () => ipcRenderer.send("output:ready"),
+});
+
+// A tiny, separate bridge (see components/lumen/electronShell.ts) for the one
+// OS-shell action Lumen needs: opening a URL in the user's real system
+// browser (the Bible-translation download page) rather than navigating the
+// app window itself.
+contextBridge.exposeInMainWorld("electronShell", {
+  openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
 });

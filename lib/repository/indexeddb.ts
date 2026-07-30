@@ -1,9 +1,9 @@
-import type { Lineup, Section, Song } from "@/components/lumen/data";
-import type { AppRepository, NewBackgroundInput, PersistedData, PersistedPrefs } from "./types";
+import type { BibleTranslation, Lineup, Section, Song } from "@/components/lumen/data";
+import type { AppRepository, NewBackgroundInput, NewBibleTranslationInput, PersistedData, PersistedPrefs } from "./types";
 
 const DB_NAME = "lumen";
-const DB_VERSION = 2;
-const STORES = ["songs", "lineups", "songOverrides", "prefs", "backgrounds"] as const;
+const DB_VERSION = 3;
+const STORES = ["songs", "lineups", "songOverrides", "prefs", "backgrounds", "bibleTranslations"] as const;
 
 type StoredBackground = {
   id: string;
@@ -11,6 +11,17 @@ type StoredBackground = {
   mediaType: "image" | "video";
   mimeType: string;
   data: ArrayBuffer;
+};
+
+type StoredBibleTranslation = {
+  code: string;
+  language: string;
+  name: string;
+  license: string;
+  link: string | null;
+  data: ArrayBuffer;
+  downloadedAt: number;
+  sizeBytes: number;
 };
 
 function openDb(): Promise<IDBDatabase> {
@@ -23,6 +34,7 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains("songOverrides")) db.createObjectStore("songOverrides", { keyPath: "songId" });
       if (!db.objectStoreNames.contains("prefs")) db.createObjectStore("prefs", { keyPath: "key" });
       if (!db.objectStoreNames.contains("backgrounds")) db.createObjectStore("backgrounds", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("bibleTranslations")) db.createObjectStore("bibleTranslations", { keyPath: "code" });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -39,6 +51,11 @@ function reqToPromise<T>(req: IDBRequest<T>): Promise<T> {
 function getAll<T>(db: IDBDatabase, store: (typeof STORES)[number]): Promise<T[]> {
   const tx = db.transaction(store, "readonly");
   return reqToPromise(tx.objectStore(store).getAll());
+}
+
+function getOne<T>(db: IDBDatabase, store: (typeof STORES)[number], key: string): Promise<T | undefined> {
+  const tx = db.transaction(store, "readonly");
+  return reqToPromise(tx.objectStore(store).get(key));
 }
 
 function put(db: IDBDatabase, store: (typeof STORES)[number], value: unknown): Promise<void> {
@@ -65,12 +82,13 @@ export function createIndexedDbRepository(): AppRepository {
   return {
     async loadAll(): Promise<PersistedData> {
       const db = await dbPromise;
-      const [customSongs, lineups, overrideRows, prefRows, backgroundRows] = await Promise.all([
+      const [customSongs, lineups, overrideRows, prefRows, backgroundRows, bibleTranslationRows] = await Promise.all([
         getAll<Song>(db, "songs"),
         getAll<Lineup>(db, "lineups"),
         getAll<{ songId: string; sections: Section[] }>(db, "songOverrides"),
         getAll<{ key: string; value: unknown }>(db, "prefs"),
         getAll<StoredBackground>(db, "backgrounds"),
+        getAll<StoredBibleTranslation>(db, "bibleTranslations"),
       ]);
       const songOverrides = Object.fromEntries(overrideRows.map((r) => [r.songId, r.sections]));
       const prefs = Object.fromEntries(prefRows.map((r) => [r.key, r.value])) as PersistedPrefs;
@@ -80,7 +98,16 @@ export function createIndexedDbRepository(): AppRepository {
         mediaType: row.mediaType,
         url: URL.createObjectURL(new Blob([row.data], { type: row.mimeType })),
       }));
-      return { customSongs, lineups, customBackgrounds, songOverrides, prefs };
+      const downloadedBibleTranslations = bibleTranslationRows.map((row) => ({
+        code: row.code,
+        language: row.language,
+        name: row.name,
+        license: row.license,
+        link: row.link,
+        downloadedAt: row.downloadedAt,
+        sizeBytes: row.sizeBytes,
+      }));
+      return { customSongs, lineups, customBackgrounds, downloadedBibleTranslations, songOverrides, prefs };
     },
 
     async upsertSong(song: Song) {
@@ -126,6 +153,27 @@ export function createIndexedDbRepository(): AppRepository {
     async deleteBackground(id: string) {
       const db = await dbPromise;
       await del(db, "backgrounds", id);
+    },
+
+    async addBibleTranslation(input: NewBibleTranslationInput) {
+      const db = await dbPromise;
+      const record: StoredBibleTranslation = {
+        code: input.code, language: input.language, name: input.name, license: input.license, link: input.link,
+        data: input.data, downloadedAt: Date.now(), sizeBytes: input.data.byteLength,
+      };
+      await put(db, "bibleTranslations", record);
+    },
+
+    async deleteBibleTranslation(code: string) {
+      const db = await dbPromise;
+      await del(db, "bibleTranslations", code);
+    },
+
+    async getBibleTranslationData(code: string): Promise<BibleTranslation | null> {
+      const db = await dbPromise;
+      const row = await getOne<StoredBibleTranslation>(db, "bibleTranslations", code);
+      if (!row) return null;
+      return JSON.parse(new TextDecoder().decode(row.data)) as BibleTranslation;
     },
   };
 }

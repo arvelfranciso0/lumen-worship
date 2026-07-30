@@ -110,7 +110,7 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
   const setLabel = inSet ? "In set ✓" : "Add to set";
   const curTitle = bible ? ref : song.title;
   const curArtist = bible
-    ? shortTransLabel(state.trans) + " · " + (currentTransMeta?.license || "Loading…")
+    ? shortTransLabel(state.trans) + " · " + (currentTransMeta?.license || "Not downloaded")
     : song.artist;
   const curMetaA = bible ? "v" + vnum(idx) : "Key " + song.key;
   const curBpm = bible ? lumen.passage.length + " verses" : song.bpm;

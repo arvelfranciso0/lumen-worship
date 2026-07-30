@@ -1,21 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CHIPS, SONGS, SORTS } from "./data";
 import { cx } from "./cx";
 import { InteractiveButton, InteractiveInput } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 
 const RECENT = SONGS.slice(0, 3);
-const BIBLE_LANGUAGES = ["English", "Cebuano", "Tagalog"] as const;
 
 export function Sidebar({ lumen }: { lumen: UseLumen }) {
   const {
     state, patch, bible, list, chipBase, tabStyle, ref, passage, vnum, idx,
-    bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel,
+    bibleBooks, currentBook, currentTransMeta, shortTransLabel,
     allSongs, deleteLineup, activateLineup, toggleFavorite, reorderLineupSongs,
   } = lumen;
-  const [transLang, setTransLang] = useState<(typeof BIBLE_LANGUAGES)[number]>("English");
+  // Driven entirely by what's been imported (Settings > Bible Translations)
+  // — this app bundles no Bible data at all, so there's no fixed language
+  // list to fall back to.
+  const bibleLanguages = useMemo(
+    () => Array.from(new Set(state.downloadedTranslations.map((entry) => entry.language))),
+    [state.downloadedTranslations]
+  );
+  const [transLang, setTransLang] = useState<string | null>(null);
+  useEffect(() => {
+    if (bibleLanguages.length && (!transLang || !bibleLanguages.includes(transLang))) {
+      setTransLang(bibleLanguages[0]);
+    }
+  }, [bibleLanguages, transLang]);
   const [viewingLineupId, setViewingLineupId] = useState<string | null>(null);
   const [draggedSongIndex, setDraggedSongIndex] = useState<number | null>(null);
   const lineupsMode = state.mode === "lineups";
@@ -29,6 +40,7 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
     .map((songId) => allSongs.find((candidate) => candidate.id === songId))
     .filter((maybeSong): maybeSong is (typeof allSongs)[number] => !!maybeSong);
 
+  const hasBibleTranslations = state.downloadedTranslations.length > 0;
   const resultCount = bible ? passage.length + " verses" : list.length + " songs";
   const showRecent = state.chip === "All" && !state.query;
 
@@ -58,9 +70,9 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
         </div>
 
         <div className=" border-b border-border ">
-          {bible && (
+          {bible && bibleLanguages.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
-            {BIBLE_LANGUAGES.map((language) => (
+            {bibleLanguages.map((language) => (
               <button key={language} onClick={() => setTransLang(language)} className={chipBase(transLang === language)}>
                 {language}
               </button>
@@ -69,27 +81,30 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
         )}
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
-          {bible
-            ? bibleManifest
-                .filter((meta) => meta.language === transLang)
-                .map((meta) => (
-                  <button
-                    key={meta.code}
-                    onClick={() => patch({ trans: meta.code })}
-                    className={chipBase(state.trans === meta.code)}
-                    title={meta.name}
-                  >
-                    {shortTransLabel(meta.code)}
+        {bible && !hasBibleTranslations ? null : (
+          <div className="flex flex-wrap gap-1.5">
+            {bible
+              ? state.downloadedTranslations
+                  .filter((entry) => entry.language === transLang)
+                  .map((entry) => (
+                    <button
+                      key={entry.code}
+                      onClick={() => patch({ trans: entry.code })}
+                      className={chipBase(state.trans === entry.code)}
+                      title={entry.name}
+                    >
+                      {shortTransLabel(entry.code)}
+                    </button>
+                  ))
+              : CHIPS.map((chip) => (
+                  <button key={chip} onClick={() => patch({ chip })} className={chipBase(state.chip === chip)}>
+                    {chip}
                   </button>
-                ))
-            : CHIPS.map((chip) => (
-                <button key={chip} onClick={() => patch({ chip })} className={chipBase(state.chip === chip)}>
-                  {chip}
-                </button>
-              ))}
-        </div>
+                ))}
+          </div>
+        )}
 
+        {(!bible || hasBibleTranslations) && (
         <div className="flex items-center justify-between">
           <div className="text-[11px] text-faint font-medium tracking-[.04em] uppercase">
             {resultCount}
@@ -111,11 +126,13 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
             </InteractiveButton>
           )}
         </div>
+        )}
         </>
         )}
       </div>
 
       {bible && (
+        hasBibleTranslations ? (
         <>
           <div className="flex-none flex border-b border-border h-43">
             <div className="w-29.5 flex-none border-r border-border overflow-y-auto p-1.5">
@@ -186,6 +203,23 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
             </div>
           </div>
         </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center p-[24px_18px]">
+            <div className="flex flex-col items-center gap-2 text-center text-muted">
+              <span className="text-[22px] text-faint">📖</span>
+              <div className="text-[13px] font-semibold text-text">No Bible translations imported</div>
+              <div className="text-[12px] leading-normal max-w-55">
+                Import a translation to start browsing and presenting Scripture.
+              </div>
+              <InteractiveButton
+                onClick={() => patch({ settingsOpen: true })}
+                className="mt-1 h-7.5 px-3 rounded-2 border border-border bg-panel2 text-[12px] text-muted cursor-pointer hover:text-text hover:bg-raise"
+              >
+                Import translation
+              </InteractiveButton>
+            </div>
+          </div>
+        )
       )}
 
       {state.mode === "songs" && (

@@ -8,8 +8,12 @@ import { LookBackground } from "./LookBackground";
 import type { UseLumen } from "./useLumen";
 
 export function SettingsModal({ lumen }: { lumen: UseLumen }) {
-  const { state, patch, allLooks, addBackground, deleteBackground, toggleLayoutPanel, resetLayout, outputStatus } = lumen;
+  const {
+    state, patch, allLooks, addBackground, deleteBackground, toggleLayoutPanel, resetLayout, outputStatus,
+    importBibleTranslation, removeBibleTranslation, openBibleDownloadsPage, bibleImportError,
+  } = lumen;
   const backgroundFileInputRef = useRef<HTMLInputElement>(null);
+  const bibleFileInputRef = useRef<HTMLInputElement>(null);
   if (!state.settingsOpen) return null;
 
   const close = () => patch({ settingsOpen: false });
@@ -19,6 +23,10 @@ export function SettingsModal({ lumen }: { lumen: UseLumen }) {
 
   const onBackgroundFile = (file: File | undefined) => {
     if (file) addBackground(file);
+  };
+
+  const onBibleFile = (file: File | undefined) => {
+    if (file) importBibleTranslation(file);
   };
 
   return (
@@ -99,6 +107,64 @@ export function SettingsModal({ lumen }: { lumen: UseLumen }) {
                 );
               })}
             </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2.25">
+              <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Bible Translations</div>
+              <div className="flex items-center gap-2.5">
+                <InteractiveButton
+                  onClick={openBibleDownloadsPage}
+                  className="text-[12px] text-muted border-none cursor-pointer px-1 py-0.5 hover:text-text"
+                >
+                  Get more translations
+                </InteractiveButton>
+                <InteractiveButton
+                  onClick={() => bibleFileInputRef.current?.click()}
+                  className="text-[12px] text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
+                >
+                  + Import translation
+                </InteractiveButton>
+                <input
+                  ref={bibleFileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={(changeEvent) => { onBibleFile(changeEvent.target.files?.[0]); changeEvent.target.value = ""; }}
+                  className="hidden"
+                />
+              </div>
+            </div>
+            {bibleImportError && (
+              <div className="mb-2 p-[10px_12px] border border-danger rounded-xl bg-panel2 text-[12px] text-danger">
+                {bibleImportError}
+              </div>
+            )}
+            {state.downloadedTranslations.length === 0 ? (
+              <div className="p-[12px_14px] border border-border rounded-xl bg-panel2 text-[12.5px] text-muted leading-normal">
+                No translations imported yet. Download one from the translations page, then import the file here.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {state.downloadedTranslations.map((translation) => (
+                  <div
+                    key={translation.code}
+                    className="flex items-center justify-between p-[10px_12px] border border-border rounded-xl bg-panel2"
+                  >
+                    <div>
+                      <div className="text-[13px] font-medium">{translation.name}</div>
+                      <div className="text-[12px] text-muted mt-0.5">{(translation.sizeBytes / (1024 * 1024)).toFixed(1)} MB</div>
+                    </div>
+                    <button
+                      onClick={() => removeBibleTranslation(translation.code)}
+                      className="w-7 h-7 rounded-full border border-border bg-panel text-muted text-[12px] cursor-pointer flex items-center justify-center hover:text-text"
+                      title="Remove translation"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>

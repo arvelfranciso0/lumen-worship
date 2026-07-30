@@ -4,14 +4,16 @@ import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from
 import { getRepository } from "@/lib/repository";
 import { cx } from "./cx";
 import {
-  addHighlightRange, bibleHighlightKey, DEFAULT_LAYOUT_SIZES, DEFAULT_LAYOUT_VISIBILITY, DEFAULT_LYRIC_FONT,
-  DEFAULT_LYRIC_STYLE, DEFAULT_TRANSLATION, LAYOUT_SIZE_LIMITS, LOADING_PASSAGE, LOOKS, LYRIC_FONTS, MISSING_PASSAGE,
-  SONGS, subtractHighlightRange,
-  type BibleHighlights, type BibleMeta, type BibleTranslation, type CustomBackground, type HighlightRange,
+  addHighlightRange, BIBLE_DOWNLOADS_URL, bibleHighlightKey, DEFAULT_LAYOUT_SIZES, DEFAULT_LAYOUT_VISIBILITY,
+  DEFAULT_LYRIC_FONT, DEFAULT_LYRIC_STYLE, DEFAULT_TRANSLATION, LAYOUT_SIZE_LIMITS, LOADING_PASSAGE, LOOKS,
+  LYRIC_FONTS, MISSING_PASSAGE, NOT_DOWNLOADED_PASSAGE, SONGS, subtractHighlightRange,
+  type BibleHighlights, type BibleTranslation, type CustomBackground,
+  type DownloadedBibleTranslation, type HighlightRange,
   type LayoutPanelId, type LayoutSizes, type LayoutVisibility, type Lineup, type LyricFontId, type LyricStyle,
   type Section, type Song,
 } from "./data";
 import { getElectronDisplay, type OutputState, type OutputStatus } from "./electronDisplay";
+import { getElectronShell } from "./electronShell";
 import type { ParsedSong } from "./songImport";
 
 const DEFAULT_OUTPUT_STATUS: OutputStatus = { active: false, selectedDisplayId: "auto", display: null, displays: [] };
@@ -126,6 +128,7 @@ type LumenState = {
   layoutSizes: LayoutSizes;
   layoutVisibility: LayoutVisibility;
   customBackgrounds: CustomBackground[];
+  downloadedTranslations: DownloadedBibleTranslation[];
   lyricStyle: LyricStyle;
   bibleHighlights: BibleHighlights;
   // Whether a second-monitor "audience output" window should be open, and
@@ -151,6 +154,7 @@ const INITIAL_STATE: LumenState = {
   lineups: [], lineupModalOpen: false, editingLineupId: null,
   layoutSizes: DEFAULT_LAYOUT_SIZES, layoutVisibility: DEFAULT_LAYOUT_VISIBILITY,
   customBackgrounds: [],
+  downloadedTranslations: [],
   lyricStyle: DEFAULT_LYRIC_STYLE,
   bibleHighlights: {},
   outputEnabled: false, outputDisplayId: "auto",
@@ -174,6 +178,7 @@ export function useLumen(props: LumenProps = {}) {
         customSongs: data.customSongs,
         lineups: data.lineups,
         customBackgrounds: data.customBackgrounds,
+        downloadedTranslations: data.downloadedBibleTranslations,
         songOverrides: data.songOverrides,
         ...data.prefs,
       });
@@ -216,37 +221,41 @@ export function useLumen(props: LumenProps = {}) {
     state.outputEnabled, state.outputDisplayId,
   ]);
 
-  const [bibleManifest, setBibleManifest] = useState<BibleMeta[]>([]);
   const [bibleCache, setBibleCache] = useState<Record<string, BibleTranslation>>({});
   const bibleCacheRef = useRef(bibleCache);
   bibleCacheRef.current = bibleCache;
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/bible/json/manifest.json")
-      .then((response) => response.json())
-      .then((data: BibleMeta[]) => { if (!cancelled) setBibleManifest(data); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
+  // Tracks translations that aren't locally imported — distinct from "still
+  // loading", so the UI can tell the two apart instead of showing
+  // LOADING_PASSAGE forever (see NOT_DOWNLOADED_PASSAGE). This app bundles no
+  // Bible data at all: every translation comes from the repository,
+  // populated only via importBibleTranslation.
+  const [bibleLoadFailed, setBibleLoadFailed] = useState<Record<string, boolean>>({});
+  // Bumped by removeBibleTranslation so the lookup effect re-runs even though
+  // state.trans itself didn't change — otherwise deleting the *currently
+  // viewed* translation would clear its cache entry but never re-check
+  // whether it's still available, leaving the passage stuck.
+  const [bibleRefreshTick, setBibleRefreshTick] = useState(0);
 
   useEffect(() => {
     if (bibleCacheRef.current[state.trans]) return;
     let cancelled = false;
-    fetch("/bible/json/" + state.trans + ".json")
-      .then((response) => response.json())
-      .then((data: BibleTranslation) => {
-        if (!cancelled) setBibleCache((previousCache) => ({ ...previousCache, [state.trans]: data }));
-      })
-      .catch(() => {});
+    getRepository().getBibleTranslationData(state.trans).then((data) => {
+      if (cancelled) return;
+      if (data) {
+        setBibleCache((previousCache) => ({ ...previousCache, [state.trans]: data }));
+        setBibleLoadFailed((previous) => (previous[state.trans] ? { ...previous, [state.trans]: false } : previous));
+        return;
+      }
+      setBibleLoadFailed((previous) => ({ ...previous, [state.trans]: true }));
+    }).catch(() => {});
     return () => { cancelled = true; };
-  }, [state.trans]);
+  }, [state.trans, bibleRefreshTick]);
 
   const translation = bibleCache[state.trans];
   const bibleBooks = useMemo(() => translation?.books ?? [], [translation]);
   const currentTransMeta = useMemo(
-    () => bibleManifest.find((meta) => meta.code === state.trans),
-    [bibleManifest, state.trans]
+    () => state.downloadedTranslations.find((entry) => entry.code === state.trans),
+    [state.downloadedTranslations, state.trans]
   );
 
   const ref = state.book + " " + state.chapter;
@@ -256,9 +265,9 @@ export function useLumen(props: LumenProps = {}) {
     [currentBook, state.chapter]
   );
   const passage = useMemo(() => {
-    if (!translation) return LOADING_PASSAGE;
+    if (!translation) return bibleLoadFailed[state.trans] ? NOT_DOWNLOADED_PASSAGE : LOADING_PASSAGE;
     return currentChapter ? currentChapter.verses.map((verse) => verse.text) : MISSING_PASSAGE;
-  }, [translation, currentChapter]);
+  }, [translation, currentChapter, bibleLoadFailed, state.trans]);
   const vnum = useCallback((verseIndex: number) => currentChapter?.verses[verseIndex]?.number ?? verseIndex + 1, [currentChapter]);
 
   const allSongs = useMemo(() => [...SONGS, ...state.customSongs], [state.customSongs]);
@@ -405,6 +414,60 @@ export function useLumen(props: LumenProps = {}) {
       look: previousState.look === backgroundId ? LOOKS[0].id : previousState.look,
     }));
   }, [patch]);
+
+  // Imports a translation JSON file the user downloaded from the Bible
+  // translations page (BIBLE_DOWNLOADS_URL) — mirrors addBackground's
+  // file-upload pattern, but the source is a manual download rather than
+  // in-app networking, since this app bundles no Bible data at all.
+  const [bibleImportError, setBibleImportError] = useState<string | null>(null);
+
+  const importBibleTranslation = useCallback(async (file: File) => {
+    setBibleImportError(null);
+    const text = await file.text();
+    let parsed: BibleTranslation;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      setBibleImportError(file.name + " isn't valid JSON.");
+      return;
+    }
+    if (!parsed?.meta?.code || !parsed?.meta?.name || !Array.isArray(parsed?.books)) {
+      setBibleImportError(file.name + " doesn't look like a Bible translation file.");
+      return;
+    }
+    const { code, name } = parsed.meta;
+    const language = parsed.meta.language || "Unknown";
+    const license = parsed.meta.license || "";
+    const link = parsed.meta.link ?? null;
+    const data = await file.arrayBuffer();
+    getRepository().addBibleTranslation({ code, language, name, license, link, data });
+    patch((previousState) => ({
+      downloadedTranslations: [
+        ...previousState.downloadedTranslations.filter((entry) => entry.code !== code),
+        { code, language, name, license, link, downloadedAt: Date.now(), sizeBytes: data.byteLength },
+      ],
+    }));
+    setBibleCache((previousCache) => ({ ...previousCache, [code]: parsed }));
+    setBibleLoadFailed((previous) => (previous[code] ? { ...previous, [code]: false } : previous));
+  }, [patch]);
+
+  const removeBibleTranslation = useCallback((code: string) => {
+    getRepository().deleteBibleTranslation(code);
+    patch((previousState) => ({
+      downloadedTranslations: previousState.downloadedTranslations.filter((entry) => entry.code !== code),
+    }));
+    setBibleCache((previousCache) => {
+      const { [code]: _removed, ...rest } = previousCache;
+      return rest;
+    });
+    setBibleRefreshTick((tick) => tick + 1);
+  }, [patch]);
+
+  const openBibleDownloadsPage = useCallback(() => {
+    const electronShell = getElectronShell();
+    if (electronShell) electronShell.openExternal(BIBLE_DOWNLOADS_URL);
+    else window.open(BIBLE_DOWNLOADS_URL, "_blank", "noopener,noreferrer");
+  }, []);
 
   const saveLyrics = useCallback((sections: Section[]) => {
     getRepository().setSongOverride(song.id, sections);
@@ -645,7 +708,8 @@ export function useLumen(props: LumenProps = {}) {
     setSongs, inSet, toggleSetSong, saveLyrics, applyLiveHighlight, removeLiveHighlight, addSong, allSongs, toggleFavorite,
     createLineup, updateLineup, deleteLineup, activateLineup, reorderLineupSongs,
     adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
-    bibleManifest, bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus,
+    bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus,
+    importBibleTranslation, removeBibleTranslation, openBibleDownloadsPage, bibleImportError,
   };
 }
 

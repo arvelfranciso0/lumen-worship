@@ -2,7 +2,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const http = require("node:http");
 const { pathToFileURL } = require("node:url");
-const { app, BrowserWindow, ipcMain, protocol, net, screen } = require("electron");
+const { app, BrowserWindow, ipcMain, protocol, net, screen, shell } = require("electron");
 const { createDb } = require("./db.js");
 
 let db;
@@ -296,6 +296,18 @@ function registerIpcHandlers() {
   ipcMain.handle("repo:setPrefs", (_event, patch) => db.setPrefs(patch));
   ipcMain.handle("repo:addBackground", (_event, input) => db.addBackground(input));
   ipcMain.handle("repo:deleteBackground", (_event, id) => db.deleteBackground(id));
+  ipcMain.handle("repo:addBibleTranslation", (_event, input) => db.addBibleTranslation(input));
+  ipcMain.handle("repo:deleteBibleTranslation", (_event, code) => db.deleteBibleTranslation(code));
+  ipcMain.handle("repo:getBibleTranslationData", (_event, code) => db.getBibleTranslationData(code));
+
+  // Only http(s) URLs are ever passed here — the caller always uses the
+  // hardcoded BIBLE_DOWNLOADS_URL constant, never user-supplied input — but
+  // the check costs nothing and keeps this handler from ever being a general
+  // arbitrary-protocol-launcher if that assumption changes later.
+  ipcMain.handle("shell:openExternal", (_event, url) => {
+    if (!/^https?:\/\//i.test(url)) return;
+    return shell.openExternal(url);
+  });
 
   ipcMain.handle("display:list", () => listDisplays());
   ipcMain.handle("display:status", () => outputStatusPayload());
