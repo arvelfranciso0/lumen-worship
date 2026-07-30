@@ -34,8 +34,13 @@ function generateVideoPoster(videoUrl: string): Promise<string> {
     // http://) taints the canvas and toDataURL throws a SecurityError, even
     // though playback itself works fine either way. See the matching
     // Access-Control-Allow-Origin header on the lumen-media:// response in
-    // electron/main.js — both sides are required.
-    video.crossOrigin = "anonymous";
+    // electron/main.js — both sides are required. Skipped for blob: URLs
+    // (the browser/IndexedDB backend) — those are always same-origin and
+    // never carry CORS headers, so setting crossOrigin on them makes some
+    // browsers fail the load entirely instead of being a harmless no-op.
+    if (!videoUrl.startsWith("blob:")) {
+      video.crossOrigin = "anonymous";
+    }
     video.src = videoUrl;
     video.addEventListener("loadeddata", () => {
       const posterCanvas = document.createElement("canvas");
@@ -182,7 +187,14 @@ export function useLumen(props: LumenProps = {}) {
                 entry.id === background.id ? { ...entry, posterUrl } : entry
               ),
             }));
-          }).catch(() => {});
+          }).catch((error) => {
+            // Left as a live <video> everywhere until a reload retries this —
+            // LookBackground falls back to real playback when posterUrl is
+            // missing, which is exactly the simultaneous-decode lag this
+            // poster mechanism exists to avoid. Logged so a silent failure
+            // here doesn't read as "just laggy" with no further clue.
+            console.error("Failed to generate poster for background " + background.id + ":", error);
+          });
         });
     }).catch(() => {});
     return () => { cancelled = true; };
@@ -376,7 +388,10 @@ export function useLumen(props: LumenProps = {}) {
     const objectUrl = URL.createObjectURL(file);
     const fileData = await file.arrayBuffer();
     getRepository().addBackground({ id: backgroundId, name: file.name, mediaType, mimeType: file.type, data: fileData });
-    const posterUrl = await generateVideoPoster(objectUrl).catch(() => undefined);
+    const posterUrl = await generateVideoPoster(objectUrl).catch((error) => {
+      console.error("Failed to generate poster for background " + backgroundId + ":", error);
+      return undefined;
+    });
     patch((previousState) => ({
       customBackgrounds: [...previousState.customBackgrounds, { id: backgroundId, name: file.name, mediaType, url: objectUrl, posterUrl }],
       look: backgroundId,
@@ -588,11 +603,23 @@ export function useLumen(props: LumenProps = {}) {
   useEffect(() => {
     const electronDisplay = getElectronDisplay();
     if (!electronDisplay) return;
-    if (state.outputEnabled) electronDisplay.openOutput(state.outputDisplayId).then(setOutputStatusFromOpenResult).catch(() => {});
-    else electronDisplay.closeOutput().catch(() => {});
+    if (state.outputEnabled) {
+      electronDisplay.openOutput(state.outputDisplayId).then((result) => {
+        if (!result.ok) console.error("Failed to open second-monitor output window:", result.reason);
+        setOutputStatusFromOpenResult();
+      }).catch((error) => {
+        console.error("output:open IPC call failed:", error);
+      });
+    } else {
+      electronDisplay.closeOutput().catch((error) => {
+        console.error("output:close IPC call failed:", error);
+      });
+    }
 
     function setOutputStatusFromOpenResult() {
-      electronDisplay!.getStatus().then(setOutputStatus).catch(() => {});
+      electronDisplay!.getStatus().then(setOutputStatus).catch((error) => {
+        console.error("display:status IPC call failed:", error);
+      });
     }
   }, [state.outputEnabled, state.outputDisplayId]);
 

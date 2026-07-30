@@ -22,9 +22,14 @@ export function OutputWindowApp() {
 
   useEffect(() => {
     const electronDisplay = getElectronDisplay();
+    console.log("[output] OutputWindowApp mounted; electronDisplay bridge present:", !!electronDisplay);
     if (!electronDisplay) return;
-    const unsubscribe = electronDisplay.onState(setOutputState);
+    const unsubscribe = electronDisplay.onState((newState) => {
+      console.log("[output] received state push:", newState);
+      setOutputState(newState);
+    });
     electronDisplay.notifyReady();
+    console.log("[output] notifyReady() sent");
     return unsubscribe;
   }, []);
 

@@ -25,7 +25,15 @@ app.disableHardwareAcceleration();
 // the renderer. Registered before app.ready, as Electron requires. A raw
 // file:// path is avoided here since it's unreliable under contextIsolation.
 protocol.registerSchemesAsPrivileged([
-  { scheme: "lumen-media", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  {
+    scheme: "lumen-media",
+    // corsEnabled is required for crossOrigin="anonymous" (see
+    // generateVideoPoster in useLumen.ts) to work at all — without it,
+    // Chromium refuses the cross-origin video load outright (an "error"
+    // event, load never even reaches the handler's response) regardless of
+    // the Access-Control-Allow-Origin header the handler below sends back.
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
 ]);
 
 const MIME_TYPES = {
@@ -146,8 +154,13 @@ function broadcastOutputStatus() {
 }
 
 async function openOutputWindow() {
+  console.log("[output] openOutputWindow() called; all displays:", listDisplays());
   const display = resolveOutputDisplay();
-  if (!display) return { ok: false, reason: "no-secondary-display" };
+  if (!display) {
+    console.log("[output] no secondary display resolved, bailing out");
+    return { ok: false, reason: "no-secondary-display" };
+  }
+  console.log("[output] opening on display", display.id, display.bounds);
 
   if (outputWindow && !outputWindow.isDestroyed()) {
     outputWindow.setFullScreen(false);
@@ -168,11 +181,29 @@ async function openOutputWindow() {
     },
   });
   outputWindow = win;
-  win.loadURL(await resolveAppUrl("output=1"));
+  win.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
+    console.error("[output] window failed to load:", errorCode, errorDescription);
+  });
+  win.webContents.on("did-finish-load", () => {
+    console.log("[output] page finished loading, waiting for output:ready…");
+  });
+  win.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[output] renderer process gone:", details.reason);
+  });
   win.on("closed", () => {
+    console.log("[output] window closed");
     if (outputWindow === win) outputWindow = null;
     broadcastOutputStatus();
   });
+  // Surfaces any renderer-side error (e.g. a JS exception before
+  // OutputWindowApp can call notifyReady) directly, instead of the window
+  // just silently never showing with no clue why.
+  if (!app.isPackaged) win.webContents.openDevTools({ mode: "detached" });
+  // Broadcast right away so the operator UI reflects "active" as soon as the
+  // window exists, rather than only after the page inside it finishes
+  // loading (loadURL below can take a moment on a cold dev server).
+  broadcastOutputStatus();
+  win.loadURL(await resolveAppUrl("output=1"));
   // Held hidden until the output-only page confirms (via output:ready) that
   // it has actually rendered live content — otherwise the operator's full
   // UI would flash on the audience screen for an instant before it swaps in.
@@ -185,16 +216,38 @@ function closeOutputWindow() {
   broadcastOutputStatus();
 }
 
-function handleDisplaysChanged() {
-  if (outputWindow && !outputWindow.isDestroyed()) {
-    const stillConnected = resolveOutputDisplay();
-    if (!stillConnected) closeOutputWindow();
-    else {
-      outputWindow.setFullScreen(false);
-      outputWindow.setBounds(stillConnected.bounds);
-      outputWindow.setFullScreen(true);
-    }
+// Re-bounds the output window to wherever it should currently be, but only
+// if that's actually different from where it already is — Windows fires
+// display-metrics-changed when a fullscreen window hides the taskbar, so
+// unconditionally calling setFullScreen/setBounds here on every event would
+// re-trigger the very same event, feeding back into itself.
+function retargetOutputWindow() {
+  if (!outputWindow || outputWindow.isDestroyed()) return;
+  const display = resolveOutputDisplay();
+  if (!display) return;
+  const current = outputWindow.getBounds();
+  const target = display.bounds;
+  if (current.x === target.x && current.y === target.y && current.width === target.width && current.height === target.height) return;
+  outputWindow.setFullScreen(false);
+  outputWindow.setBounds(target);
+  outputWindow.setFullScreen(true);
+}
+
+// Only a genuine display-removed means the output window's monitor might be
+// gone — display-metrics-changed also fires from our own setFullScreen()
+// calls (see retargetOutputWindow above) and must never be treated as a
+// disconnect, or the output window would close itself moments after opening.
+function handleDisplayRemoved() {
+  if (outputWindow && !outputWindow.isDestroyed() && !resolveOutputDisplay()) {
+    closeOutputWindow();
+    return;
   }
+  retargetOutputWindow();
+  broadcastOutputStatus();
+}
+
+function handleDisplaysChanged() {
+  retargetOutputWindow();
   broadcastOutputStatus();
 }
 
@@ -225,7 +278,7 @@ app.whenReady().then(() => {
   createWindow();
 
   screen.on("display-added", handleDisplaysChanged);
-  screen.on("display-removed", handleDisplaysChanged);
+  screen.on("display-removed", handleDisplayRemoved);
   screen.on("display-metrics-changed", handleDisplaysChanged);
 
   app.on("activate", () => {
@@ -268,11 +321,13 @@ function registerIpcHandlers() {
   // on the audience screen while the page loads and reads ?output=1.
   ipcMain.on("output:ready", (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
+    console.log("[output] output:ready received; is the tracked output window?", win === outputWindow);
     if (win !== outputWindow || win.isDestroyed()) return;
     const display = resolveOutputDisplay();
     if (display) win.setBounds(display.bounds);
     win.setFullScreen(true);
     win.show();
+    console.log("[output] window shown on", display?.bounds);
     broadcastOutputStatus();
   });
 }

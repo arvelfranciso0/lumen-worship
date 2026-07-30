@@ -25,10 +25,17 @@ export function LookBackground({ look, black, preview, className }: LookBackgrou
 
   if (isCustomBackground(look)) {
     if (look.mediaType === "video") {
-      if (preview && look.posterUrl) {
-        return (
+      // Preview spots never get a live <video> — if the poster hasn't been
+      // captured yet (or capture failed), they just stay a plain black
+      // panel rather than falling back to an independent decode, which is
+      // exactly the simultaneous-decode lag this preview mode exists to
+      // avoid in the first place.
+      if (preview) {
+        return look.posterUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- runtime data URL, not a static asset next/image can optimize
           <img src={look.posterUrl} alt="" className={cx(baseClassName, "w-full h-full object-cover")} />
+        ) : (
+          <div className={cx(baseClassName, "bg-black")} />
         );
       }
       return (
