@@ -38,7 +38,7 @@
   },
   "build": {
     "appId": "com.lumen.worship",
-    "productName": "Lumen",
+    "productName": "Lumen Worship",
     "directories": {
       "output": "release"
     },

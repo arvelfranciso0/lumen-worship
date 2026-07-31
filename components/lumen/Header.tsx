@@ -67,7 +67,7 @@ export function Header({ lumen }: { lumen: UseLumen }) {
           alt="Lume"
           />
         </div>
-        <div className="text-[15px] font-semibold tracking-[-0.01em]">Lumen</div>
+        <div className="text-[15px] font-semibold tracking-[-0.01em]">Lumen Worship</div>
         <div className="font-mono text-[10px] text-faint border border-border p-[2px_5px] rounded-[5px]">v{process.env.NEXT_PUBLIC_APP_VERSION}</div>
       </div>
 
