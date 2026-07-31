@@ -14,4 +14,4 @@ release:
 	npm run electron:build -- --publish always
 
 release-beta:
-	npm run electron:build -- --publish always -c.publish.releaseType=prerelease
+	npx electron-builder --publish always -c.publish.releaseType=prerelease -c.publish.channel=beta

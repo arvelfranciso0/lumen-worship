@@ -9,6 +9,39 @@ import type { UseLumen } from "./useLumen";
 
 const fieldClass = "h-9 px-2.5 rounded-2 border border-border bg-panel2 text-text text-[13px] outline-none";
 
+// A ready-to-edit example matching extractMetadataHeader's format — download,
+// tweak the header lines and lyrics, then upload it right back in via
+// "Choose .txt file to prefill…".
+const SAMPLE_SONG_TEXT = `Title: Amazing Grace
+Artist: John Newton
+Key: G
+BPM: 72
+Category: Hymn
+Tags: hymn, classic
+
+Verse 1
+Amazing grace, how sweet the sound
+That saved a wretch like me
+I once was lost, but now am found
+Was blind but now I see
+
+Chorus
+'Twas grace that taught my heart to fear
+And grace my fears relieved
+How precious did that grace appear
+The hour I first believed
+`;
+
+function downloadSampleSongFile() {
+  const blob = new Blob([SAMPLE_SONG_TEXT], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "sample-song.txt";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
   const { state, patch, addSong } = lumen;
   const [title, setTitle] = useState("");
@@ -91,12 +124,25 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
             onChange={(e) => onFile(e.target.files?.[0])}
             className="hidden"
           />
-          <InteractiveButton
-            onClick={() => fileRef.current?.click()}
-            className="h-9 rounded-2.25 border border-dashed border-border2 bg-transparent text-[12.5px] text-muted cursor-pointer hover:border-accent hover:text-accent"
-          >
-            Choose .txt file to prefill…
-          </InteractiveButton>
+          <div className="flex gap-2">
+            <InteractiveButton
+              onClick={() => fileRef.current?.click()}
+              className="flex-1 h-9 rounded-2.25 border border-dashed border-border2 bg-transparent text-[12.5px] text-muted cursor-pointer hover:border-accent hover:text-accent"
+            >
+              Choose .txt file to prefill…
+            </InteractiveButton>
+            <InteractiveButton
+              onClick={downloadSampleSongFile}
+              className="h-9 px-3 rounded-2.25 border border-border2 bg-transparent text-[12.5px] text-muted cursor-pointer hover:border-accent hover:text-accent"
+            >
+              Download sample .txt
+            </InteractiveButton>
+          </div>
+          <div className="text-[12px] text-muted leading-[1.6]">
+            Start the file with any of <code>Title:</code>, <code>Artist:</code>, <code>Key:</code>, <code>BPM:</code>,{" "}
+            <code>Category:</code>, <code>Tags:</code> (one per line) to prefill the fields below — everything after
+            the first blank line is treated as the lyrics.
+          </div>
 
           <div className="flex flex-col gap-2">
             <input value={title} onChange={(e) => { setTitle(e.target.value); setError(""); }} placeholder="Title" className={fieldClass} />
