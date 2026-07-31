@@ -168,7 +168,7 @@ const INITIAL_STATE: LumenState = {
   lyricStyle: DEFAULT_LYRIC_STYLE,
   bibleHighlights: {},
   outputEnabled: false, outputDisplayId: "auto",
-  autoUpdateEnabled: true,
+  autoUpdateEnabled: false,
   hasSeenOnboarding: false,
 };
 

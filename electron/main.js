@@ -11,11 +11,11 @@ let staticServer;
 let operatorWindow;
 let outputWindow = null;
 let updateStatus = { status: "idle" };
-// Defaults to on (opt-out) until the DB's persisted prefs say otherwise —
+// Defaults to off (opt-in) until the DB's persisted prefs say otherwise —
 // read directly from db.loadAll() in app.whenReady, since the main process
 // already owns the SQLite connection and doesn't need to round-trip through
 // the renderer just to know this before deciding whether to check on launch.
-let autoUpdateEnabled = true;
+let autoUpdateEnabled = false;
 let hasCheckedForUpdate = false;
 
 function checkForUpdatesIfEnabled() {
@@ -34,11 +34,21 @@ function setUpdateStatus(next) {
   }
 }
 
+// electron-updater's releaseNotes can be a plain string or (only when
+// fullChangelog is enabled, which it isn't here) an array of per-version
+// {version, note} entries — normalized to a single string either way so the
+// renderer only ever deals with one shape.
+function normalizeReleaseNotes(releaseNotes) {
+  if (typeof releaseNotes === "string") return releaseNotes;
+  if (Array.isArray(releaseNotes) && releaseNotes.length > 0) return releaseNotes[0].note;
+  return null;
+}
+
 autoUpdater.on("checking-for-update", () => setUpdateStatus({ status: "checking" }));
 autoUpdater.on("update-not-available", () => setUpdateStatus({ status: "idle" }));
-autoUpdater.on("update-available", (info) => setUpdateStatus({ status: "available", version: info.version }));
+autoUpdater.on("update-available", (info) => setUpdateStatus({ status: "available", version: info.version, releaseNotes: normalizeReleaseNotes(info.releaseNotes) }));
 autoUpdater.on("download-progress", (progress) => setUpdateStatus({ status: "downloading", percent: progress.percent }));
-autoUpdater.on("update-downloaded", (info) => setUpdateStatus({ status: "downloaded", version: info.version }));
+autoUpdater.on("update-downloaded", (info) => setUpdateStatus({ status: "downloaded", version: info.version, releaseNotes: normalizeReleaseNotes(info.releaseNotes) }));
 autoUpdater.on("error", (error) => setUpdateStatus({ status: "error", error: error.message }));
 // "auto" picks the first non-primary display; a number pins to that specific
 // display's id. Persisted through the same generic prefs mechanism as any
