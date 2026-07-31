@@ -5,21 +5,33 @@ import { LAYOUT_PANELS, isCustomBackground } from "./data";
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
 import { LookBackground } from "./LookBackground";
+import { useBackdropClose } from "./useBackdropClose";
 import type { UseLumen } from "./useLumen";
 
 export function SettingsModal({ lumen }: { lumen: UseLumen }) {
   const {
     state, patch, allLooks, addBackground, deleteBackground, toggleLayoutPanel, resetLayout, outputStatus,
-    importBibleTranslation, removeBibleTranslation, openBibleDownloadsPage, bibleImportError,
+    importBibleTranslation, removeBibleTranslation, openBibleDownloadsPage, bibleImportError, updateStatus,
   } = lumen;
   const backgroundFileInputRef = useRef<HTMLInputElement>(null);
   const bibleFileInputRef = useRef<HTMLInputElement>(null);
+  const close = () => patch({ settingsOpen: false });
+  const backdropProps = useBackdropClose(close);
+
   if (!state.settingsOpen) return null;
 
-  const close = () => patch({ settingsOpen: false });
   const sizePct = Math.round(((state.scale - 0.7) / 0.8) * 100);
   const secondaryDisplays = outputStatus.displays.filter((display) => !display.isPrimary);
   const hasSecondaryDisplay = secondaryDisplays.length > 0;
+
+  const updateStatusLabel =
+    !state.autoUpdateEnabled ? "Won't check for updates automatically"
+    : updateStatus.status === "downloaded" ? "Update " + updateStatus.version + " ready — restart to install"
+    : updateStatus.status === "downloading" ? "Downloading update… " + Math.round(updateStatus.percent) + "%"
+    : updateStatus.status === "available" ? "Update " + updateStatus.version + " available"
+    : updateStatus.status === "checking" ? "Checking for updates…"
+    : updateStatus.status === "error" ? "Last update check failed"
+    : "Up to date";
 
   const onBackgroundFile = (file: File | undefined) => {
     if (file) addBackground(file);
@@ -31,7 +43,7 @@ export function SettingsModal({ lumen }: { lumen: UseLumen }) {
 
   return (
     <div
-      onClick={close}
+      {...backdropProps}
       className="fixed inset-0 z-120 bg-[rgba(6,6,8,.6)] backdrop-blur-[6px] flex items-center justify-center"
     >
       <div
@@ -260,6 +272,19 @@ export function SettingsModal({ lumen }: { lumen: UseLumen }) {
             <button
               onClick={() => patch((previousState) => ({ chords: !previousState.chords }))}
               className={cx("w-11 h-6.5 rounded-5 border-none cursor-pointer p-0.75 flex", state.chords ? "justify-end bg-accent" : "justify-start bg-border2")}
+            >
+              <span className="w-5 h-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.3)]" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between p-[12px_14px] border border-border rounded-xl bg-panel2">
+            <div>
+              <div className="text-[13px] font-medium">Automatic updates</div>
+              <div className="text-[12px] text-muted mt-0.5">{updateStatusLabel}</div>
+            </div>
+            <button
+              onClick={() => patch((previousState) => ({ autoUpdateEnabled: !previousState.autoUpdateEnabled }))}
+              className={cx("w-11 h-6.5 rounded-5 border-none cursor-pointer p-0.75 flex", state.autoUpdateEnabled ? "justify-end bg-accent" : "justify-start bg-border2")}
             >
               <span className="w-5 h-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.3)]" />
             </button>

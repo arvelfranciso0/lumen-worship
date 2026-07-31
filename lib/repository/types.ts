@@ -15,6 +15,7 @@ export type PersistedPrefs = Partial<{
   bibleHighlights: BibleHighlights;
   outputEnabled: boolean;
   outputDisplayId: number | "auto";
+  autoUpdateEnabled: boolean;
 }>;
 
 export type PersistedData = {

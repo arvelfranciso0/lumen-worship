@@ -319,9 +319,11 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
                     )}
                   </div>
                   <div className="flex items-center gap-1.5 mt-2.25">
-                    <span className="font-mono text-[10px] text-text bg-raise border border-border p-[2px_6px] rounded-[5px]">
-                      {songEntry.key}
-                    </span>
+                    {songEntry.key && (
+                      <span className="font-mono text-[10px] text-text bg-raise border border-border p-[2px_6px] rounded-[5px]">
+                        {songEntry.key}
+                      </span>
+                    )}
                     <span className="font-mono text-[10px] text-faint">{songEntry.bpm}</span>
                     <div className="flex-1" />
                     {songEntry.tags.slice(0, 2).map((tag) => (
@@ -488,9 +490,11 @@ export function Sidebar({ lumen }: { lumen: UseLumen }) {
                         {lineupSong.artist}
                       </div>
                       <div className="flex items-center gap-1.5 mt-2.25">
-                        <span className="font-mono text-[10px] text-text bg-raise border border-border p-[2px_6px] rounded-[5px]">
-                          {lineupSong.key}
-                        </span>
+                        {lineupSong.key && (
+                          <span className="font-mono text-[10px] text-text bg-raise border border-border p-[2px_6px] rounded-[5px]">
+                            {lineupSong.key}
+                          </span>
+                        )}
                         <span className="font-mono text-[10px] text-faint">{lineupSong.bpm}</span>
                       </div>
                     </div>

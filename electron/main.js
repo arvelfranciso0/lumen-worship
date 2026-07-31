@@ -11,6 +11,18 @@ let staticServer;
 let operatorWindow;
 let outputWindow = null;
 let updateStatus = { status: "idle" };
+// Defaults to on (opt-out) until the DB's persisted prefs say otherwise —
+// read directly from db.loadAll() in app.whenReady, since the main process
+// already owns the SQLite connection and doesn't need to round-trip through
+// the renderer just to know this before deciding whether to check on launch.
+let autoUpdateEnabled = true;
+let hasCheckedForUpdate = false;
+
+function checkForUpdatesIfEnabled() {
+  if (!app.isPackaged || !autoUpdateEnabled || hasCheckedForUpdate) return;
+  hasCheckedForUpdate = true;
+  autoUpdater.checkForUpdatesAndNotify();
+}
 
 // Tracked here (not just fired as one-off IPC events) so a freshly opened/
 // reloaded operator window can ask for the current status instead of only
@@ -280,6 +292,8 @@ function handleDisplaysChanged() {
 
 app.whenReady().then(() => {
   db = createDb(path.join(app.getPath("userData"), "lumen.db"));
+  const persistedAutoUpdatePref = db.loadAll().prefs.autoUpdateEnabled;
+  if (typeof persistedAutoUpdatePref === "boolean") autoUpdateEnabled = persistedAutoUpdatePref;
 
   const backgroundsDir = path.join(app.getPath("userData"), "backgrounds");
   protocol.handle("lumen-media", async (request) => {
@@ -305,7 +319,7 @@ app.whenReady().then(() => {
   createWindow();
   // Only meaningful in a packaged build published to GitHub releases — a
   // dev run has no update feed to check against.
-  if (app.isPackaged) autoUpdater.checkForUpdatesAndNotify();
+  checkForUpdatesIfEnabled();
 
   screen.on("display-added", handleDisplaysChanged);
   screen.on("display-removed", handleDisplayRemoved);
@@ -354,6 +368,12 @@ function registerIpcHandlers() {
   // Only meaningful once updateStatus.status is "downloaded" — quitAndInstall
   // is a no-op (electron-updater just resolves/ignores it) otherwise.
   ipcMain.handle("update:install", () => autoUpdater.quitAndInstall());
+  ipcMain.handle("update:setAutoUpdateEnabled", (_event, enabled) => {
+    autoUpdateEnabled = enabled;
+    // Flipped on mid-session (rather than at next launch) — run the check
+    // now instead of making the user restart the app to benefit from it.
+    checkForUpdatesIfEnabled();
+  });
 
   ipcMain.handle("output:open", async (_event, displayId) => {
     selectedOutputDisplayId = displayId ?? "auto";

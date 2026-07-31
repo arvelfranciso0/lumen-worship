@@ -9,6 +9,7 @@ export type ElectronUpdaterBridge = {
   getStatus: () => Promise<UpdateStatus>;
   onStatusChanged: (callback: (status: UpdateStatus) => void) => () => void;
   installUpdate: () => Promise<void>;
+  setAutoUpdateEnabled: (enabled: boolean) => Promise<void>;
 };
 
 declare global {

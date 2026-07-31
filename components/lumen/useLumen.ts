@@ -140,6 +140,10 @@ type LumenState = {
   // no-op in the plain browser build.
   outputEnabled: boolean;
   outputDisplayId: number | "auto";
+  // Whether the desktop build should check GitHub Releases for updates on
+  // launch (see the header bell / electron/main.js). A no-op preference in
+  // the browser build, since getElectronUpdater() is always null there.
+  autoUpdateEnabled: boolean;
 };
 
 type Slide = { label: string; lines: string[]; lineHighlights?: HighlightRange[][]; slideNumber: number; caption: string };
@@ -160,6 +164,7 @@ const INITIAL_STATE: LumenState = {
   lyricStyle: DEFAULT_LYRIC_STYLE,
   bibleHighlights: {},
   outputEnabled: false, outputDisplayId: "auto",
+  autoUpdateEnabled: true,
 };
 
 export function useLumen(props: LumenProps = {}) {
@@ -217,13 +222,14 @@ export function useLumen(props: LumenProps = {}) {
         font: state.font, chords: state.chords, setIds: state.setIds, setName: state.setName,
         layoutSizes: state.layoutSizes, layoutVisibility: state.layoutVisibility, lyricStyle: state.lyricStyle,
         bibleHighlights: state.bibleHighlights, outputEnabled: state.outputEnabled, outputDisplayId: state.outputDisplayId,
+        autoUpdateEnabled: state.autoUpdateEnabled,
       });
     }, 400);
     return () => clearTimeout(persistTimeout);
   }, [
     state.favs, state.look, state.scale, state.theme, state.font, state.chords, state.setIds, state.setName,
     state.layoutSizes, state.layoutVisibility, state.lyricStyle, state.bibleHighlights,
-    state.outputEnabled, state.outputDisplayId,
+    state.outputEnabled, state.outputDisplayId, state.autoUpdateEnabled,
   ]);
 
   const [bibleCache, setBibleCache] = useState<Record<string, BibleTranslation>>({});
@@ -478,6 +484,19 @@ export function useLumen(props: LumenProps = {}) {
     getRepository().setSongOverride(song.id, sections);
     patch((previousState) => ({ songOverrides: { ...previousState.songOverrides, [song.id]: sections } }));
   }, [patch, song.id]);
+
+  // Only ever called on a custom (user-created) song — same reasoning as
+  // deleteSong: the built-in SONGS sample data has no row of its own to
+  // update, so its title/artist/key/etc. aren't editable, only its lyrics
+  // (via the songOverrides mechanism saveLyrics already uses for any song).
+  const updateSongMetadata = useCallback((updates: { title: string; artist: string; key: string; bpm: string; cat: string; tags: string[] }) => {
+    if (!song.id.startsWith("custom-")) return;
+    const updatedSong: Song = { ...song, ...updates };
+    getRepository().upsertSong(updatedSong);
+    patch((previousState) => ({
+      customSongs: previousState.customSongs.map((customSong) => (customSong.id === song.id ? updatedSong : customSong)),
+    }));
+  }, [patch, song]);
 
   const addSong = useCallback((parsed: ParsedSong) => {
     const newSongId = "custom-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -764,10 +783,19 @@ export function useLumen(props: LumenProps = {}) {
     getElectronUpdater()?.installUpdate();
   }, []);
 
+  // Mirrors the Settings toggle into the main process, which is the one
+  // that actually decides whether to call autoUpdater.checkForUpdatesAndNotify
+  // — main.js also reads this same pref straight from its own SQLite db at
+  // startup (before this effect can ever fire), so a launch respects
+  // whatever was last saved even before the renderer finishes loading.
+  useEffect(() => {
+    getElectronUpdater()?.setAutoUpdateEnabled(state.autoUpdateEnabled).catch(() => {});
+  }, [state.autoUpdateEnabled]);
+
   return {
     state, patch, theme, accent, ref, passage, vnum, song, look, allLooks, slides, go, idx, cur, nxt, prv, hidden,
     bible, list, chipBase, tabStyle, pill, toolBtn, canvas, lyricFamily, fit, bigLine,
-    setSongs, inSet, toggleSetSong, saveLyrics, applyLiveHighlight, removeLiveHighlight, addSong, deleteSong, allSongs, toggleFavorite,
+    setSongs, inSet, toggleSetSong, saveLyrics, updateSongMetadata, applyLiveHighlight, removeLiveHighlight, addSong, deleteSong, allSongs, toggleFavorite,
     createLineup, updateLineup, deleteLineup, activateLineup, reorderLineupSongs,
     adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
     bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus,

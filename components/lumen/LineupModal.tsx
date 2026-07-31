@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { cx } from "./cx";
 import { InteractiveButton, InteractiveInput } from "./Interactive";
+import { useBackdropClose } from "./useBackdropClose";
 import type { UseLumen } from "./useLumen";
 
 export function LineupModal({ lumen }: { lumen: UseLumen }) {
@@ -28,9 +29,11 @@ export function LineupModal({ lumen }: { lumen: UseLumen }) {
     setError("");
   }, [state.lineupModalOpen, state.editingLineupId]);
 
+  const close = () => patch({ lineupModalOpen: false, editingLineupId: null });
+  const backdropProps = useBackdropClose(close);
+
   if (!state.lineupModalOpen) return null;
 
-  const close = () => patch({ lineupModalOpen: false, editingLineupId: null });
   const toggleSong = (id: string) => setSelected((s) => ({ ...s, [id]: !s[id] }));
   const selectedCount = Object.values(selected).filter(Boolean).length;
   const q = query.trim().toLowerCase();
@@ -47,7 +50,7 @@ export function LineupModal({ lumen }: { lumen: UseLumen }) {
 
   return (
     <div
-      onClick={close}
+      {...backdropProps}
       className="fixed inset-0 z-120 bg-[rgba(6,6,8,.6)] backdrop-blur-[6px] flex items-center justify-center"
     >
       <div

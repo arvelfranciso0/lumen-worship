@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
 import { extractMetadataHeader, parseLyricsBlock } from "./songImport";
+import { useBackdropClose } from "./useBackdropClose";
 import type { UseLumen } from "./useLumen";
 
 const fieldClass = "h-9 px-2.5 rounded-2 border border-border bg-panel2 text-text text-[13px] outline-none";
@@ -20,13 +21,14 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  if (!state.uploadOpen) return null;
-
   const reset = () => {
     setTitle(""); setArtist(""); setKey(""); setBpm(""); setCat(""); setTagsText("");
     setLyricsText(""); setError("");
   };
   const close = () => { patch({ uploadOpen: false }); reset(); };
+  const backdropProps = useBackdropClose(close);
+
+  if (!state.uploadOpen) return null;
 
   const onFile = (file: File | undefined) => {
     if (!file) return;
@@ -61,7 +63,7 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
 
   return (
     <div
-      onClick={close}
+      {...backdropProps}
       className="fixed inset-0 z-120 bg-[rgba(6,6,8,.6)] backdrop-blur-[6px] flex items-center justify-center"
     >
       <div

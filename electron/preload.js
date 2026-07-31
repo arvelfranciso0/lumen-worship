@@ -63,4 +63,5 @@ contextBridge.exposeInMainWorld("electronUpdater", {
     return () => ipcRenderer.removeListener("update:status", handler);
   },
   installUpdate: () => ipcRenderer.invoke("update:install"),
+  setAutoUpdateEnabled: (enabled) => ipcRenderer.invoke("update:setAutoUpdateEnabled", enabled),
 });

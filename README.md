@@ -104,7 +104,7 @@ Releases publish to a **separate** GitHub repo from the source (`build.publish.o
 
 ```bash
 $env:GH_TOKEN = "ghp_..."          # classic PAT with the `repo` scope
-npm run electron:build -- --publish always
+make release
 ```
 
 This builds, packages, and uploads the installer `.exe`, its `.blockmap`, and `latest.yml` to a
