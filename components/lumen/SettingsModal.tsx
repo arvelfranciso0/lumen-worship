@@ -290,6 +290,19 @@ export function SettingsModal({ lumen }: { lumen: UseLumen }) {
             </button>
           </div>
 
+          <div className="flex items-center justify-between p-[12px_14px] border border-border rounded-xl bg-panel2">
+            <div>
+              <div className="text-[13px] font-medium">Welcome guide</div>
+              <div className="text-[12px] text-muted mt-0.5">The walkthrough shown the first time you opened Lumen.</div>
+            </div>
+            <InteractiveButton
+              onClick={() => patch({ hasSeenOnboarding: false, settingsOpen: false })}
+              className="h-9 px-3.5 rounded-2.25 border border-border bg-panel text-[13px] text-muted cursor-pointer hover:text-text"
+            >
+              Replay
+            </InteractiveButton>
+          </div>
+
           <div>
             <div className="flex items-center justify-between mb-2.25">
               <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Layout panels</div>

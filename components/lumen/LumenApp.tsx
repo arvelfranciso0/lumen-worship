@@ -13,6 +13,7 @@ import { SlidesStrip } from "./SlidesStrip";
 import { SongUploadModal } from "./SongUploadModal";
 import { Toolbar } from "./Toolbar";
 import { useLumen, type LumenProps } from "./useLumen";
+import { WelcomeModal } from "./WelcomeModal";
 
 export function LumenApp(props: LumenProps) {
   const lumen = useLumen(props);
@@ -46,6 +47,7 @@ export function LumenApp(props: LumenProps) {
       <LineupModal lumen={lumen} />
       <SongUploadModal lumen={lumen} />
       <PresentationOverlay lumen={lumen} />
+      <WelcomeModal lumen={lumen} />
     </div>
   );
 }

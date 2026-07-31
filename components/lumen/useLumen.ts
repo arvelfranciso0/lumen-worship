@@ -144,6 +144,10 @@ type LumenState = {
   // launch (see the header bell / electron/main.js). A no-op preference in
   // the browser build, since getElectronUpdater() is always null there.
   autoUpdateEnabled: boolean;
+  // Whether the first-launch welcome guide (WelcomeModal) has already been
+  // shown/dismissed. Settings has a "Replay welcome guide" link that just
+  // flips this back to false.
+  hasSeenOnboarding: boolean;
 };
 
 type Slide = { label: string; lines: string[]; lineHighlights?: HighlightRange[][]; slideNumber: number; caption: string };
@@ -165,6 +169,7 @@ const INITIAL_STATE: LumenState = {
   bibleHighlights: {},
   outputEnabled: false, outputDisplayId: "auto",
   autoUpdateEnabled: true,
+  hasSeenOnboarding: false,
 };
 
 export function useLumen(props: LumenProps = {}) {
@@ -176,6 +181,12 @@ export function useLumen(props: LumenProps = {}) {
 
   const theme = state.theme || props.theme || "dark";
   const accent = props.accent || "#8b5cf6";
+
+  // Gates WelcomeModal — without this, state.hasSeenOnboarding briefly reads
+  // its INITIAL_STATE default of false (even for a returning user) until
+  // loadAll() resolves, which would flash the welcome guide open for an
+  // instant on every launch.
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -192,6 +203,7 @@ export function useLumen(props: LumenProps = {}) {
         songOverrides: data.songOverrides,
         ...data.prefs,
       });
+      setPrefsLoaded(true);
       data.customBackgrounds
         .filter((background) => background.mediaType === "video")
         .forEach((background) => {
@@ -222,14 +234,14 @@ export function useLumen(props: LumenProps = {}) {
         font: state.font, chords: state.chords, setIds: state.setIds, setName: state.setName,
         layoutSizes: state.layoutSizes, layoutVisibility: state.layoutVisibility, lyricStyle: state.lyricStyle,
         bibleHighlights: state.bibleHighlights, outputEnabled: state.outputEnabled, outputDisplayId: state.outputDisplayId,
-        autoUpdateEnabled: state.autoUpdateEnabled,
+        autoUpdateEnabled: state.autoUpdateEnabled, hasSeenOnboarding: state.hasSeenOnboarding,
       });
     }, 400);
     return () => clearTimeout(persistTimeout);
   }, [
     state.favs, state.look, state.scale, state.theme, state.font, state.chords, state.setIds, state.setName,
     state.layoutSizes, state.layoutVisibility, state.lyricStyle, state.bibleHighlights,
-    state.outputEnabled, state.outputDisplayId, state.autoUpdateEnabled,
+    state.outputEnabled, state.outputDisplayId, state.autoUpdateEnabled, state.hasSeenOnboarding,
   ]);
 
   const [bibleCache, setBibleCache] = useState<Record<string, BibleTranslation>>({});
@@ -800,7 +812,7 @@ export function useLumen(props: LumenProps = {}) {
     adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
     bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus,
     importBibleTranslation, removeBibleTranslation, openBibleDownloadsPage, bibleImportError,
-    updateStatus, installUpdate, startPresenting,
+    updateStatus, installUpdate, startPresenting, prefsLoaded,
   };
 }
 

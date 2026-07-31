@@ -16,6 +16,7 @@ export type PersistedPrefs = Partial<{
   outputEnabled: boolean;
   outputDisplayId: number | "auto";
   autoUpdateEnabled: boolean;
+  hasSeenOnboarding: boolean;
 }>;
 
 export type PersistedData = {
