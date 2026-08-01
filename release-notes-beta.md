@@ -1,6 +1,6 @@
 ## Beta notes
 
-- **Update bell refactor** — the notification bell now shakes once when a new update is found, and clicking it opens a popover with the actual release notes for that update (pulled straight from GitHub) instead of installing immediately.
-- **Install button moved into the popover** — updates now install via an explicit "Install & restart" button once the download finishes, rather than by clicking the bell itself.
+- **Fixed background crop mismatch** — the Live output preview, Previous/Next up boxes, and Slides strip thumbnails now crop uploaded backgrounds to match your actual presentation screen's aspect ratio, so what you see while editing matches what the audience sees.
+- **Fixed long background filenames overflowing the UI** — a Look with a long uploaded filename now truncates with an ellipsis (hover to see the full name) instead of stretching the toolbar/settings layout.
 
 ⚠️ This is a beta build — expect rough edges. Please report anything broken.

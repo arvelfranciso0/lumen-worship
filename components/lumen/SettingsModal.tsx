@@ -101,7 +101,7 @@ export function SettingsModal({ lumen }: { lumen: UseLumen }) {
                       ) : (
                         <span className="w-full h-14 rounded-lg border border-border" style={{ background: lookOption.css }} />
                       )}
-                      <span className="text-[11.5px] truncate w-full text-left">{lookOption.name}</span>
+                      <span title={lookOption.name} className="text-[11.5px] truncate w-full text-left">{lookOption.name}</span>
                       <span className="text-[10px] text-faint">
                         {custom ? (lookOption.mediaType === "video" ? "Video" : "Image") : lookOption.kind}
                       </span>

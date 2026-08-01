@@ -78,7 +78,7 @@ export function Toolbar({ lumen }: { lumen: UseLumen }) {
                     style={{ background: lookOption.swatch }}
                   />
                 )}
-                {lookOption.name}
+                <span className="truncate max-w-24">{lookOption.name}</span>
               </button>
             );
           })}

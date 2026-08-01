@@ -13,7 +13,7 @@ import type { UseLumen } from "./useLumen";
 const SLIDES_STRIP_CHROME_HEIGHT = 80;
 
 export function SlidesStrip({ lumen }: { lumen: UseLumen }) {
-  const { slides, idx: currentSlideIndex, patch, look, adjustLayoutSize } = lumen;
+  const { slides, idx: currentSlideIndex, patch, look, adjustLayoutSize, outputAspectRatio } = lumen;
   const stripHeight = lumen.state.layoutSizes.slidesStripHeight;
   const thumbnailAreaHeight = Math.max(36, stripHeight - SLIDES_STRIP_CHROME_HEIGHT);
 
@@ -40,7 +40,7 @@ export function SlidesStrip({ lumen }: { lumen: UseLumen }) {
                 slideIndex === currentSlideIndex ? "border-accent shadow-[0_0_0_3px_var(--accent-soft)]" : "border-border shadow-none"
               )}
             >
-              <div className="relative aspect-video overflow-hidden" style={{ height: thumbnailAreaHeight }}>
+              <div className="relative overflow-hidden" style={{ height: thumbnailAreaHeight, aspectRatio: outputAspectRatio }}>
                 <LookBackground look={look} preview />
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 p-[6px_8px]">
                   {slide.lines.map((line, lineIndex) => (

@@ -724,6 +724,18 @@ export function useLumen(props: LumenProps = {}) {
     [outputStatus.displays]
   );
 
+  // The real aspect ratio backgrounds actually get cropped to on the
+  // audience screen — prefer whichever display is currently doing the
+  // presenting, otherwise whichever one would if Present were pressed, so
+  // every preview (Live output, Previous/Next up, Slides strip) crops
+  // uploads the same way the real output will. Falls back to 16:9 (the old
+  // hardcoded assumption) in the browser build or when no second display is
+  // detected, since there's nothing more specific to go on there.
+  const outputAspectRatio = useMemo(() => {
+    const targetDisplay = outputStatus.display ?? outputStatus.displays.find((display) => !display.isPrimary) ?? null;
+    return targetDisplay && targetDisplay.height > 0 ? targetDisplay.width / targetDisplay.height : 16 / 9;
+  }, [outputStatus.display, outputStatus.displays]);
+
   const startPresenting = useCallback(() => {
     if (secondaryDisplayAvailable) {
       patch((previousState) => (previousState.outputEnabled ? {} : { outputEnabled: true }));
@@ -810,7 +822,7 @@ export function useLumen(props: LumenProps = {}) {
     setSongs, inSet, toggleSetSong, saveLyrics, updateSongMetadata, applyLiveHighlight, removeLiveHighlight, addSong, deleteSong, allSongs, toggleFavorite,
     createLineup, updateLineup, deleteLineup, activateLineup, reorderLineupSongs,
     adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
-    bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus,
+    bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus, outputAspectRatio,
     importBibleTranslation, removeBibleTranslation, openBibleDownloadsPage, bibleImportError,
     updateStatus, installUpdate, startPresenting, prefsLoaded,
   };

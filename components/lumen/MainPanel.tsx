@@ -39,9 +39,33 @@ function measureTextOffset(lineElement: HTMLElement, node: Node, offset: number)
 export function MainPanel({ lumen }: { lumen: UseLumen }) {
   const {
     state, patch, bible, song, cur, nxt, prv, idx, slides, hidden, look, canvas, pill, bigLine, lyricFamily,
-    vnum, ref, inSet, toggleSetSong, currentTransMeta, shortTransLabel, adjustLayoutSize,
+    vnum, ref, inSet, toggleSetSong, currentTransMeta, shortTransLabel, adjustLayoutSize, outputAspectRatio,
     applyLiveHighlight, removeLiveHighlight,
   } = lumen;
+
+  // Sizes the Live output box to the largest area that both fits within its
+  // flex-1 wrapper (so it never forces the panel to scroll) and matches
+  // outputAspectRatio — otherwise the crop shown here while editing wouldn't
+  // match what the audience actually sees on the real presentation screen.
+  const liveBoxWrapperRef = useRef<HTMLDivElement>(null);
+  const [liveBoxSize, setLiveBoxSize] = useState<{ width: number; height: number } | null>(null);
+
+  useEffect(() => {
+    const wrapper = liveBoxWrapperRef.current;
+    if (!wrapper) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setLiveBoxSize({ width, height });
+    });
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, []);
+
+  const liveBoxDimensions = liveBoxSize
+    ? liveBoxSize.width / liveBoxSize.height > outputAspectRatio
+      ? { width: liveBoxSize.height * outputAspectRatio, height: liveBoxSize.height }
+      : { width: liveBoxSize.width, height: liveBoxSize.width / outputAspectRatio }
+    : { aspectRatio: outputAspectRatio, width: "100%", maxHeight: "100%" as const };
 
   // Lets the operator highlight text by selecting it directly on the Live
   // output box (with the mouse/cursor), instead of through a separate
@@ -274,23 +298,28 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
             <div className="flex-1" />
             <span className="font-mono text-[11px] text-faint">{liveState}</span>
           </div>
-          <div className="relative flex-1 min-h-60 w-full rounded-2xl overflow-hidden border border-border2 bg-black shadow-app">
-            <LookBackground look={look} black={state.black} />
-            <div ref={liveOutputRef} className={cx(canvas, "gap-2.5 transition-opacity duration-180 ease-in-out", hidden ? "opacity-0" : "opacity-100")}>
-              {cur.lines.map((line, lineIndex) => (
-                <div key={lineIndex} data-line-index={lineIndex} className={lyricFamily} style={bigLine}>
-                  <HighlightedLine line={line} highlights={cur.lineHighlights?.[lineIndex]} />
-                </div>
-              ))}
-              {hasCaption && (
-                <div className="font-mono tracking-[.08em] mt-2.5 text-[rgba(255,255,255,.62)]" style={{ fontSize: 11 * state.scale + "px" }}>
-                  {cur.caption}
-                </div>
-              )}
-            </div>
-            <div className="absolute top-3 left-3.5 flex items-center gap-1.75 p-[5px_10px] rounded-5 bg-[rgba(0,0,0,.45)] backdrop-blur">
-              <span className="w-1.5 h-1.5 rounded-full bg-danger" />
-              <span className="font-mono text-[10px] text-white tracking-[.06em]">LIVE</span>
+          <div ref={liveBoxWrapperRef} className="relative flex-1 min-h-60 w-full flex items-center justify-center">
+            <div
+              className="relative rounded-2xl overflow-hidden border border-border2 bg-black shadow-app"
+              style={liveBoxDimensions}
+            >
+              <LookBackground look={look} black={state.black} />
+              <div ref={liveOutputRef} className={cx(canvas, "gap-2.5 transition-opacity duration-180 ease-in-out", hidden ? "opacity-0" : "opacity-100")}>
+                {cur.lines.map((line, lineIndex) => (
+                  <div key={lineIndex} data-line-index={lineIndex} className={lyricFamily} style={bigLine}>
+                    <HighlightedLine line={line} highlights={cur.lineHighlights?.[lineIndex]} />
+                  </div>
+                ))}
+                {hasCaption && (
+                  <div className="font-mono tracking-[.08em] mt-2.5 text-[rgba(255,255,255,.62)]" style={{ fontSize: 11 * state.scale + "px" }}>
+                    {cur.caption}
+                  </div>
+                )}
+              </div>
+              <div className="absolute top-3 left-3.5 flex items-center gap-1.75 p-[5px_10px] rounded-5 bg-[rgba(0,0,0,.45)] backdrop-blur">
+                <span className="w-1.5 h-1.5 rounded-full bg-danger" />
+                <span className="font-mono text-[10px] text-white tracking-[.06em]">LIVE</span>
+              </div>
             </div>
           </div>
         </div>
@@ -307,7 +336,7 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
                   <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Previous</span>
                   <div className="flex-1 h-px bg-border" />
                 </div>
-                <div className="relative w-full aspect-video rounded-[10px] overflow-hidden border border-border bg-panel2 opacity-60">
+                <div className="relative w-full rounded-[10px] overflow-hidden border border-border bg-panel2 opacity-60" style={{ aspectRatio: outputAspectRatio }}>
                   <div className={cx(canvas, "gap-1")}>
                     {(prv ? prv.lines : ["— start of song —"]).map((line, lineIndex) => (
                       <div
@@ -330,7 +359,7 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
                   <div className="flex-1 h-px bg-border" />
                   <span className={pill(false)}>{nxt ? nxt.label : "End"}</span>
                 </div>
-                <div className="relative w-full aspect-video rounded-xl overflow-hidden border border-accent bg-black shadow-[0_0_0_3px_var(--accent-soft)]">
+                <div className="relative w-full rounded-xl overflow-hidden border border-accent bg-black shadow-[0_0_0_3px_var(--accent-soft)]" style={{ aspectRatio: outputAspectRatio }}>
                   <LookBackground look={look} black={state.black} preview />
                   <div className={cx(canvas, "gap-1.25")}>
                     {(nxt ? nxt.lines : ["— end of song —"]).map((line, lineIndex) => (
