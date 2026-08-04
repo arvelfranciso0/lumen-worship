@@ -1,6 +1,6 @@
 {
   "name": "live-worship",
-  "version": "0.1.0-beta.4",
+  "version": "0.1.0-beta.5",
   "private": true,
   "description": "Lumen worship presentation app",
   "author": "Lumen",
@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "npx serve@latest out",
     "lint": "eslint",
+    "test": "node --test",
     "bible:convert": "node scripts/convert-bible.mjs",
     "electron:dev": "concurrently -k \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "next build && electron-builder"
@@ -20,7 +21,9 @@
     "electron-updater": "^6.8.9",
     "next": "16.2.12",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

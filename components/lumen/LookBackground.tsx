@@ -7,7 +7,7 @@ type LookBackgroundProps = {
   look: LookOption;
   black?: boolean;
   // True for every spot that isn't the actual audience-facing output (the
-  // Toolbar/Settings pickers, slide thumbnails, the "Next up" box) — a video
+  // Backgrounds panel, slide thumbnails, the "Next up" box) — a video
   // look then renders its captured poster frame instead of an independent
   // live decode, since a dozen simultaneous full-res video decodes is what
   // actually causes the lag, not the source file's resolution.
@@ -25,17 +25,23 @@ export function LookBackground({ look, black, preview, className }: LookBackgrou
 
   if (isCustomBackground(look)) {
     if (look.mediaType === "video") {
-      // Preview spots never get a live <video> — if the poster hasn't been
-      // captured yet (or capture failed), they just stay a plain black
-      // panel rather than falling back to an independent decode, which is
-      // exactly the simultaneous-decode lag this preview mode exists to
-      // avoid in the first place.
+      // Preview spots never get a live <video>: falling back to an independent
+      // decode is exactly the simultaneous-decode lag this preview mode exists
+      // to avoid. While the poster is still being captured (or if capture
+      // failed outright) they show a striped "video" placeholder instead —
+      // distinguishable at a glance from a background that really is black,
+      // which a plain black panel here was not.
       if (preview) {
         return look.posterUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- runtime data URL, not a static asset next/image can optimize
           <img src={look.posterUrl} alt="" className={cx(baseClassName, "w-full h-full object-cover")} />
         ) : (
-          <div className={cx(baseClassName, "bg-black")} />
+          <div
+            title={look.name + " — video background, still frame not ready"}
+            className={cx(baseClassName, "bg-[repeating-linear-gradient(45deg,#16161c_0_6px,#0b0b0e_6px_12px)] flex items-center justify-center")}
+          >
+            <span className="text-white/30 text-[10px] leading-none">▶</span>
+          </div>
         );
       }
       return (

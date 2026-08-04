@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
-import { extractMetadataHeader, parseLyricsBlock } from "./songImport";
+import { extractMetadataHeader, parseLyricsBlock, sectionsToText } from "./songImport";
 import { useBackdropClose } from "./useBackdropClose";
 import type { UseLumen } from "./useLumen";
 
@@ -18,6 +18,7 @@ Key: G
 BPM: 72
 Category: Hymn
 Tags: hymn, classic
+CCLI: 22025
 
 Verse 1
 Amazing grace, how sweet the sound
@@ -42,54 +43,78 @@ function downloadSampleSongFile() {
   URL.revokeObjectURL(url);
 }
 
-export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
-  const { state, patch, addSong } = lumen;
+// Replaces the old separate LyricsEditorModal (edit) / SongUploadModal
+// (create) — one shared form, since both flows need the same fields and the
+// same lyrics-block parsing. Editing now works on ANY song (not just
+// custom-*) via setSongMetaOverride, which supersedes the old custom-*-only
+// updateSongMetadata gate.
+export function SongEditorModal({ lumen }: { lumen: UseLumen }) {
+  const { state, patch, song, saveLyrics, setSongMetaOverride, addSong } = lumen;
+  const isEdit = state.songEditorMode === "edit";
+
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [key, setKey] = useState("");
   const [bpm, setBpm] = useState("");
   const [cat, setCat] = useState("");
   const [tagsText, setTagsText] = useState("");
+  const [ccli, setCcli] = useState("");
   const [lyricsText, setLyricsText] = useState("");
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const reset = () => {
-    setTitle(""); setArtist(""); setKey(""); setBpm(""); setCat(""); setTagsText("");
+    setTitle(""); setArtist(""); setKey(""); setBpm(""); setCat(""); setTagsText(""); setCcli("");
     setLyricsText(""); setError("");
   };
-  const close = () => { patch({ uploadOpen: false }); reset(); };
+
+  useEffect(() => {
+    if (!state.songEditorOpen) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- populating the form
+       when the modal opens for a specific song/mode is a one-time sync of
+       local UI state to a changed prop, the same shape as this codebase's
+       other modals' pre-existing populate-on-open effects. */
+    if (isEdit) {
+      setTitle(song.title); setArtist(song.artist); setKey(song.key); setBpm(song.bpm); setCat(song.cat);
+      setTagsText(song.tags.join(", ")); setCcli(song.ccli || ""); setLyricsText(sectionsToText(song.sections));
+    } else {
+      reset();
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [state.songEditorOpen, isEdit, song]);
+
+  const close = () => { patch({ songEditorOpen: false }); reset(); };
   const backdropProps = useBackdropClose(close);
 
-  if (!state.uploadOpen) return null;
+  if (!state.songEditorOpen) return null;
 
   const onFile = (file: File | undefined) => {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       const parsed = extractMetadataHeader(String(reader.result || ""));
-      setTitle(parsed.title);
-      setArtist(parsed.artist);
-      setKey(parsed.key);
-      setBpm(parsed.bpm);
-      setCat(parsed.cat);
-      setTagsText(parsed.tags.join(", "));
-      setLyricsText(parsed.body);
+      setTitle(parsed.title); setArtist(parsed.artist); setKey(parsed.key); setBpm(parsed.bpm);
+      setCat(parsed.cat); setTagsText(parsed.tags.join(", ")); setCcli(parsed.ccli); setLyricsText(parsed.body);
       setError("");
     };
     reader.readAsText(file);
   };
 
   const submit = () => {
+    const tags = tagsText.split(",").map((t) => t.trim()).filter(Boolean);
+    if (isEdit) {
+      saveLyrics(parseLyricsBlock(lyricsText));
+      setSongMetaOverride(song.id, {
+        title: title.trim() || song.title, artist: artist.trim(), key: key.trim(), bpm: bpm.trim(),
+        cat: cat.trim() || song.cat, tags, ccli: ccli.trim(),
+      });
+      close();
+      return;
+    }
     if (!title.trim()) { setError("Add a title before uploading."); return; }
     addSong({
-      title: title.trim(),
-      artist: artist.trim(),
-      key: key.trim(),
-      bpm: bpm.trim(),
-      cat: cat.trim() || "Contemporary",
-      tags: tagsText.split(",").map((t) => t.trim()).filter(Boolean),
-      sections: parseLyricsBlock(lyricsText),
+      title: title.trim(), artist: artist.trim(), key: key.trim(), bpm: bpm.trim(),
+      cat: cat.trim() || "Contemporary", tags, ccli: ccli.trim(), sections: parseLyricsBlock(lyricsText),
     });
     reset();
   };
@@ -105,8 +130,10 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
       >
         <div className="flex items-center justify-between p-[18px_20px_14px] border-b border-border">
           <div>
-            <div className="text-[16px] font-semibold tracking-[-0.02em]">Upload song</div>
-            <div className="text-[12.5px] text-muted mt-0.75">Fill in the details below, or load them from a text file</div>
+            <div className="text-[16px] font-semibold tracking-[-0.02em]">{isEdit ? "Edit lyrics" : "Upload song"}</div>
+            <div className="text-[12.5px] text-muted mt-0.75">
+              {isEdit ? song.title : "Fill in the details below, or load them from a text file"}
+            </div>
           </div>
           <InteractiveButton
             onClick={close}
@@ -140,8 +167,8 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
           </div>
           <div className="text-[12px] text-muted leading-[1.6]">
             Start the file with any of <code>Title:</code>, <code>Artist:</code>, <code>Key:</code>, <code>BPM:</code>,{" "}
-            <code>Category:</code>, <code>Tags:</code> (one per line) to prefill the fields below — everything after
-            the first blank line is treated as the lyrics.
+            <code>Category:</code>, <code>Tags:</code>, <code>CCLI:</code> (one per line) to prefill the fields below —
+            everything after the first blank line is treated as the lyrics.
           </div>
 
           <div className="flex flex-col gap-2">
@@ -155,6 +182,7 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
               <input value={cat} onChange={(e) => setCat(e.target.value)} placeholder="Category (e.g. Contemporary)" className={cx(fieldClass, "flex-1")} />
               <input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="Tags, comma separated" className={cx(fieldClass, "flex-1")} />
             </div>
+            <input value={ccli} onChange={(e) => setCcli(e.target.value)} placeholder="CCLI # (optional)" className={fieldClass} />
           </div>
 
           <div className="flex flex-col gap-2">
@@ -182,7 +210,7 @@ export function SongUploadModal({ lumen }: { lumen: UseLumen }) {
             Cancel
           </InteractiveButton>
           <button onClick={submit} className="h-9 px-4 rounded-2.25 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer">
-            Add song
+            {isEdit ? "Save changes" : "Add song"}
           </button>
         </div>
       </div>

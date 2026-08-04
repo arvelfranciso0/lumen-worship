@@ -92,7 +92,7 @@ export function LineupModal({ lumen }: { lumen: UseLumen }) {
               {selectedCount} of {allSongs.length} songs selected
             </div>
             <InteractiveButton
-              onClick={() => patch({ uploadOpen: true })}
+              onClick={() => patch({ songEditorOpen: true, songEditorMode: "create" })}
               className="text-[12px] text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
             >
               + Upload song

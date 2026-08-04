@@ -26,6 +26,25 @@ export const BOOKS = [
   "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Revelation",
 ];
 
+// Per-language book names in the same canonical 1-66 order as BOOKS. Kept in
+// sync by hand with electron/bibleXml.js's BOOK_NAMES_BY_LANGUAGE (see that
+// file's header for why the parser isn't a shared module).
+const BOOK_NAMES_BY_LANGUAGE = {
+  Cebuano: [
+    "Genesis", "Exodo", "Levitico", "Numeros", "Deuteronomio", "Josue", "Maghuhukom", "Ruth",
+    "1 Samuel", "2 Samuel", "1 Mga Hari", "2 Mga Hari", "1 Cronicas", "2 Cronicas", "Ezra",
+    "Nehemias", "Ester", "Job", "Mga Salmo", "Mga Panultihon", "Ecclesiastes", "Awit ni Solomon",
+    "Isaias", "Jeremias", "Pagbangotan", "Ezequiel", "Daniel", "Oseas", "Joel", "Amos",
+    "Obadias", "Jonas", "Miqueas", "Nahum", "Habacuc", "Sofonias", "Haggeo", "Zacarias",
+    "Malaquias",
+    "Mateo", "Marcos", "Lucas", "Juan", "Mga Buhat", "Mga Taga-Roma", "1 Mga Taga-Corinto",
+    "2 Mga Taga-Corinto", "Mga Taga-Galacia", "Mga Taga-Efeso", "Mga Taga-Filipos",
+    "Mga Taga-Colosas", "1 Mga Taga-Tesalonica", "2 Mga Taga-Tesalonica", "1 Timoteo",
+    "2 Timoteo", "Tito", "Filemon", "Mga Hebreohanon", "Santiago",
+    "1 Pedro", "2 Pedro", "1 Juan", "2 Juan", "3 Juan", "Judas", "Pinadayag",
+  ],
+};
+
 const OLD_TESTAMENT_BOOK_COUNT = 39;
 
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
@@ -46,16 +65,31 @@ function parseBibleXml(xml, fileName) {
   const rootTag = xml.match(/<bible\b[^>]*>/)?.[0] || "<bible>";
   const attrs = parseAttrs(rootTag);
   const code = fileName.replace(/Bible\.xml$/, "");
-  const language = fileName.startsWith("Cebuano") ? "Cebuano" : "English";
+  // A `language` attribute is only trusted when it actually looks like a
+  // language — real-world exports often put the whole translation title there
+  // (language="Cebuano 1999 (Maayong Balita Biblia)"), which would show up as a
+  // bogus language in the sidebar. Otherwise the leading word of the
+  // translation title is used, which Bible names conventionally start with
+  // ("Cebuano RCPV 1999 (Ang Bag-ong Maayong Balita Biblia)" -> "Cebuano").
+  // Kept in sync by hand with electron/bibleXml.js's normalizeBibleLanguage
+  // (see that file's header comment for why this isn't a shared module).
+  const title = attrs.translation || attrs.name || attrs.title || "";
+  const firstWord = (value) => (value || "").trim().split(/\s+/)[0] || "";
+  const rawLanguage = (attrs.language || "").trim();
+  const languageLooksReal = !!rawLanguage
+    && !/[\d(){}[\]/|,:;]/.test(rawLanguage)
+    && rawLanguage.split(/\s+/).length <= 2;
+  const language = languageLooksReal ? rawLanguage : (firstWord(title) || firstWord(rawLanguage) || "Unknown");
 
   const meta = {
     code,
     language,
-    name: attrs.translation || attrs.name || attrs.title || attrs.language || code,
+    name: title || language || code,
     license: attrs.status || attrs.info || "Unknown",
     link: attrs.link || null,
   };
 
+  const bookNames = BOOK_NAMES_BY_LANGUAGE[language] || BOOKS;
   const books = [];
   for (const bookMatch of xml.matchAll(/<book\s+number="(\d+)"[^>]*>([\s\S]*?)<\/book>/g)) {
     const number = Number(bookMatch[1]);
@@ -67,11 +101,26 @@ function parseBibleXml(xml, fileName) {
       const chapterBody = chapterMatch[2];
       const verses = [];
 
-      for (const verseMatch of chapterBody.matchAll(/<verse\s+number="(\d+)"[^>]*>([\s\S]*?)<\/verse>/g)) {
-        verses.push({
-          number: Number(verseMatch[1]),
-          text: decodeEntities(verseMatch[2]).trim(),
-        });
+      // Matches both self-closing (<verse number="2"/>) and open/close
+      // (<verse number="2"></verse>) forms — a translation file may use
+      // either, even inconsistently within itself. Kept in sync by hand with
+      // electron/bibleXml.js's identical parser (see that file's header
+      // comment for why this isn't a shared module).
+      const versePattern = /<verse\s+number="(\d+)"[^>]*\/>|<verse\s+number="(\d+)"[^>]*>([\s\S]*?)<\/verse>/g;
+      for (const verseMatch of chapterBody.matchAll(versePattern)) {
+        const verseNumber = Number(verseMatch[1] ?? verseMatch[2]);
+        const text = verseMatch[1] !== undefined ? "" : decodeEntities(verseMatch[3]).trim();
+        if (text) {
+          verses.push({ number: verseNumber, text });
+          continue;
+        }
+        // Empty verse: a "verse bridge" (merged into the preceding verse,
+        // which holds the full text) — extends that verse's displayed
+        // range. If there's no preceding verse in this chapter to merge
+        // into (e.g. 1 Samuel 13:1's famously defective source text), it's
+        // dropped instead; it was never a real verse to display.
+        const previousVerse = verses[verses.length - 1];
+        if (previousVerse) previousVerse.endNumber = verseNumber;
       }
 
       chapters.push({ number: chapterNumber, verses });
@@ -79,7 +128,7 @@ function parseBibleXml(xml, fileName) {
 
     books.push({
       number,
-      name: BOOKS[number - 1] || "Unknown " + number,
+      name: bookNames[number - 1] || BOOKS[number - 1] || "Unknown " + number,
       testament: number <= OLD_TESTAMENT_BOOK_COUNT ? "Old" : "New",
       chapters,
     });

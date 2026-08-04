@@ -7,6 +7,7 @@ export type ParsedSong = {
   bpm: string;
   cat: string;
   tags: string[];
+  ccli?: string;
   sections: Section[];
 };
 
@@ -92,6 +93,7 @@ export type SongMetadataHeader = {
   bpm: string;
   cat: string;
   tags: string[];
+  ccli: string;
   body: string;
 };
 
@@ -117,6 +119,7 @@ export function extractMetadataHeader(raw: string): SongMetadataHeader {
     bpm: meta.bpm || "",
     cat: meta.category || meta.cat || "",
     tags: meta.tags ? meta.tags.split(",").map((tag) => tag.trim()).filter(Boolean) : [],
+    ccli: meta.ccli || "",
     body: lines.slice(bodyStart).join("\n"),
   };
 }

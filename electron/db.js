@@ -24,7 +24,13 @@ const SCHEMA = `
   );
   CREATE TABLE IF NOT EXISTS bible_translations (
     code TEXT PRIMARY KEY, language TEXT, name TEXT, license TEXT, link TEXT,
-    file_name TEXT, downloaded_at INTEGER, size_bytes INTEGER
+    file_name TEXT, downloaded_at INTEGER, size_bytes INTEGER, format TEXT DEFAULT 'json'
+  );
+  CREATE TABLE IF NOT EXISTS bible_collections (
+    id TEXT PRIMARY KEY, name TEXT, verse_refs TEXT
+  );
+  CREATE TABLE IF NOT EXISTS song_meta_overrides (
+    song_id TEXT PRIMARY KEY, patch TEXT
   );
 `;
 
@@ -38,6 +44,12 @@ function migrateSchema(db) {
     "ALTER TABLE bible_translations ADD COLUMN language TEXT DEFAULT ''",
     "ALTER TABLE bible_translations ADD COLUMN license TEXT DEFAULT ''",
     "ALTER TABLE bible_translations ADD COLUMN link TEXT",
+    // Existing rows all predate XML support and are backfilled to 'json' by
+    // SQLite itself (a DEFAULT-bearing ADD COLUMN populates existing rows,
+    // not just new ones) — so getBibleTranslationData never needs a
+    // NULL-means-json fallback anywhere in the read path.
+    "ALTER TABLE bible_translations ADD COLUMN format TEXT DEFAULT 'json'",
+    "ALTER TABLE songs ADD COLUMN ccli TEXT DEFAULT ''",
   ]) {
     try { db.exec(statement); } catch { /* column already exists */ }
   }
@@ -47,8 +59,12 @@ function rowToSong(row) {
   return {
     id: row.id, title: row.title, artist: row.artist, key: row.song_key, bpm: row.bpm,
     cat: row.cat, tags: JSON.parse(row.tags || "[]"), fav: !!row.fav, when: row.when_used,
-    sections: JSON.parse(row.sections || "[]"),
+    sections: JSON.parse(row.sections || "[]"), ccli: row.ccli || "",
   };
+}
+
+function rowToBibleCollection(row) {
+  return { id: row.id, name: row.name, verseRefs: JSON.parse(row.verse_refs || "[]") };
 }
 
 function rowToLineup(row) {
@@ -92,19 +108,25 @@ function createDb(dbPath) {
       const prefs = Object.fromEntries(prefRows.map((r) => [r.key, JSON.parse(r.value)]));
       const customBackgrounds = db.prepare("SELECT * FROM backgrounds").all().map(rowToBackground);
       const downloadedBibleTranslations = db.prepare("SELECT * FROM bible_translations").all().map(rowToDownloadedBibleTranslation);
-      return { customSongs, lineups, customBackgrounds, downloadedBibleTranslations, songOverrides, prefs };
+      const bibleCollections = db.prepare("SELECT * FROM bible_collections").all().map(rowToBibleCollection);
+      const songMetaOverrideRows = db.prepare("SELECT * FROM song_meta_overrides").all();
+      const songMetaOverrides = Object.fromEntries(
+        songMetaOverrideRows.map((r) => [r.song_id, JSON.parse(r.patch)])
+      );
+      return { customSongs, lineups, customBackgrounds, downloadedBibleTranslations, songOverrides, bibleCollections, songMetaOverrides, prefs };
     },
 
     upsertSong(song) {
       db.prepare(
-        `INSERT INTO songs (id, title, artist, song_key, bpm, cat, tags, fav, when_used, sections)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO songs (id, title, artist, song_key, bpm, cat, tags, fav, when_used, sections, ccli)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            title=excluded.title, artist=excluded.artist, song_key=excluded.song_key, bpm=excluded.bpm,
-           cat=excluded.cat, tags=excluded.tags, fav=excluded.fav, when_used=excluded.when_used, sections=excluded.sections`
+           cat=excluded.cat, tags=excluded.tags, fav=excluded.fav, when_used=excluded.when_used, sections=excluded.sections,
+           ccli=excluded.ccli`
       ).run(
         song.id, song.title, song.artist, song.key, song.bpm,
-        song.cat, JSON.stringify(song.tags), song.fav ? 1 : 0, song.when, JSON.stringify(song.sections)
+        song.cat, JSON.stringify(song.tags), song.fav ? 1 : 0, song.when, JSON.stringify(song.sections), song.ccli || ""
       );
     },
 
@@ -159,16 +181,17 @@ function createDb(dbPath) {
       db.prepare("DELETE FROM backgrounds WHERE id = ?").run(id);
     },
 
-    addBibleTranslation({ code, language, name, license, link, data }) {
-      const fileName = code + ".json";
+    addBibleTranslation({ code, language, name, license, link, data, format }) {
+      const fileName = code + "." + format;
       fs.writeFileSync(path.join(bibleTranslationsDir, fileName), Buffer.from(data));
       db.prepare(
-        `INSERT INTO bible_translations (code, language, name, license, link, file_name, downloaded_at, size_bytes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO bible_translations (code, language, name, license, link, file_name, downloaded_at, size_bytes, format)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(code) DO UPDATE SET
            language=excluded.language, name=excluded.name, license=excluded.license, link=excluded.link,
-           file_name=excluded.file_name, downloaded_at=excluded.downloaded_at, size_bytes=excluded.size_bytes`
-      ).run(code, language, name, license, link, fileName, Date.now(), data.byteLength);
+           file_name=excluded.file_name, downloaded_at=excluded.downloaded_at, size_bytes=excluded.size_bytes,
+           format=excluded.format`
+      ).run(code, language, name, license, link, fileName, Date.now(), data.byteLength, format);
     },
 
     deleteBibleTranslation(code) {
@@ -179,14 +202,38 @@ function createDb(dbPath) {
       db.prepare("DELETE FROM bible_translations WHERE code = ?").run(code);
     },
 
+    // Returns the raw file text + its format, unparsed — parsing a
+    // multi-MB translation is real CPU work, and doing it here (the main
+    // process) would block IPC for every window, including the
+    // second-monitor audience output. preload.js's getBibleTranslationData
+    // does the actual JSON.parse/parseBibleXml instead, in the renderer's
+    // own isolated context.
     getBibleTranslationData(code) {
-      const row = db.prepare("SELECT file_name FROM bible_translations WHERE code = ?").get(code);
+      const row = db.prepare("SELECT file_name, format FROM bible_translations WHERE code = ?").get(code);
       if (!row) return null;
       try {
-        return JSON.parse(fs.readFileSync(path.join(bibleTranslationsDir, row.file_name), "utf-8"));
+        return { text: fs.readFileSync(path.join(bibleTranslationsDir, row.file_name), "utf-8"), format: row.format };
       } catch {
         return null;
       }
+    },
+
+    upsertBibleCollection({ id, name, verseRefs }) {
+      db.prepare(
+        `INSERT INTO bible_collections (id, name, verse_refs) VALUES (?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET name=excluded.name, verse_refs=excluded.verse_refs`
+      ).run(id, name, JSON.stringify(verseRefs));
+    },
+
+    deleteBibleCollection(id) {
+      db.prepare("DELETE FROM bible_collections WHERE id = ?").run(id);
+    },
+
+    setSongMetaOverride(songId, patch) {
+      db.prepare(
+        `INSERT INTO song_meta_overrides (song_id, patch) VALUES (?, ?)
+         ON CONFLICT(song_id) DO UPDATE SET patch=excluded.patch`
+      ).run(songId, JSON.stringify(patch));
     },
 
     close() {

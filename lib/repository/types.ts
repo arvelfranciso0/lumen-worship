@@ -1,4 +1,4 @@
-import type { BibleHighlights, BibleTranslation, CustomBackground, DownloadedBibleTranslation, Lineup, LayoutSizes, LayoutVisibility, LyricFontId, LyricStyle, Section, Song } from "@/components/lumen/data";
+import type { BibleCollection, BibleHighlights, BibleTranslation, CustomBackground, DownloadedBibleTranslation, Lineup, LayoutSizes, LayoutVisibility, LyricFontId, LyricStyle, Section, Song, TourSeenFlags } from "@/components/lumen/data";
 
 export type PersistedPrefs = Partial<{
   favs: Record<string, boolean>;
@@ -16,7 +16,21 @@ export type PersistedPrefs = Partial<{
   outputEnabled: boolean;
   outputDisplayId: number | "auto";
   autoUpdateEnabled: boolean;
+  // Deliberately no longer written/read once tourSeen exists — see the
+  // hasSeenOnboarding -> tourSeen migration in useLumen.ts's loadAll hydration.
   hasSeenOnboarding: boolean;
+  performanceMode: boolean;
+  transitionType: "cut" | "fade" | "slide" | "zoom" | "push";
+  transitionSpeedPct: number;
+  // Keyed like bibleHighlightKey (translation|book|chapter|verse) — a
+  // separate store from bibleHighlights (per-character range highlights);
+  // the two features are unrelated.
+  bibleFavorites: Record<string, boolean>;
+  bibleHistory: { key: string; label: string; viewedAt: number }[];
+  operatorNotes: string;
+  tourSeen: TourSeenFlags;
+  songUsageHistory: Record<string, number[]>;
+  deletedLookIds: string[];
 }>;
 
 export type PersistedData = {
@@ -25,6 +39,11 @@ export type PersistedData = {
   customBackgrounds: CustomBackground[];
   downloadedBibleTranslations: DownloadedBibleTranslation[];
   songOverrides: Record<string, Section[]>;
+  bibleCollections: BibleCollection[];
+  // Lets tags/CCLI/etc. be edited on built-in (non-custom-*) songs too,
+  // mirroring how songOverrides already does this for lyrics — keyed by
+  // song id, applied as a shallow patch over the base Song.
+  songMetaOverrides: Record<string, Partial<Song>>;
   prefs: PersistedPrefs;
 };
 
@@ -41,8 +60,8 @@ export type NewBackgroundInput = {
 
 // The raw payload for a manually-imported Bible translation (see
 // DownloadedBibleTranslation/BIBLE_DOWNLOADS_URL in components/lumen/data.ts)
-// — `data` is the raw JSON file bytes, kept as an ArrayBuffer for the same
-// structured-clone reasons as NewBackgroundInput.
+// — `data` is the raw file bytes (JSON or XML — see `format`), kept as an
+// ArrayBuffer for the same structured-clone reasons as NewBackgroundInput.
 export type NewBibleTranslationInput = {
   code: string;
   language: string;
@@ -50,6 +69,7 @@ export type NewBibleTranslationInput = {
   license: string;
   link: string | null;
   data: ArrayBuffer;
+  format: "json" | "xml";
 };
 
 export interface AppRepository {
@@ -67,4 +87,7 @@ export interface AppRepository {
   // Lazily reads+parses one translation's full verse data — not part of
   // loadAll()'s eager hydration, since each file can be several megabytes.
   getBibleTranslationData(code: string): Promise<BibleTranslation | null>;
+  upsertBibleCollection(collection: BibleCollection): Promise<void>;
+  deleteBibleCollection(id: string): Promise<void>;
+  setSongMetaOverride(songId: string, patch: Partial<Song>): Promise<void>;
 }

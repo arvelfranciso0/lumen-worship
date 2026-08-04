@@ -35,20 +35,25 @@ export function ResizeHandle({ axis, onResizeDelta, className }: ResizeHandlePro
   }, [axis, handlePointerMove, handlePointerUp]);
 
   return (
+    // The handle IS the divider line — a solid 3px rule, not a wide transparent
+    // strip with a hairline drawn inside it. The transparent version used to be
+    // invisible only because the panels either side had no background of their
+    // own; now that they do, it opened a strip of page background between them
+    // that read as a gap.
+    //
+    // The ::after box restores a comfortable grab target either side of that 3px
+    // without occupying any layout space (and so without reopening the gap). It
+    // needs the z-index because it overlaps the next panel, which comes later in
+    // the DOM and would otherwise swallow the pointer on its half.
     <div
       onPointerDown={handlePointerDown}
       className={cx(
-        "flex-none group relative bg-transparent select-none",
-        axis === "horizontal" ? "w-2.5 cursor-col-resize" : "h-2.5 cursor-row-resize",
+        "flex-none relative z-10 select-none bg-border2 hover:bg-accent transition-colors after:absolute after:content-['']",
+        axis === "horizontal"
+          ? "w-0.75 cursor-col-resize after:inset-y-0 after:-left-1.5 after:-right-1.5"
+          : "h-0.75 cursor-row-resize after:inset-x-0 after:-top-1.5 after:-bottom-1.5",
         className
       )}
-    >
-      <div
-        className={cx(
-          "absolute bg-border2 group-hover:bg-accent transition-colors rounded-full",
-          axis === "horizontal" ? "inset-y-0 left-1/2 -translate-x-1/2 w-px" : "inset-x-0 top-1/2 -translate-y-1/2 h-px"
-        )}
-      />
-    </div>
+    />
   );
 }

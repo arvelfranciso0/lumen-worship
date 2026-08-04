@@ -58,9 +58,18 @@ let selectedOutputDisplayId = "auto";
 // Some machines (VMs, remote-desktop sessions, flaky GPU drivers) can't run
 // Chromium's GPU process reliably — it crash-loops, the compositor can never
 // paint a frame, and the window shows blank even though the page underneath
-// loaded fine. Disabling hardware acceleration avoids that entirely. Must be
-// called before app.ready.
-app.disableHardwareAcceleration();
+// loaded fine. Disabling hardware acceleration avoids that, but forces
+// software rendering for every window, which is dramatically slower on
+// low-spec hardware (most visibly as lag between clicking a slide and it
+// appearing on the audience screen). So this is opt-in — off by default,
+// toggled from Settings as "Compatibility mode" for the rare machine that
+// actually needs it — rather than punishing everyone else's paint
+// performance for a workaround most people don't need. Must be read/called
+// before app.ready, so this can't wait for the SQLite db (only opened in
+// app.whenReady below) — a plain marker file is checked instead.
+const gpuCompatFlagPath = path.join(app.getPath("userData"), "disable-gpu-acceleration");
+const gpuAccelerationDisabled = fs.existsSync(gpuCompatFlagPath);
+if (gpuAccelerationDisabled) app.disableHardwareAcceleration();
 
 // Serves uploaded background images/video from userData/backgrounds/ back to
 // the renderer. Registered before app.ready, as Electron requires. A raw
@@ -150,6 +159,11 @@ async function createWindow() {
   operatorWindow.loadURL(await resolveAppUrl());
   operatorWindow.on("closed", () => {
     operatorWindow = null;
+    // Without this, closing just the operator window leaves outputWindow
+    // open on the second monitor — window-all-closed only fires once every
+    // BrowserWindow is gone, so the app would never actually quit and the
+    // audience screen would keep showing the last slide indefinitely.
+    closeOutputWindow();
   });
 }
 
@@ -353,6 +367,9 @@ function registerIpcHandlers() {
   ipcMain.handle("repo:addBibleTranslation", (_event, input) => db.addBibleTranslation(input));
   ipcMain.handle("repo:deleteBibleTranslation", (_event, code) => db.deleteBibleTranslation(code));
   ipcMain.handle("repo:getBibleTranslationData", (_event, code) => db.getBibleTranslationData(code));
+  ipcMain.handle("repo:upsertBibleCollection", (_event, collection) => db.upsertBibleCollection(collection));
+  ipcMain.handle("repo:deleteBibleCollection", (_event, id) => db.deleteBibleCollection(id));
+  ipcMain.handle("repo:setSongMetaOverride", (_event, songId, patch) => db.setSongMetaOverride(songId, patch));
 
   // Only http(s) URLs are ever passed here — the caller always uses the
   // hardcoded BIBLE_DOWNLOADS_URL constant, never user-supplied input — but
@@ -372,6 +389,16 @@ function registerIpcHandlers() {
   // called and the operator's own window stays a normal window.
   ipcMain.handle("window:setFullScreen", (_event, fullScreen) => {
     if (operatorWindow && !operatorWindow.isDestroyed()) operatorWindow.setFullScreen(fullScreen);
+  });
+
+  // Compatibility mode (disables GPU acceleration) — see the comment above
+  // gpuCompatFlagPath. Always reflects the flag file already read at launch;
+  // toggling only takes effect after a restart, since acceleration can only
+  // be disabled before app.ready.
+  ipcMain.handle("compat:getGpuAccelerationDisabled", () => gpuAccelerationDisabled);
+  ipcMain.handle("compat:setGpuAccelerationDisabled", (_event, disabled) => {
+    if (disabled) fs.writeFileSync(gpuCompatFlagPath, "");
+    else { try { fs.unlinkSync(gpuCompatFlagPath); } catch { /* already absent */ } }
   });
 
   ipcMain.handle("update:status", () => updateStatus);

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored Claude Design handoff bundle — reference-only HTML/CSS/JS
+    // prototypes plus their design-system runtime, not app source.
+    "Lumen Worship operator screen-handoff/**",
   ]),
 ]);
 

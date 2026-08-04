@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Instrument_Sans, Instrument_Serif, JetBrains_Mono, Inter, Poppins, Playfair_Display, Merriweather } from "next/font/google";
+import { Instrument_Sans, Instrument_Serif, JetBrains_Mono, Inter, Poppins, Playfair_Display, Merriweather, Bebas_Neue } from "next/font/google";
 import "./globals.css";
 
 const instrumentSans = Instrument_Sans({
@@ -41,6 +41,12 @@ const merriweather = Merriweather({
   weight: ["400", "700"],
 });
 
+const bebasNeue = Bebas_Neue({
+  variable: "--font-bebas-raw",
+  subsets: ["latin"],
+  weight: "400",
+});
+
 export const metadata: Metadata = {
   title: "Lumen Worship",
   description: "Live lyrics presentation for worship gatherings",
@@ -54,7 +60,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${instrumentSans.variable} ${instrumentSerif.variable} ${jetBrainsMono.variable} ${inter.variable} ${poppins.variable} ${playfairDisplay.variable} ${merriweather.variable}`}
+      className={`${instrumentSans.variable} ${instrumentSerif.variable} ${jetBrainsMono.variable} ${inter.variable} ${poppins.variable} ${playfairDisplay.variable} ${merriweather.variable} ${bebasNeue.variable}`}
     >
       <body className="h-screen overflow-hidden">{children}</body>
     </html>

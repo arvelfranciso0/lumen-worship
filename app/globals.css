@@ -9,6 +9,7 @@
   --font-poppins: var(--font-poppins-raw), system-ui, sans-serif;
   --font-playfair: var(--font-playfair-raw), Georgia, serif;
   --font-merriweather: var(--font-merriweather-raw), Georgia, serif;
+  --font-bebas: var(--font-bebas-raw), Impact, sans-serif;
 
   /* Standard OS-installed fonts — plain font stacks, nothing downloaded. */
   --font-arial: Arial, Helvetica, sans-serif;
@@ -23,6 +24,16 @@
   --font-palatino: "Palatino Linotype", Palatino, serif;
   --font-comicsans: "Comic Sans MS", "Comic Sans", cursive;
   --font-impact: Impact, Haettenschweiler, sans-serif;
+}
+
+/* Numeric border-radius utilities (rounded-2, rounded-2.25, rounded-1.5, ...)
+   on the same 4px-per-step scale as Tailwind's spacing utilities. Tailwind v4
+   ships only named radii (rounded-sm/xl/full/...) plus arbitrary values, so
+   without this every numeric `rounded-*` class in the app silently produced no
+   CSS at all — square corners everywhere. Named and arbitrary forms still
+   resolve through Tailwind's own built-ins. */
+@utility rounded-* {
+  border-radius: --spacing(--value(number));
 }
 
 @theme inline {
@@ -140,4 +151,62 @@ a:hover {
   60% { transform: rotate(-7deg); }
   75% { transform: rotate(4deg); }
   90% { transform: rotate(-2deg); }
+}
+
+/* Slide-transition animations (see useSlideTransition.ts) — applied to the
+   Live output content wrapper, keyed by slide identity so re-mounting
+   restarts the animation each time the live slide changes. */
+@keyframes lumenTransFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes lumenTransSlide {
+  from { opacity: 0; transform: translateX(36px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes lumenTransZoom {
+  from { opacity: 0; transform: scale(.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes lumenTransPush {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+/* Looping demo animations for the transition picker's preview cards (see
+   TransitionRow.tsx) — these show what each transition *does*, so unlike the
+   lumenTrans* set above they run continuously and animate out-then-in. */
+@keyframes lumenPreviewCut {
+  0%, 45% { opacity: 1; }
+  50%, 95% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes lumenPreviewFade {
+  0%, 40% { opacity: 1; }
+  50% { opacity: 0; }
+  60%, 100% { opacity: 1; }
+}
+@keyframes lumenPreviewZoom {
+  0%, 40% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(.8); opacity: .2; }
+  60%, 100% { transform: scale(1); opacity: 1; }
+}
+@keyframes lumenPreviewSlide {
+  0%, 40% { transform: translateX(0); opacity: 1; }
+  49% { transform: translateX(14px); opacity: 0; }
+  51% { transform: translateX(-14px); opacity: 0; }
+  60%, 100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes lumenPreviewPush {
+  0%, 40% { transform: translateX(0); }
+  49% { transform: translateX(-100%); }
+  51% { transform: translateX(100%); }
+  60%, 100% { transform: translateX(0); }
+}
+
+/* Product tour spotlight ring (see TourOverlay.tsx) — the 9999px shadow
+   spread dims everything outside the target element's rounded rect. */
+@keyframes lumenTourPulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(139,92,246,.25), 0 0 0 9999px rgba(6,6,8,.72); }
+  50% { box-shadow: 0 0 0 8px rgba(139,92,246,.12), 0 0 0 9999px rgba(6,6,8,.72); }
 }

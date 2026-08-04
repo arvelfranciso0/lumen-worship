@@ -3,6 +3,7 @@
 // lib/repository/electron.ts can call it as a plain pass-through.
 
 const { contextBridge, ipcRenderer } = require("electron");
+const { parseBibleXml } = require("./bibleXml.js");
 
 contextBridge.exposeInMainWorld("electronAPI", {
   loadAll: () => ipcRenderer.invoke("repo:loadAll"),
@@ -16,7 +17,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteBackground: (id) => ipcRenderer.invoke("repo:deleteBackground", id),
   addBibleTranslation: (input) => ipcRenderer.invoke("repo:addBibleTranslation", input),
   deleteBibleTranslation: (code) => ipcRenderer.invoke("repo:deleteBibleTranslation", code),
-  getBibleTranslationData: (code) => ipcRenderer.invoke("repo:getBibleTranslationData", code),
+  // db.js's getBibleTranslationData returns raw { text, format } (no
+  // parsing) — the actual JSON.parse/parseBibleXml happens here, in the
+  // preload script's own isolated renderer context, not the main process,
+  // so parsing a multi-MB translation never blocks IPC for other windows
+  // (notably the second-monitor audience output).
+  getBibleTranslationData: (code) => ipcRenderer.invoke("repo:getBibleTranslationData", code).then(
+    (raw) => raw ? (raw.format === "xml" ? parseBibleXml(raw.text) : JSON.parse(raw.text)) : null
+  ),
+  upsertBibleCollection: (collection) => ipcRenderer.invoke("repo:upsertBibleCollection", collection),
+  deleteBibleCollection: (id) => ipcRenderer.invoke("repo:deleteBibleCollection", id),
+  setSongMetaOverride: (songId, patch) => ipcRenderer.invoke("repo:setSongMetaOverride", songId, patch),
 });
 
 // Separate bridge for the second-monitor "audience output" feature — kept
@@ -49,6 +60,16 @@ contextBridge.exposeInMainWorld("electronDisplay", {
 // app window itself.
 contextBridge.exposeInMainWorld("electronShell", {
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
+});
+
+// Bridge for the Settings "Compatibility mode" toggle (see
+// components/lumen/electronCompat.ts) — disables GPU acceleration, an escape
+// hatch for the rare machine that can't run Chromium's GPU process reliably.
+// Off by default; the change only takes effect after a restart, since
+// acceleration can only be disabled before app.ready.
+contextBridge.exposeInMainWorld("electronCompat", {
+  getGpuAccelerationDisabled: () => ipcRenderer.invoke("compat:getGpuAccelerationDisabled"),
+  setGpuAccelerationDisabled: (disabled) => ipcRenderer.invoke("compat:setGpuAccelerationDisabled", disabled),
 });
 
 // Bridge for the header's update-notification bell (see

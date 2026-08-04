@@ -1,9 +1,15 @@
-import type { BibleTranslation, Lineup, Section, Song } from "@/components/lumen/data";
+import type { BibleCollection, BibleTranslation, Lineup, Section, Song } from "@/components/lumen/data";
 import type { AppRepository, NewBackgroundInput, NewBibleTranslationInput, PersistedData, PersistedPrefs } from "./types";
+// Plain CJS module shared verbatim with electron/preload.js (see its header
+// comment) — allowJs + the bundler's CJS interop make this a normal import.
+import { parseBibleXml } from "../../electron/bibleXml.js";
 
 const DB_NAME = "lumen";
-const DB_VERSION = 3;
-const STORES = ["songs", "lineups", "songOverrides", "prefs", "backgrounds", "bibleTranslations"] as const;
+const DB_VERSION = 4;
+const STORES = [
+  "songs", "lineups", "songOverrides", "prefs", "backgrounds", "bibleTranslations",
+  "bibleCollections", "songMetaOverrides",
+] as const;
 
 type StoredBackground = {
   id: string;
@@ -22,6 +28,9 @@ type StoredBibleTranslation = {
   data: ArrayBuffer;
   downloadedAt: number;
   sizeBytes: number;
+  // Absent on records written before XML support existed — undefined is
+  // treated as "json" below, so old records keep parsing exactly as before.
+  format?: "json" | "xml";
 };
 
 function openDb(): Promise<IDBDatabase> {
@@ -35,6 +44,8 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains("prefs")) db.createObjectStore("prefs", { keyPath: "key" });
       if (!db.objectStoreNames.contains("backgrounds")) db.createObjectStore("backgrounds", { keyPath: "id" });
       if (!db.objectStoreNames.contains("bibleTranslations")) db.createObjectStore("bibleTranslations", { keyPath: "code" });
+      if (!db.objectStoreNames.contains("bibleCollections")) db.createObjectStore("bibleCollections", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("songMetaOverrides")) db.createObjectStore("songMetaOverrides", { keyPath: "songId" });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -82,15 +93,18 @@ export function createIndexedDbRepository(): AppRepository {
   return {
     async loadAll(): Promise<PersistedData> {
       const db = await dbPromise;
-      const [customSongs, lineups, overrideRows, prefRows, backgroundRows, bibleTranslationRows] = await Promise.all([
+      const [customSongs, lineups, overrideRows, prefRows, backgroundRows, bibleTranslationRows, bibleCollections, songMetaOverrideRows] = await Promise.all([
         getAll<Song>(db, "songs"),
         getAll<Lineup>(db, "lineups"),
         getAll<{ songId: string; sections: Section[] }>(db, "songOverrides"),
         getAll<{ key: string; value: unknown }>(db, "prefs"),
         getAll<StoredBackground>(db, "backgrounds"),
         getAll<StoredBibleTranslation>(db, "bibleTranslations"),
+        getAll<BibleCollection>(db, "bibleCollections"),
+        getAll<{ songId: string; patch: Partial<Song> }>(db, "songMetaOverrides"),
       ]);
       const songOverrides = Object.fromEntries(overrideRows.map((r) => [r.songId, r.sections]));
+      const songMetaOverrides = Object.fromEntries(songMetaOverrideRows.map((r) => [r.songId, r.patch]));
       const prefs = Object.fromEntries(prefRows.map((r) => [r.key, r.value])) as PersistedPrefs;
       const customBackgrounds = backgroundRows.map((row) => ({
         id: row.id,
@@ -107,7 +121,7 @@ export function createIndexedDbRepository(): AppRepository {
         downloadedAt: row.downloadedAt,
         sizeBytes: row.sizeBytes,
       }));
-      return { customSongs, lineups, customBackgrounds, downloadedBibleTranslations, songOverrides, prefs };
+      return { customSongs, lineups, customBackgrounds, downloadedBibleTranslations, songOverrides, bibleCollections, songMetaOverrides, prefs };
     },
 
     async upsertSong(song: Song) {
@@ -159,7 +173,7 @@ export function createIndexedDbRepository(): AppRepository {
       const db = await dbPromise;
       const record: StoredBibleTranslation = {
         code: input.code, language: input.language, name: input.name, license: input.license, link: input.link,
-        data: input.data, downloadedAt: Date.now(), sizeBytes: input.data.byteLength,
+        data: input.data, downloadedAt: Date.now(), sizeBytes: input.data.byteLength, format: input.format,
       };
       await put(db, "bibleTranslations", record);
     },
@@ -173,7 +187,23 @@ export function createIndexedDbRepository(): AppRepository {
       const db = await dbPromise;
       const row = await getOne<StoredBibleTranslation>(db, "bibleTranslations", code);
       if (!row) return null;
-      return JSON.parse(new TextDecoder().decode(row.data)) as BibleTranslation;
+      const text = new TextDecoder().decode(row.data);
+      return row.format === "xml" ? (parseBibleXml(text) as BibleTranslation) : (JSON.parse(text) as BibleTranslation);
+    },
+
+    async upsertBibleCollection(collection: BibleCollection) {
+      const db = await dbPromise;
+      await put(db, "bibleCollections", collection);
+    },
+
+    async deleteBibleCollection(id: string) {
+      const db = await dbPromise;
+      await del(db, "bibleCollections", id);
+    },
+
+    async setSongMetaOverride(songId: string, patch: Partial<Song>) {
+      const db = await dbPromise;
+      await put(db, "songMetaOverrides", { songId, patch });
     },
   };
 }
