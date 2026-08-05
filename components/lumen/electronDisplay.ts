@@ -36,7 +36,7 @@ export type OutputState = {
   // so the transition animation actually restarts each time.
   slideKey: string;
   transitionType: "cut" | "fade" | "slide" | "zoom" | "push";
-  transitionSpeedPct: number;
+  transitionDurationMs: number;
   performanceMode: boolean;
   // Set when Bible Compare is active — both translations' wording of the
   // current verse, shown stacked instead of the normal single slide.
@@ -44,7 +44,7 @@ export type OutputState = {
   // line prefixed with `verseNumber` as a superscript, with the translation
   // codes folded into `caption` (e.g. "PSA 23:2 KJV - NIV") instead of a
   // separate label above each line.
-  compare?: { verseNumber: string; lines: [string, string]; caption: string };
+  compare?: { verseNumber: string; lines: string[]; caption: string };
 };
 
 export type ElectronDisplayBridge = {

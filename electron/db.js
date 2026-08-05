@@ -26,9 +26,6 @@ const SCHEMA = `
     code TEXT PRIMARY KEY, language TEXT, name TEXT, license TEXT, link TEXT,
     file_name TEXT, downloaded_at INTEGER, size_bytes INTEGER, format TEXT DEFAULT 'json'
   );
-  CREATE TABLE IF NOT EXISTS bible_collections (
-    id TEXT PRIMARY KEY, name TEXT, verse_refs TEXT
-  );
   CREATE TABLE IF NOT EXISTS song_meta_overrides (
     song_id TEXT PRIMARY KEY, patch TEXT
   );
@@ -61,10 +58,6 @@ function rowToSong(row) {
     cat: row.cat, tags: JSON.parse(row.tags || "[]"), fav: !!row.fav, when: row.when_used,
     sections: JSON.parse(row.sections || "[]"), ccli: row.ccli || "",
   };
-}
-
-function rowToBibleCollection(row) {
-  return { id: row.id, name: row.name, verseRefs: JSON.parse(row.verse_refs || "[]") };
 }
 
 function rowToLineup(row) {
@@ -108,12 +101,11 @@ function createDb(dbPath) {
       const prefs = Object.fromEntries(prefRows.map((r) => [r.key, JSON.parse(r.value)]));
       const customBackgrounds = db.prepare("SELECT * FROM backgrounds").all().map(rowToBackground);
       const downloadedBibleTranslations = db.prepare("SELECT * FROM bible_translations").all().map(rowToDownloadedBibleTranslation);
-      const bibleCollections = db.prepare("SELECT * FROM bible_collections").all().map(rowToBibleCollection);
       const songMetaOverrideRows = db.prepare("SELECT * FROM song_meta_overrides").all();
       const songMetaOverrides = Object.fromEntries(
         songMetaOverrideRows.map((r) => [r.song_id, JSON.parse(r.patch)])
       );
-      return { customSongs, lineups, customBackgrounds, downloadedBibleTranslations, songOverrides, bibleCollections, songMetaOverrides, prefs };
+      return { customSongs, lineups, customBackgrounds, downloadedBibleTranslations, songOverrides, songMetaOverrides, prefs };
     },
 
     upsertSong(song) {
@@ -216,17 +208,6 @@ function createDb(dbPath) {
       } catch {
         return null;
       }
-    },
-
-    upsertBibleCollection({ id, name, verseRefs }) {
-      db.prepare(
-        `INSERT INTO bible_collections (id, name, verse_refs) VALUES (?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET name=excluded.name, verse_refs=excluded.verse_refs`
-      ).run(id, name, JSON.stringify(verseRefs));
-    },
-
-    deleteBibleCollection(id) {
-      db.prepare("DELETE FROM bible_collections WHERE id = ?").run(id);
     },
 
     setSongMetaOverride(songId, patch) {

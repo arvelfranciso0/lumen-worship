@@ -2,21 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { cx } from "./cx";
-import { DEFAULT_LYRIC_STYLE, LOOKS, lyricStyleCss } from "./data";
+import { DEFAULT_LYRIC_STYLE, LOOKS } from "./data";
 import { getElectronDisplay, type OutputState } from "./electronDisplay";
 import { HighlightedLine } from "./HighlightedLine";
 import { LookBackground } from "./LookBackground";
 import { SlideCaption } from "./SlideCaption";
-import { useSlideTransition } from "./useSlideTransition";
-
-// Kept in step with PresentationOverlay's own ratio — these two render the same
-// audience view, just in different windows.
-const CAPTION_RATIO = 0.3;
+import {
+  stageFontSize, stageLineStyle,
+  STAGE_CANVAS_SCREEN, STAGE_CAPTION_BOTTOM_SCREEN, STAGE_CAPTION_RATIO, STAGE_LINE_GAP_SCREEN,
+} from "./stage";
+import { DEFAULT_TRANSITION_MS, useSlideTransition } from "./useSlideTransition";
 
 const DEFAULT_OUTPUT_STATE: OutputState = {
   lines: [], look: LOOKS[0], black: false, hidden: false,
   lyricStyle: DEFAULT_LYRIC_STYLE, fontClassName: "font-sans", scale: 1, fit: 1, caption: "",
-  slideKey: "", transitionType: "cut", transitionSpeedPct: 50, performanceMode: false,
+  slideKey: "", transitionType: "cut", transitionDurationMs: DEFAULT_TRANSITION_MS, performanceMode: false,
 };
 
 // The whole content of the second, audience-facing monitor. Deliberately
@@ -42,10 +42,10 @@ export function OutputWindowApp() {
 
   const {
     lines, lineHighlights, look, black, hidden, lyricStyle, fontClassName, scale, fit, caption,
-    slideKey, transitionType, transitionSpeedPct, performanceMode, compare,
+    slideKey, transitionType, transitionDurationMs, performanceMode, compare,
   } = outputState;
   const stageLines = hidden ? [] : lines;
-  const slideTransitionStyle = useSlideTransition(transitionType, transitionSpeedPct, performanceMode);
+  const slideTransitionStyle = useSlideTransition(transitionType, transitionDurationMs, performanceMode);
   // Compare mode carries its own reference caption (both translation codes);
   // otherwise the slide's own caption is used. Pinned to the bottom of the
   // screen either way, so showing it never shifts the verse off centre.
@@ -56,27 +56,26 @@ export function OutputWindowApp() {
   const stageCaption = hidden || !captionLines.some((line) => line.trim().length > 0)
     ? ""
     : compare ? compare.caption : caption;
-  const lineClassName = cx(fontClassName, "font-semibold tracking-[-0.02em] text-white leading-[1.24] [text-shadow:0_4px_60px_rgba(0,0,0,.55)]");
+  // Identical proportions to every other surface (see stage.ts). `fit` arrives
+  // in the pushed state rather than being recomputed, since this window renders
+  // outside the operator's React tree.
+  const lineStyle = stageLineStyle(lyricStyle, scale, fit, "vw");
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden">
       <LookBackground look={look} black={black} />
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-[2.2vh] p-[8vh_10vw] text-center z-1">
-        <div key={slideKey} style={slideTransitionStyle} className="flex flex-col items-center gap-[2.2vh]">
+      <div className={cx(STAGE_CANVAS_SCREEN, fontClassName)}>
+        <div key={slideKey} style={slideTransitionStyle} className={cx("flex flex-col items-center", STAGE_LINE_GAP_SCREEN)}>
           {compare && !hidden ? (
             compare.lines.map((line, compareIndex) => (
-              <div key={compareIndex} className={lineClassName} style={{ fontSize: 4.4 * scale * fit + "vw", ...lyricStyleCss(lyricStyle) }}>
+              <div key={compareIndex} style={lineStyle}>
                 <span className="text-[0.55em] align-super mr-[0.25em]">{compare.verseNumber}</span>
                 {line}
               </div>
             ))
           ) : (
             stageLines.map((line, lineIndex) => (
-              <div
-                key={lineIndex}
-                className={lineClassName}
-                style={{ fontSize: 4.4 * scale * fit + "vw", ...lyricStyleCss(lyricStyle) }}
-              >
+              <div key={lineIndex} style={lineStyle}>
                 <HighlightedLine line={line} highlights={lineHighlights?.[lineIndex]} />
               </div>
             ))
@@ -87,9 +86,9 @@ export function OutputWindowApp() {
         caption={stageCaption}
         lyricStyle={lyricStyle}
         fontClassName={fontClassName}
-        baseFontSize={4.4 * scale * fit + "vw"}
-        ratio={CAPTION_RATIO}
-        bottom="4vh"
+        baseFontSize={stageFontSize(scale, fit, "vw")}
+        ratio={STAGE_CAPTION_RATIO}
+        bottom={STAGE_CAPTION_BOTTOM_SCREEN}
       />
     </div>
   );

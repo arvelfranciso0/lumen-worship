@@ -18,6 +18,12 @@ type SlideCaptionProps = {
   ratio: number;
   // Distance from the bottom of the surface, as a CSS length.
   bottom: string;
+  // Floor for the computed size, as a CSS length. Only needed where
+  // baseFontSize is proportional to a surface small enough for the honest
+  // fraction to come out illegible (the Live output box on a narrow panel);
+  // it can't affect the lyric layout, since the caption is positioned out of
+  // the text flow.
+  minFontSize?: string;
 };
 
 // The Bible reference shown under the verse ("PSA 23:2 KJV"). Deliberately
@@ -30,10 +36,11 @@ type SlideCaptionProps = {
 // surface that renders slide text renders this too (Live output, Previous,
 // Next up, the slides grid, Present, and the audience window), so a caption is
 // never a surprise that only appears once it's already live.
-export function SlideCaption({ caption, lyricStyle, fontClassName, baseFontSize, ratio, bottom }: SlideCaptionProps) {
+export function SlideCaption({ caption, lyricStyle, fontClassName, baseFontSize, ratio, bottom, minFontSize }: SlideCaptionProps) {
   if (!caption) return null;
 
-  const fontSize = "calc(" + baseFontSize + " * " + ratio + ")";
+  const scaledFontSize = "calc(" + baseFontSize + " * " + ratio + ")";
+  const fontSize = minFontSize ? "max(" + scaledFontSize + ", " + minFontSize + ")" : scaledFontSize;
   // Scaled with the text — a 2px stroke sized for a 26px verse would swallow a
   // 6px caption whole.
   const outlineWidth = lyricStyle.outlineWidth ? lyricStyle.outlineWidth * ratio : 0;

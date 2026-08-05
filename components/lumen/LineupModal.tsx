@@ -74,6 +74,7 @@ export function LineupModal({ lumen }: { lumen: UseLumen }) {
 
         <div className="p-[18px_20px] flex flex-col gap-3 overflow-y-auto flex-1">
           <input
+            data-tour="lineup-name"
             value={name}
             onChange={(e) => { setName(e.target.value); setError(""); }}
             placeholder="Lineup name — e.g. Sunday AM"
@@ -81,6 +82,7 @@ export function LineupModal({ lumen }: { lumen: UseLumen }) {
           />
 
           <InteractiveInput
+            data-tour="lineup-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search songs, artists, tags"
@@ -92,6 +94,7 @@ export function LineupModal({ lumen }: { lumen: UseLumen }) {
               {selectedCount} of {allSongs.length} songs selected
             </div>
             <InteractiveButton
+              data-tour="lineup-upload"
               onClick={() => patch({ songEditorOpen: true, songEditorMode: "create" })}
               className="text-[12px] text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
             >
@@ -99,7 +102,7 @@ export function LineupModal({ lumen }: { lumen: UseLumen }) {
             </InteractiveButton>
           </div>
 
-          <div className="flex flex-col gap-1 border border-border rounded-xl bg-panel2 p-1.5 max-h-80 overflow-y-auto">
+          <div data-tour="lineup-songs" className="flex flex-col gap-1 border border-border rounded-xl bg-panel2 p-1.5 max-h-80 overflow-y-auto">
             {filteredSongs.length === 0 && (
               <div className="p-[20px_10px] text-center text-[12.5px] text-muted">
                 No songs match “{query}”.
@@ -144,7 +147,7 @@ export function LineupModal({ lumen }: { lumen: UseLumen }) {
           >
             Cancel
           </InteractiveButton>
-          <button onClick={submit} className="h-9 px-4 rounded-2.25 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer">
+          <button data-tour="lineup-create" onClick={submit} className="h-9 px-4 rounded-2.25 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer">
             {editingLineup ? "Save changes" : "Create lineup"}
           </button>
         </div>

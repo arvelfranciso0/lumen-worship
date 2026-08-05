@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { cx } from "./cx";
 import type { UseLumen } from "./useLumen";
-import type { TransitionType } from "./useSlideTransition";
+import {
+  clampTransitionDurationMs, MAX_TRANSITION_MS, MIN_TRANSITION_MS, type TransitionType,
+} from "./useSlideTransition";
 
-// Each card animates a miniature of what its transition actually does, on a
-// loop — see the lumenPreview* keyframes in app/globals.css.
+// Each card can animate a miniature of what its transition actually does — see
+// the lumenPreview* keyframes in app/globals.css.
 const TRANSITIONS: { id: TransitionType; label: string; animation: string }[] = [
   { id: "cut", label: "Cut", animation: "lumenPreviewCut" },
   { id: "fade", label: "Fade", animation: "lumenPreviewFade" },
@@ -14,12 +17,9 @@ const TRANSITIONS: { id: TransitionType; label: string; animation: string }[] = 
   { id: "push", label: "Push", animation: "lumenPreviewPush" },
 ];
 
-// Duration the chosen speed maps to — mirrors useSlideTransition's own
-// 600ms-slow → 150ms-fast mapping, shown so the collapsed row can summarise
-// the current setting without expanding.
-function durationMs(speedPct: number) {
-  return Math.round(600 - (speedPct / 100) * 450);
-}
+// Gap between preview loops, so a card reads as repeating the transition rather
+// than as a continuously moving element.
+const PREVIEW_PAUSE_MS = 900;
 
 // Inline collapsible row in the main column (was a modal before the handoff
 // redesign) — sits between the text-style toolbar and the slides grid.
@@ -27,7 +27,20 @@ export function TransitionRow({ lumen }: { lumen: UseLumen }) {
   const { state, patch } = lumen;
   const open = state.transitionRowOpen;
   const active = TRANSITIONS.find((transition) => transition.id === state.transitionType) ?? TRANSITIONS[0];
-  const summary = active.label + " · " + durationMs(state.transitionSpeedPct) + "ms";
+  const summary = active.label + " · " + state.transitionDurationMs + "ms";
+
+  // Which card the pointer/keyboard focus is on. Previews used to run on all
+  // five cards at once, unconditionally — five looping animations competing for
+  // attention, none of them telling the operator which one was selected. Only
+  // the active card and the one being hovered/focused animate now.
+  const [previewingId, setPreviewingId] = useState<TransitionType | null>(null);
+
+  // Previews run at the real configured duration, so what the card shows is what
+  // the audience screen will do — with a pause appended so the loop stays
+  // legible at very short durations.
+  const previewCycleMs = state.transitionDurationMs + PREVIEW_PAUSE_MS;
+
+  const setDuration = (value: number) => patch({ transitionDurationMs: clampTransitionDurationMs(value) });
 
   return (
     <div className="flex-none flex items-center gap-2.5 p-[8px_16px] border-b border-border bg-panel2 flex-wrap gap-y-1.5">
@@ -49,10 +62,18 @@ export function TransitionRow({ lumen }: { lumen: UseLumen }) {
         <div className="flex gap-1.5 items-start">
           {TRANSITIONS.map((transition) => {
             const on = transition.id === state.transitionType;
+            // "cut" is an instant swap — there is nothing to animate, and a
+            // looping card would imply otherwise.
+            const animating = (on || previewingId === transition.id) && transition.id !== "cut";
             return (
               <button
                 key={transition.id}
                 onClick={() => patch({ transitionType: transition.id })}
+                onMouseEnter={() => setPreviewingId(transition.id)}
+                onMouseLeave={() => setPreviewingId((current) => (current === transition.id ? null : current))}
+                onFocus={() => setPreviewingId(transition.id)}
+                onBlur={() => setPreviewingId((current) => (current === transition.id ? null : current))}
+                title={transition.label + " · " + state.transitionDurationMs + "ms"}
                 className="flex flex-col items-center gap-0.75 bg-transparent border-none p-0 cursor-pointer"
               >
                 <div
@@ -63,7 +84,7 @@ export function TransitionRow({ lumen }: { lumen: UseLumen }) {
                 >
                   <div
                     className="flex flex-col gap-0.5 items-center"
-                    style={{ animation: transition.animation + " 2.4s ease-in-out infinite" }}
+                    style={animating ? { animation: transition.animation + " " + previewCycleMs + "ms ease-in-out infinite" } : undefined}
                   >
                     <div className="w-6.5 h-0.75 rounded-0.5 bg-white" />
                     <div className="w-4.5 h-0.75 rounded-0.5 bg-white opacity-80" />
@@ -75,19 +96,36 @@ export function TransitionRow({ lumen }: { lumen: UseLumen }) {
           })}
         </div>
         <div className="w-px h-5.5 bg-border" />
-        <span className="text-[10px] text-faint">Slow</span>
+        {/* Duration in real milliseconds rather than an abstract 0-100 "speed".
+            Slider and number field write the same value; the number field is
+            there so an exact duration can be typed instead of hunted for. Both
+            are disabled for Cut, which has no duration to set. */}
+        <label className="text-[10px] text-faint flex-none">Duration</label>
         <input
           type="range"
-          min={0}
-          max={100}
+          min={MIN_TRANSITION_MS}
+          max={MAX_TRANSITION_MS}
           step={10}
-          value={state.transitionSpeedPct}
-          onChange={(changeEvent) => patch({ transitionSpeedPct: Number(changeEvent.target.value) })}
-          title={durationMs(state.transitionSpeedPct) + "ms"}
+          value={state.transitionDurationMs}
+          onChange={(changeEvent) => setDuration(Number(changeEvent.target.value))}
+          title={state.transitionDurationMs + "ms"}
           disabled={state.transitionType === "cut"}
           className="w-25 cursor-pointer accent-accent disabled:opacity-40"
         />
-        <span className="text-[10px] text-faint">Fast</span>
+        <input
+          type="number"
+          min={MIN_TRANSITION_MS}
+          max={MAX_TRANSITION_MS}
+          step={10}
+          value={state.transitionDurationMs}
+          // Clamped on blur rather than on every keystroke, so typing "1200"
+          // isn't snapped to the maximum the instant "1" is entered.
+          onChange={(changeEvent) => patch({ transitionDurationMs: Number(changeEvent.target.value) })}
+          onBlur={(blurEvent) => setDuration(Number(blurEvent.target.value))}
+          disabled={state.transitionType === "cut"}
+          className="w-15 h-6.5 px-1.5 rounded-1.5 border border-border bg-panel text-text font-mono text-[10.5px] outline-none focus:border-accent disabled:opacity-40"
+        />
+        <span className="text-[10px] text-faint flex-none">ms</span>
       </div>
     </div>
   );

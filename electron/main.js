@@ -367,8 +367,6 @@ function registerIpcHandlers() {
   ipcMain.handle("repo:addBibleTranslation", (_event, input) => db.addBibleTranslation(input));
   ipcMain.handle("repo:deleteBibleTranslation", (_event, code) => db.deleteBibleTranslation(code));
   ipcMain.handle("repo:getBibleTranslationData", (_event, code) => db.getBibleTranslationData(code));
-  ipcMain.handle("repo:upsertBibleCollection", (_event, collection) => db.upsertBibleCollection(collection));
-  ipcMain.handle("repo:deleteBibleCollection", (_event, id) => db.deleteBibleCollection(id));
   ipcMain.handle("repo:setSongMetaOverride", (_event, songId, patch) => db.setSongMetaOverride(songId, patch));
 
   // Only http(s) URLs are ever passed here — the caller always uses the

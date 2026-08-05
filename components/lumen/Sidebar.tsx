@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { BibleCollectionsPanel } from "./BibleCollectionsPanel";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BibleComparePanel } from "./BibleComparePanel";
-import { BibleFavoritesPanel } from "./BibleFavoritesPanel";
-import { BibleHistoryPanel } from "./BibleHistoryPanel";
-import { bibleHighlightKey, CHIPS, SONGS, SORTS, type Song } from "./data";
+import { matchBibleBooks, parseBibleQuery, resolveBibleQueryTarget } from "./bibleSearch";
+import { CHIPS, SONGS, SORTS, type Song } from "./data";
 import { cx } from "./cx";
 import { InteractiveButton, InteractiveInput } from "./Interactive";
 import type { UseLumen } from "./useLumen";
@@ -13,55 +11,18 @@ import type { Breakpoint } from "./useViewportBreakpoint";
 
 const RECENT = SONGS.slice(0, 3);
 
-const BIBLE_SUB_TABS: { id: "browse" | "compare" | "history" | "favorites" | "collections"; label: string }[] = [
+const BIBLE_SUB_TABS: { id: "browse" | "compare"; label: string }[] = [
   { id: "browse", label: "Browse" },
   { id: "compare", label: "Compare" },
-  { id: "history", label: "History" },
-  { id: "favorites", label: "Favorites" },
-  { id: "collections", label: "Collections" },
 ];
-
-// Small tag-name input + Add/Remove pair shown under the Library header
-// while bulk-select mode is active — applies to every currently-selected
-// song via setSongMetaOverride, which works on built-in songs too (not just
-// custom-*), unlike the old per-song metadata editor.
-function BulkTagBar({
-  selectedCount, onAddTag, onRemoveTag,
-}: { selectedCount: number; onAddTag: (tag: string) => void; onRemoveTag: (tag: string) => void }) {
-  const [tag, setTag] = useState("");
-  return (
-    <div className="flex items-center gap-1.5 mb-2 p-1.5 rounded-2 border border-border bg-panel2">
-      <span className="text-[11px] text-muted px-1 flex-none">{selectedCount} selected</span>
-      <InteractiveInput
-        value={tag}
-        onChange={(changeEvent) => setTag(changeEvent.target.value)}
-        placeholder="tag name"
-        className="flex-1 h-6.5 px-2 rounded-1.5 border border-border bg-panel text-text text-[11px] outline-none"
-      />
-      <InteractiveButton
-        onClick={() => { if (tag.trim()) { onAddTag(tag.trim()); setTag(""); } }}
-        className="h-6.5 px-2 rounded-1.5 border border-border bg-panel text-text text-[11px] cursor-pointer hover:bg-raise"
-      >
-        + Add
-      </InteractiveButton>
-      <InteractiveButton
-        onClick={() => { if (tag.trim()) { onRemoveTag(tag.trim()); setTag(""); } }}
-        className="h-6.5 px-2 rounded-1.5 border border-border bg-panel text-muted text-[11px] cursor-pointer hover:bg-raise"
-      >
-        − Remove
-      </InteractiveButton>
-    </div>
-  );
-}
 
 export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Breakpoint }) {
   const {
     state, patch, bible, list, chipBase, tabStyle, ref, passage, vlabel, idx,
     bibleBooks, currentBook, currentTransMeta, shortTransLabel,
     allSongs, deleteLineup, activateLineup, toggleFavorite, deleteSong,
-    duplicateSongAsReprise, recordSongUsage, setSongMetaOverride, askConfirm,
+    duplicateSongAsReprise, askConfirm,
   } = lumen;
-  const [expandedHistorySongId, setExpandedHistorySongId] = useState<string | null>(null);
   // Driven entirely by what's been imported (Settings > Bible Translations)
   // — this app bundles no Bible data at all, so there's no fixed language
   // list to fall back to.
@@ -75,6 +36,30 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
       setTransLang(bibleLanguages[0]);
     }
   }, [bibleLanguages, transLang]);
+  // Book names come from whichever translation is actually loaded, so picking a
+  // language has to move state.trans as well — otherwise the list keeps the old
+  // language's names until a Version is picked too, which is not what "changed
+  // the language" should mean. Landing on the first version of that language is
+  // enough; useLumen's book-remap effect then carries the current book across by
+  // canonical number once the new translation finishes loading, so "Psalms"
+  // becomes "Mga Salmo" rather than dead-ending on an unknown name.
+  const selectLanguage = (language: string) => {
+    setTransLang(language);
+    const current = state.downloadedTranslations.find((entry) => entry.code === state.trans);
+    if (current?.language === language) return;
+    const firstOfLanguage = state.downloadedTranslations.find((entry) => entry.language === language);
+    if (firstOfLanguage) patch({ trans: firstOfLanguage.code, idx: 0, black: false, blank: false });
+  };
+
+  // Keeps the live verse in view. Jumping to "Genesis 1:1" selects the verse
+  // but the Browse list holds its own scroll position, so a verse far down a
+  // long chapter would be selected off-screen and the jump would read as having
+  // done nothing. "nearest" so an already-visible verse doesn't shift the list.
+  const activeVerseRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    activeVerseRef.current?.scrollIntoView({ block: "nearest" });
+  }, [idx, state.book, state.chapter, state.bibleSubTab, state.mode]);
+
   const [viewingLineupId, setViewingLineupId] = useState<string | null>(null);
   const [draggedSongIndex, setDraggedSongIndex] = useState<number | null>(null);
   const lineupsMode = state.mode === "lineups";
@@ -89,7 +74,36 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
     .filter((maybeSong): maybeSong is (typeof allSongs)[number] => !!maybeSong);
 
   const hasBibleTranslations = state.downloadedTranslations.length > 0;
-  const resultCount = bible ? passage.length + " verses" : list.length + " songs";
+
+  // Bible search. The box wrote state.query all along, but only the song list
+  // ever read it — in Bible mode every book rendered regardless, so typing a
+  // reference did nothing. The book list is now filtered as you type, and Enter
+  // jumps to the full reference.
+  const bibleQuery = useMemo(() => parseBibleQuery(state.query), [state.query]);
+  const visibleBibleBooks = useMemo(
+    () => matchBibleBooks(bibleBooks, bibleQuery.bookQuery),
+    [bibleBooks, bibleQuery.bookQuery]
+  );
+  const bibleTarget = useMemo(
+    () => resolveBibleQueryTarget(bibleBooks, state.book, bibleQuery),
+    [bibleBooks, state.book, bibleQuery]
+  );
+  const goToBibleQuery = () => {
+    if (!bibleTarget) return;
+    patch({
+      book: bibleTarget.book, chapter: bibleTarget.chapter, idx: bibleTarget.verseIndex,
+      black: false, blank: false,
+      // Back to Browse: a reference jump that landed the operator on the Compare
+      // tab would look like it had done nothing.
+      bibleSubTab: "browse",
+    });
+  };
+
+  const resultCount = bible
+    ? (bibleQuery.bookQuery && visibleBibleBooks.length !== bibleBooks.length
+      ? visibleBibleBooks.length + " books"
+      : passage.length + " verses")
+    : list.length + " songs";
   const showRecent = state.chip === "All" && !state.query;
 
   return (
@@ -120,11 +134,26 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
           <InteractiveInput
             value={state.query}
             onChange={(changeEvent) => patch({ query: changeEvent.target.value })}
+            onKeyDown={bible ? (keyEvent) => { if (keyEvent.key === "Enter") goToBibleQuery(); } : undefined}
             placeholder={bible ? "Go to reference — e.g. John 3:16" : "Search songs, lyrics, tags"}
             className="w-full h-9 p-[0_44px_0_28px] rounded-[10px] border border-border bg-panel2 text-[13px] outline-none focus:border-accent focus:shadow-[0_0_0_3px_var(--accent-soft)]"
           />
           <span className="absolute right-2.5 font-mono text-[10px] text-faint border border-border rounded-[5px] p-[2px_5px]">⌘K</span>
         </div>
+
+        {/* A reference the query resolves to is offered as a real row rather than
+            left to a bare Enter press. Navigation was already wired to Enter, but
+            nothing on screen said so — so typing "Genesis 1:1" looked like it
+            only ever filtered the book list. */}
+        {bible && bibleTarget && (
+          <InteractiveButton
+            onClick={goToBibleQuery}
+            className="flex items-center gap-2 h-8 px-2.5 rounded-2 border border-accent bg-accent-soft text-[12px] text-text cursor-pointer text-left"
+          >
+            <span className="text-accent flex-none">↵</span>
+            <span className="truncate">Go to <strong className="font-semibold">{bibleTarget.label}</strong></span>
+          </InteractiveButton>
+        )}
 
         {/* Language/version pickers are no longer up here — in Bible mode they
             live in their own labelled block below the book/chapter grid (see
@@ -152,16 +181,9 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
               Sort: {state.sort} <span className="text-faint">⇅</span>
             </InteractiveButton>
           )}
-          {/* Translation management now hangs off the Version block's
-              "Get more translations →" button further down, not from here. */}
-          {bible && (
-            <InteractiveButton
-              onClick={() => patch({ idx: 0, black: false, blank: false })}
-              className="text-[12px] text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
-            >
-              Queue whole chapter
-            </InteractiveButton>
-          )}
+          {/* Translation management hangs off the Version block's "Get more
+              translations →" button further down, not from here. "Queue whole
+              chapter" used to sit here too and was removed on request. */}
         </div>
         )}
         </>
@@ -173,18 +195,22 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
         <>
           <div data-tour="bible-nav" className="flex-none flex border-b border-border h-43">
             <div className="w-29.5 flex-none border-r border-border overflow-y-auto p-1.5">
-              {bibleBooks.map((book) => (
-                <button
-                  key={book.number}
-                  onClick={() => patch({ book: book.name, chapter: 1, idx: 0 })}
-                  className={cx(
-                    "block w-full text-left p-[6px_8px] rounded-[7px] border-none cursor-pointer text-[12px]",
-                    book.name === state.book ? "bg-accent-soft text-text font-semibold" : "bg-transparent text-muted font-normal"
-                  )}
-                >
-                  {book.name}
-                </button>
-              ))}
+              {visibleBibleBooks.length === 0 ? (
+                <div className="text-[11px] text-faint p-[6px_8px] leading-normal">No books match “{state.query.trim()}”</div>
+              ) : (
+                visibleBibleBooks.map((book) => (
+                  <button
+                    key={book.number}
+                    onClick={() => patch({ book: book.name, chapter: 1, idx: 0 })}
+                    className={cx(
+                      "block w-full text-left p-[6px_8px] rounded-[7px] border-none cursor-pointer text-[12px]",
+                      book.name === state.book ? "bg-accent-soft text-text font-semibold" : "bg-transparent text-muted font-normal"
+                    )}
+                  >
+                    {book.name}
+                  </button>
+                ))
+              )}
             </div>
             <div className="flex-1 overflow-y-auto p-2">
               <div className="text-[10px] font-semibold tracking-[.06em] uppercase text-faint p-[2px_2px_7px]">
@@ -218,7 +244,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
               {bibleLanguages.map((language) => (
                 <button
                   key={language}
-                  onClick={() => setTransLang(language)}
+                  onClick={() => selectLanguage(language)}
                   className={cx(
                     "h-6.5 px-2.5 rounded-full border text-[11.5px] cursor-pointer",
                     transLang === language ? "border-accent bg-accent-soft text-accent" : "border-border bg-panel2 text-muted hover:text-text"
@@ -229,7 +255,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
               ))}
             </div>
             <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint mt-1">Version</div>
-            <div className="flex flex-wrap gap-1.5">
+            <div data-tour="bible-version" className="flex flex-wrap gap-1.5">
               {state.downloadedTranslations
                 .filter((entry) => entry.language === transLang)
                 .map((entry) => (
@@ -286,40 +312,27 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col gap-1">
-                  {passage.map((verseText, verseIndex) => {
-                    const favKey = bibleHighlightKey(state.trans, state.book, state.chapter, lumen.vnum(verseIndex));
-                    const fav = !!state.bibleFavorites[favKey];
-                    return (
-                      <div
-                        key={verseIndex}
-                        onClick={() => patch({ idx: verseIndex, black: false, blank: false })}
-                        className={cx(
-                          "flex gap-2.25 p-[8px_9px] rounded-2.25 cursor-pointer border",
-                          verseIndex === idx ? "border-accent bg-accent-soft" : "border-transparent bg-panel2"
-                        )}
-                      >
-                        <span className={cx("font-mono text-[10px] pt-0.75", verseIndex === idx ? "text-accent" : "text-faint")}>
-                          {vlabel(verseIndex)}
-                        </span>
-                        <span className="flex-1 text-[12.5px] leading-normal">{verseText}</span>
-                        <button
-                          onClick={(clickEvent) => { clickEvent.stopPropagation(); lumen.toggleBibleFavorite(favKey); }}
-                          title="Favorite this verse"
-                          className={cx("border-none bg-transparent cursor-pointer text-[12px] flex-none", fav ? "text-warn" : "text-faint")}
-                        >
-                          ★
-                        </button>
-                      </div>
-                    );
-                  })}
+                <div data-tour="bible-verse" className="flex flex-col gap-1">
+                  {passage.map((verseText, verseIndex) => (
+                    <div
+                      key={verseIndex}
+                      ref={verseIndex === idx ? activeVerseRef : undefined}
+                      onClick={() => patch({ idx: verseIndex, black: false, blank: false })}
+                      className={cx(
+                        "flex gap-2.25 p-[8px_9px] rounded-2.25 cursor-pointer border",
+                        verseIndex === idx ? "border-accent bg-accent-soft" : "border-transparent bg-panel2"
+                      )}
+                    >
+                      <span className={cx("font-mono text-[10px] pt-0.75", verseIndex === idx ? "text-accent" : "text-faint")}>
+                        {vlabel(verseIndex)}
+                      </span>
+                      <span className="flex-1 text-[12.5px] leading-normal">{verseText}</span>
+                    </div>
+                  ))}
                 </div>
               </>
             )}
             {state.bibleSubTab === "compare" && <BibleComparePanel lumen={lumen} />}
-            {state.bibleSubTab === "history" && <BibleHistoryPanel lumen={lumen} />}
-            {state.bibleSubTab === "favorites" && <BibleFavoritesPanel lumen={lumen} />}
-            {state.bibleSubTab === "collections" && <BibleCollectionsPanel lumen={lumen} />}
           </div>
         </>
         ) : (
@@ -374,15 +387,6 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
             </div>
             <div className="flex gap-2.5">
               <InteractiveButton
-                onClick={() => patch((s) => ({ bulkSelectMode: !s.bulkSelectMode, bulkSelectedIds: [] }))}
-                className={cx(
-                  "text-[11.5px] font-semibold border-none cursor-pointer px-1 py-0.5",
-                  state.bulkSelectMode ? "text-accent" : "text-muted hover:text-text"
-                )}
-              >
-                {state.bulkSelectMode ? "Done" : "Select"}
-              </InteractiveButton>
-              <InteractiveButton
                 onClick={() => patch({ lineupModalOpen: true, editingLineupId: null })}
                 className="text-[11.5px] font-semibold text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
               >
@@ -397,23 +401,6 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
               </InteractiveButton>
             </div>
           </div>
-          {state.bulkSelectMode && (
-            <BulkTagBar
-              selectedCount={state.bulkSelectedIds.length}
-              onAddTag={(tag) => {
-                for (const songId of state.bulkSelectedIds) {
-                  const target = allSongs.find((candidate) => candidate.id === songId);
-                  if (target && !target.tags.includes(tag)) setSongMetaOverride(songId, { tags: [...target.tags, tag] });
-                }
-              }}
-              onRemoveTag={(tag) => {
-                for (const songId of state.bulkSelectedIds) {
-                  const target = allSongs.find((candidate) => candidate.id === songId);
-                  if (target) setSongMetaOverride(songId, { tags: target.tags.filter((existingTag) => existingTag !== tag) });
-                }
-              }}
-            />
-          )}
           {list.length === 0 ? (
             <div className="flex flex-col items-center gap-2 text-center p-[40px_18px] text-muted">
               <span className="text-[22px] text-faint">⌕</span>
@@ -431,42 +418,18 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
             {list.map((songEntry) => {
               const on = songEntry.id === state.songId;
               const fav = !!state.favs[songEntry.id];
-              const selected = state.bulkSelectedIds.includes(songEntry.id);
-              const history = state.songUsageHistory[songEntry.id] ?? [];
-              const historyOpen = expandedHistorySongId === songEntry.id;
               return (
                 <div
                   key={songEntry.id}
-                  onClick={() => {
-                    if (state.bulkSelectMode) {
-                      patch((s) => ({
-                        bulkSelectedIds: selected
-                          ? s.bulkSelectedIds.filter((id) => id !== songEntry.id)
-                          : [...s.bulkSelectedIds, songEntry.id],
-                      }));
-                      return;
-                    }
-                    recordSongUsage(songEntry.id);
-                    patch({ songId: songEntry.id, idx: 0, black: false, blank: false });
-                  }}
+                  onClick={() => patch({ songId: songEntry.id, idx: 0, black: false, blank: false })}
                   className={cx(
                     "p-[11px_12px_10px] rounded-xl cursor-pointer border",
-                    selected
-                      ? "border-accent bg-accent-soft"
-                      : on
-                        ? "border-accent bg-accent-soft shadow-[0_0_0_3px_var(--accent-soft)]"
-                        : "border-border bg-panel2 shadow-none"
+                    on
+                      ? "border-accent bg-accent-soft shadow-[0_0_0_3px_var(--accent-soft)]"
+                      : "border-border bg-panel2 shadow-none"
                   )}
                 >
                   <div className="flex items-start gap-2.5">
-                    {state.bulkSelectMode && (
-                      <span className={cx(
-                        "mt-0.5 w-4 h-4 rounded-1 flex-none flex items-center justify-center text-[10px] text-white border",
-                        selected ? "border-accent bg-accent" : "border-border2 bg-transparent"
-                      )}>
-                        {selected ? "✓" : ""}
-                      </span>
-                    )}
                     <div className="flex-1 min-w-0">
                       <div className="text-[13.5px] font-semibold tracking-[-0.01em] truncate">
                         {songEntry.title}
@@ -475,17 +438,6 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
                         {songEntry.artist}
                       </div>
                     </div>
-                    {!state.bulkSelectMode && (
-                      <>
-                        {history.length > 0 && (
-                          <button
-                            onClick={(clickEvent) => { clickEvent.stopPropagation(); setExpandedHistorySongId(historyOpen ? null : songEntry.id); }}
-                            className="border-none cursor-pointer text-[12px] leading-none p-0.5 text-faint hover:text-text"
-                            title="Usage history"
-                          >
-                            🕐
-                          </button>
-                        )}
                         <button
                           onClick={(clickEvent) => { clickEvent.stopPropagation(); duplicateSongAsReprise(songEntry.id); }}
                           className="border-none cursor-pointer text-[12px] leading-none p-0.5 text-faint hover:text-text"
@@ -514,8 +466,6 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
                             ✕
                           </button>
                         )}
-                      </>
-                    )}
                   </div>
                   <div className="flex items-center gap-1.5 mt-2.25">
                     {songEntry.key && (
@@ -531,16 +481,6 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
                       </span>
                     ))}
                   </div>
-                  {historyOpen && (
-                    <div onClick={(clickEvent) => clickEvent.stopPropagation()} className="mt-2 pt-2 border-t border-border flex flex-col gap-1">
-                      <div className="text-[10px] font-semibold tracking-[.06em] uppercase text-faint">Recently used</div>
-                      {history.slice(0, 5).map((timestamp) => (
-                        <div key={timestamp} className="text-[11px] text-muted">
-                          {new Date(timestamp).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               );
             })}

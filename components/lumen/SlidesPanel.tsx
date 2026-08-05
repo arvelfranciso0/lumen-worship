@@ -3,19 +3,17 @@
 import { useState } from "react";
 import { BackgroundsPanel } from "./BackgroundsPanel";
 import { cx } from "./cx";
-import { lyricStyleCss } from "./data";
-import { HighlightedLine } from "./HighlightedLine";
 import { LookBackground } from "./LookBackground";
 import { ResizeHandle } from "./ResizeHandle";
-import { SlideCaption } from "./SlideCaption";
+import { SlideStage } from "./SlideStage";
 import type { UseLumen } from "./useLumen";
 
 type Slide = UseLumen["slides"][number];
 
-// Deliberately close to 1: at a thumbnail's 8px body text, anything much
-// smaller stops being readable at all (see PreviewPanel's own note on why the
-// caption ratio has to grow as the surface shrinks).
-const CAPTION_RATIO = 0.8;
+// A thumbnail is the smallest surface a slide is drawn on, so its caption needs
+// the lowest floor of any of them before the honest proportion becomes unreadable
+// (see stage.ts for why nothing here is sized in fixed pixels).
+const THUMBNAIL_CAPTION_MIN_SIZE = "5px";
 
 // Groups consecutive slides that share a label into one section block, so a
 // two-slide "Verse 1" reads as one unit. Bible mode has no section concept —
@@ -37,23 +35,20 @@ function groupSlides(slides: Slide[], grouped: boolean): { label: string; items:
 export function SlidesPanel({ lumen }: { lumen: UseLumen }) {
   const {
     state, slides, idx: currentSlideIndex, patch, look, allLooks, adjustLayoutSize, bible, lyricFamily,
-    duplicateSlide, mergeSlideWithNext, splitSlide, reorderSlides, setSlideNote,
+    outputAspectRatio, duplicateSlide, mergeSlideWithNext, splitSlide, reorderSlides,
   } = lumen;
 
   const [grouped, setGrouped] = useState(true);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [openNoteIndex, setOpenNoteIndex] = useState<number | null>(null);
-  // Kept as a local draft and committed on blur/close rather than on every
-  // keystroke — setSlideNote goes through saveLyrics, which writes the whole
-  // song override straight to the repository.
-  const [noteDraft, setNoteDraft] = useState("");
 
   const showGroupLabels = !bible && grouped;
   const groups = groupSlides(slides, showGroupLabels);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      <div className="flex items-center gap-2.5 px-2 flex-none">
+      {/* pt-2.5 so the label isn't flush against the panel's top edge — the row
+          above is a divider, not spacing. */}
+      <div className="flex items-center gap-2.5 px-2 pt-2.5 flex-none">
         <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Slides</div>
         {!bible && (
           <button
@@ -106,48 +101,32 @@ export function SlidesPanel({ lumen }: { lumen: UseLumen }) {
                       draggedIndex === index && "opacity-40"
                     )}
                   >
-                    <div className="relative h-24 rounded-t-[9px] overflow-hidden flex flex-col items-center justify-center gap-0.75 p-[8px_10px]">
+                    {/* Carries the output's aspect ratio and container-type so a
+                        thumbnail is the same scale model of the audience screen
+                        the Live output box is — it used to be a fixed h-24 with
+                        hardcoded 8px text, which is why A−/A+ and panel resizing
+                        never reached it. */}
+                    <div
+                      className="relative rounded-t-[9px] overflow-hidden"
+                      style={{ aspectRatio: outputAspectRatio, containerType: "size" }}
+                    >
                       <LookBackground look={effectiveLook || look} preview />
-                      {slide.lines.map((line, lineIndex) => (
-                        <div
-                          key={lineIndex}
-                          className={cx(lyricFamily, "text-[8px] font-medium text-white opacity-[.92] text-center relative z-1")}
-                          style={lyricStyleCss(state.lyricStyle)}
-                        >
-                          <HighlightedLine line={line} highlights={slide.lineHighlights?.[lineIndex]} />
-                        </div>
-                      ))}
-                      {!bible && (
-                        <button
-                          onClick={(clickEvent) => {
-                            clickEvent.stopPropagation();
-                            if (openNoteIndex === index) { setSlideNote(index, noteDraft); setOpenNoteIndex(null); return; }
-                            setNoteDraft(slide.note || "");
-                            setOpenNoteIndex(index);
-                          }}
-                          title="Operator note (never shown live)"
-                          className={cx(
-                            "absolute top-1 left-1 w-4 h-4 rounded-full border-none text-[9px] cursor-pointer flex items-center justify-center z-2 p-0",
-                            slide.note ? "bg-accent text-white" : "bg-[rgba(0,0,0,.45)] text-white/70"
-                          )}
-                        >
-                          ✎
-                        </button>
-                      )}
+                      <SlideStage
+                        lines={slide.lines}
+                        lineHighlights={slide.lineHighlights}
+                        compareVerseNumber={slide.compare?.verseNumber}
+                        caption={slide.caption}
+                        lyricStyle={state.lyricStyle}
+                        fontClassName={lyricFamily}
+                        scale={state.scale}
+                        captionMinFontSize={THUMBNAIL_CAPTION_MIN_SIZE}
+                      />
                       {slide.lookId && (
                         <span
                           title="Custom background for this section"
                           className="absolute top-1 right-1 w-1.75 h-1.75 rounded-full bg-accent z-2"
                         />
                       )}
-                      <SlideCaption
-                        caption={slide.caption}
-                        lyricStyle={state.lyricStyle}
-                        fontClassName={lyricFamily}
-                        baseFontSize="8px"
-                        ratio={CAPTION_RATIO}
-                        bottom="3px"
-                      />
                     </div>
                     <div className={cx("flex justify-between p-[6px_9px_4px] text-[11px]", isLive ? "text-accent" : "text-muted")}>
                       <span className="truncate">{slide.label}</span>
@@ -178,21 +157,6 @@ export function SlidesPanel({ lumen }: { lumen: UseLumen }) {
                         >
                           ✂
                         </button>
-                      </div>
-                    )}
-                    {openNoteIndex === index && (
-                      <div
-                        onClick={(clickEvent) => clickEvent.stopPropagation()}
-                        className="absolute z-10 top-5.5 left-1 w-37.5 bg-panel border border-border2 rounded-2 shadow-app p-1.5"
-                      >
-                        <textarea
-                          autoFocus
-                          value={noteDraft}
-                          onChange={(changeEvent) => setNoteDraft(changeEvent.target.value)}
-                          onBlur={() => { setSlideNote(index, noteDraft); setOpenNoteIndex(null); }}
-                          placeholder="wait for cue…"
-                          className="w-full h-12.5 text-[10.5px] border border-border rounded-1.5 bg-panel2 text-text p-1 resize-none box-border outline-none"
-                        />
                       </div>
                     )}
                   </div>

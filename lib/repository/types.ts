@@ -1,4 +1,4 @@
-import type { BibleCollection, BibleHighlights, BibleTranslation, CustomBackground, DownloadedBibleTranslation, Lineup, LayoutSizes, LayoutVisibility, LyricFontId, LyricStyle, Section, Song, TourSeenFlags } from "@/components/lumen/data";
+import type { BibleHighlights, BibleTranslation, CustomBackground, DownloadedBibleTranslation, Lineup, LayoutSizes, LayoutVisibility, LyricFontId, LyricStyle, Section, Song, TourSeenFlags } from "@/components/lumen/data";
 
 export type PersistedPrefs = Partial<{
   favs: Record<string, boolean>;
@@ -6,7 +6,6 @@ export type PersistedPrefs = Partial<{
   scale: number;
   theme: "dark" | "light" | null;
   font: LyricFontId;
-  chords: boolean;
   setIds: string[];
   setName: string;
   layoutSizes: LayoutSizes;
@@ -21,15 +20,12 @@ export type PersistedPrefs = Partial<{
   hasSeenOnboarding: boolean;
   performanceMode: boolean;
   transitionType: "cut" | "fade" | "slide" | "zoom" | "push";
+  // Superseded by transitionDurationMs — read once on load to migrate an
+  // existing value forward (see useLumen's loadAll hydration), never written.
   transitionSpeedPct: number;
-  // Keyed like bibleHighlightKey (translation|book|chapter|verse) — a
-  // separate store from bibleHighlights (per-character range highlights);
-  // the two features are unrelated.
-  bibleFavorites: Record<string, boolean>;
-  bibleHistory: { key: string; label: string; viewedAt: number }[];
+  transitionDurationMs: number;
   operatorNotes: string;
   tourSeen: TourSeenFlags;
-  songUsageHistory: Record<string, number[]>;
   deletedLookIds: string[];
 }>;
 
@@ -39,7 +35,6 @@ export type PersistedData = {
   customBackgrounds: CustomBackground[];
   downloadedBibleTranslations: DownloadedBibleTranslation[];
   songOverrides: Record<string, Section[]>;
-  bibleCollections: BibleCollection[];
   // Lets tags/CCLI/etc. be edited on built-in (non-custom-*) songs too,
   // mirroring how songOverrides already does this for lyrics — keyed by
   // song id, applied as a shallow patch over the base Song.
@@ -87,7 +82,5 @@ export interface AppRepository {
   // Lazily reads+parses one translation's full verse data — not part of
   // loadAll()'s eager hydration, since each file can be several megabytes.
   getBibleTranslationData(code: string): Promise<BibleTranslation | null>;
-  upsertBibleCollection(collection: BibleCollection): Promise<void>;
-  deleteBibleCollection(id: string): Promise<void>;
   setSongMetaOverride(songId: string, patch: Partial<Song>): Promise<void>;
 }

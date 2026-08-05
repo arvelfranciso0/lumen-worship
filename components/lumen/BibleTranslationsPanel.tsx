@@ -43,12 +43,14 @@ export function BibleTranslationsPanel({ lumen }: { lumen: UseLumen }) {
         <div className="p-[18px_20px] flex flex-col gap-3 overflow-y-auto flex-1">
           <div className="flex items-center gap-2.5">
             <InteractiveButton
+              data-tour="bible-panel-downloads"
               onClick={openBibleDownloadsPage}
               className="text-[12px] text-muted border-none cursor-pointer px-1 py-0.5 hover:text-text"
             >
               Get more translations
             </InteractiveButton>
             <InteractiveButton
+              data-tour="bible-panel-import"
               onClick={() => bibleFileInputRef.current?.click()}
               className="text-[12px] text-accent border-none cursor-pointer px-1 py-0.5 hover:text-text"
             >

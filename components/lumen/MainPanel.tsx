@@ -39,8 +39,8 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
   );
 
   // Key transpose is session-only — resets whenever the live song changes,
-  // never persisted, never sent to the audience output (same treatment as the
-  // existing chords toggle).
+  // never persisted, never sent to the audience output. It's an operator aid
+  // for reading the key off the header, not something the congregation sees.
   useEffect(() => { patch({ transposeSemitones: 0 }); }, [song.id, patch]);
 
   const outlineWidth = state.lyricStyle.outlineWidth || 0;
@@ -281,16 +281,6 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
           A+
         </button>
         <div className="flex-1" />
-        <button
-          onClick={() => patch((s) => ({ chords: !s.chords }))}
-          title="Show chord symbols on the operator view"
-          className={cx(
-            "h-6.5 px-2.5 rounded-2 border text-[11.5px] cursor-pointer",
-            state.chords ? "border-accent bg-accent-soft text-accent font-semibold" : "border-border bg-panel2 text-muted"
-          )}
-        >
-          Chords
-        </button>
         <button
           onClick={() => patch({ lyricStyle: DEFAULT_LYRIC_STYLE })}
           className="text-[12px] text-muted border-none bg-transparent cursor-pointer px-1 py-0.5 hover:text-text"

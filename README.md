@@ -29,6 +29,22 @@ components under `components/lumen/`.
 - Desktop build only: auto-update (checks GitHub Releases, notifies via a bell in the header,
   installs on restart).
 
+## Deferred features
+
+Things deliberately not built yet, recorded so the reasoning isn't rediscovered from scratch.
+
+- **Multi-simultaneous displays** — the app drives one optional second-monitor output window.
+  Per-display content modes (mirror/stage/audience), role profiles and true N-display support
+  are deferred. See the comment block at the top of `components/lumen/DisplaysModal.tsx`.
+- **Chords** — to be reintroduced as part of the above: chord symbols would appear only on a
+  **Stage** display, for the musicians, while the **Audience** display shows the same slide
+  without them. This makes chords a property of a display's role rather than a global toggle.
+  An earlier global `state.chords` boolean was removed because it was exactly that global
+  toggle, and because nothing ever rendered chords — no song/section field carried chord data,
+  so it only lit its own indicator. Reintroducing it means designing chord storage (per-section
+  chord lines, or ChordPro-style inline markup parsed from the lyrics) alongside the per-display
+  routing. Same comment block in `DisplaysModal.tsx` has the details.
+
 ## Architecture
 
 - **State** — `components/lumen/useLumen.ts` is the single source of truth for the entire app:

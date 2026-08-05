@@ -9,6 +9,23 @@
 // are NOT implemented here and are a deliberately deferred future feature —
 // see the redesign plan's Stage 13 for context before re-deriving this
 // constraint from scratch.
+//
+// ---- FUTURE FEATURE: Chords, as part of the above --------------------------
+// Chords are to be reintroduced once per-display content modes exist. The
+// intent: chord symbols appear ONLY on a Stage display (for the musicians),
+// while the Audience display shows the same slide without them. That is why
+// chords are a property of a *display's role*, not a global on/off — which is
+// what the removed implementation got wrong.
+//
+// What was removed (see git history for the exact diff):
+//   - state.chords + its PersistedPrefs entry (a persisted global boolean)
+//   - the "Chords" toggle button in MainPanel's text toolbar
+//   - the ♪ badge on the connected-output row in PreviewPanel
+// Nothing rendered actual chords: no Song/Section field ever carried chord
+// data, so the toggle only ever lit its own badge. Reintroducing this means
+// designing chord storage (per-section chord lines, or ChordPro-style inline
+// markup parsed out of the lyrics) as well as the per-display routing — the
+// removed code is not a starting point worth restoring.
 
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";

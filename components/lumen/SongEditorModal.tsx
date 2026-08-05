@@ -171,7 +171,7 @@ export function SongEditorModal({ lumen }: { lumen: UseLumen }) {
             everything after the first blank line is treated as the lyrics.
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div data-tour="song-editor-fields" className="flex flex-col gap-2">
             <input value={title} onChange={(e) => { setTitle(e.target.value); setError(""); }} placeholder="Title" className={fieldClass} />
             <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" className={fieldClass} />
             <div className="flex gap-2">
@@ -191,6 +191,7 @@ export function SongEditorModal({ lumen }: { lumen: UseLumen }) {
               to start a new section. Leave a blank line between slides.
             </div>
             <textarea
+              data-tour="song-editor-lyrics"
               value={lyricsText}
               onChange={(e) => setLyricsText(e.target.value)}
               rows={12}
@@ -209,7 +210,7 @@ export function SongEditorModal({ lumen }: { lumen: UseLumen }) {
           >
             Cancel
           </InteractiveButton>
-          <button onClick={submit} className="h-9 px-4 rounded-2.25 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer">
+          <button data-tour="song-editor-save" onClick={submit} className="h-9 px-4 rounded-2.25 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer">
             {isEdit ? "Save changes" : "Add song"}
           </button>
         </div>

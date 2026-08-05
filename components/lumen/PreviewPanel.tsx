@@ -3,21 +3,20 @@
 import { useEffect, useRef } from "react";
 import { cx } from "./cx";
 import { CountdownControl } from "./CountdownControl";
-import { lyricStyleCss } from "./data";
-import { HighlightedLine } from "./HighlightedLine";
 import { InteractiveButton } from "./Interactive";
 import { LookBackground } from "./LookBackground";
-import { SlideCaption } from "./SlideCaption";
+import { SlideStage } from "./SlideStage";
 import type { UseLumen } from "./useLumen";
 import { useSlideTransition } from "./useSlideTransition";
 import type { Breakpoint } from "./useViewportBreakpoint";
 
-// The reference caption is sized as a fraction of its own box's lyric size, so
-// it tracks the operator's lyric-size setting. The small preview boxes need a
-// *larger* fraction than the Live output box: the 0.42 that reads well against
-// 26px live text would render the previews' 10px text at ~4px, i.e. illegible.
-const LIVE_CAPTION_RATIO = 0.42;
-const PREVIEW_CAPTION_RATIO = 0.75;
+// Every box here sizes its text as a fraction of itself (see stage.ts), so a
+// caption on a narrow panel — or on the half-width Previous/Next boxes — can
+// come out honestly proportional but too small to read. These floors only lift
+// the caption, which is positioned out of the text flow and so can never affect
+// where the lyrics wrap.
+const LIVE_CAPTION_MIN_SIZE = "7px";
+const PREVIEW_CAPTION_MIN_SIZE = "6px";
 
 // Walks up from `node` to find the nearest ancestor line <div> (tagged with
 // data-line-index), stopping at `container` so a selection outside the
@@ -47,8 +46,8 @@ function measureTextOffset(lineElement: HTMLElement, node: Node, offset: number)
 // backgrounds) — that division is the core of the handoff redesign.
 export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Breakpoint }) {
   const {
-    state, patch, go, cur, nxt, prv, idx, hidden, look, allLooks, canvas, bigLine, lyricFamily,
-    outputAspectRatio, outputStatus, liveCompare, boundaryPrevLabel, boundaryNextLabel, startPresenting,
+    state, patch, go, cur, nxt, prv, idx, hidden, look, allLooks, lyricFamily,
+    outputAspectRatio, outputStatus, boundaryPrevLabel, boundaryNextLabel, startPresenting,
     canGoNext, canGoPrev, atEndOverflow, atStartOverflow, slideCount,
   } = lumen;
 
@@ -62,7 +61,7 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
   const curLook = (cur.lookId && allLooks.find((l) => l.id === cur.lookId)) || look;
   const nxtLook = (nxt?.lookId && allLooks.find((l) => l.id === nxt.lookId)) || look;
   const prvLook = (prv?.lookId && allLooks.find((l) => l.id === prv.lookId)) || look;
-  const slideTransitionStyle = useSlideTransition(state.transitionType, state.transitionSpeedPct, state.performanceMode);
+  const slideTransitionStyle = useSlideTransition(state.transitionType, state.transitionDurationMs, state.performanceMode);
 
   // Lets the operator highlight text by selecting it directly on the Live
   // output box (with the mouse/cursor), instead of through a separate
@@ -107,17 +106,6 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
   // Old selection offsets don't mean anything once the live slide changes.
   useEffect(() => { patch({ liveSelection: null }); }, [idx, patch]);
 
-  // Compare mode carries its own reference caption (both translation codes);
-  // otherwise the slide's own caption is used. Pinned to the bottom of the box
-  // either way, so showing it never shifts the verse off centre.
-  //
-  // Suppressed when the slide has no actual text: a translation that isn't
-  // downloaded yields a single blank line by design (NOT_DOWNLOADED_PASSAGE —
-  // deliberately message-free so nothing explanatory reaches the audience), and
-  // a bare "REV 22:1 KJV" floating over an empty screen is worse than nothing.
-  const stageLines = liveCompare ? liveCompare.lines : cur.lines;
-  const stageHasText = stageLines.some((line) => line.trim().length > 0);
-  const stageCaption = hidden || !stageHasText ? "" : liveCompare ? liveCompare.caption : cur.caption;
   // Clamped into the deck: on the blank overflow positions `idx` sits one step
   // outside it, and "22 of 21" would be nonsense.
   const position = Math.min(Math.max(idx + 1, 1), Math.max(slideCount, 1));
@@ -138,7 +126,6 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
       id: outputStatus.display.id,
       name: outputStatus.display.label,
       liveState: state.black ? "BLACK" : state.blank ? "BLANK" : "LIVE",
-      chords: state.chords,
     }]
     : [];
 
@@ -162,9 +149,17 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
             <div className="flex-1" />
             <CountdownControl />
           </div>
+          {/* containerType "size" is what makes this box a scale model of the
+              audience screen: everything SlideStage draws inside it is sized in
+              cqw/cqh against this element (see stage.ts), so dragging the panel
+              rescales the whole slide instead of re-wrapping its text. Safe here
+              because the box's own size never depends on its contents — width
+              comes from the panel, height from the output's aspect ratio. The
+              same two style properties are what put Previous, Next up and the
+              slides grid on the identical footing. */}
           <div
             className="relative w-full rounded-2xl overflow-hidden border border-border2 bg-black shadow-app flex-none"
-            style={{ aspectRatio: outputAspectRatio }}
+            style={{ aspectRatio: outputAspectRatio, containerType: "size" }}
           >
             {/* preview when a different live decode is already showing this same
                 background elsewhere (PresentationOverlay or the second-monitor
@@ -173,29 +168,20 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
                 effect for image/gradient looks, which render identically either
                 way. */}
             <LookBackground look={curLook} black={state.black} preview={state.presenting || outputStatus.active} />
-            <div ref={liveOutputRef} className={cx(canvas, "gap-2 transition-opacity duration-180 ease-in-out", hidden ? "opacity-0" : "opacity-100")}>
-              <div key={idx} style={slideTransitionStyle} className="flex flex-col items-center gap-2 w-full">
-                {liveCompare
-                  ? liveCompare.lines.map((line, compareIndex) => (
-                    <div key={compareIndex} className={lyricFamily} style={bigLine}>
-                      <span className="text-[0.55em] align-super mr-[0.25em]">{liveCompare.verseNumber}</span>
-                      {line}
-                    </div>
-                  ))
-                  : cur.lines.map((line, lineIndex) => (
-                    <div key={lineIndex} data-line-index={lineIndex} className={lyricFamily} style={bigLine}>
-                      <HighlightedLine line={line} highlights={cur.lineHighlights?.[lineIndex]} />
-                    </div>
-                  ))}
-              </div>
-            </div>
-            <SlideCaption
-              caption={stageCaption}
+            <SlideStage
+              stageRef={liveOutputRef}
+              selectable
+              lines={cur.lines}
+              lineHighlights={cur.lineHighlights}
+              compareVerseNumber={cur.compare?.verseNumber}
+              caption={cur.caption}
               lyricStyle={state.lyricStyle}
               fontClassName={lyricFamily}
-              baseFontSize={String(bigLine.fontSize)}
-              ratio={LIVE_CAPTION_RATIO}
-              bottom="14px"
+              scale={state.scale}
+              hidden={hidden}
+              transitionStyle={slideTransitionStyle}
+              transitionKey={idx}
+              captionMinFontSize={LIVE_CAPTION_MIN_SIZE}
             />
             <div className="absolute top-2 left-2 flex items-center gap-1.5 p-[4px_8px] rounded-5 bg-[rgba(0,0,0,.45)] backdrop-blur">
               <span className="w-1.5 h-1.5 rounded-full bg-danger" />
@@ -216,8 +202,8 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
               )}
             </div>
             <div
-              className="relative w-full rounded-2 overflow-hidden opacity-60 mt-1.5 flex items-center justify-center flex-none"
-              style={{ aspectRatio: outputAspectRatio }}
+              className="relative w-full rounded-2 overflow-hidden opacity-60 mt-1.5 flex-none"
+              style={{ aspectRatio: outputAspectRatio, containerType: "size" }}
             >
               <LookBackground look={prvLook} preview />
               {prv && (
@@ -225,24 +211,15 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
                   {prv.label}
                 </div>
               )}
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 px-[8%] text-center overflow-hidden">
-                {(prv ? prv.lines : ["—"]).map((line, lineIndex) => (
-                  <div
-                    key={lineIndex}
-                    className={cx(lyricFamily, "text-[10px] leading-[1.28] font-semibold text-muted line-clamp-2")}
-                    style={lyricStyleCss(state.lyricStyle)}
-                  >
-                    <HighlightedLine line={line} highlights={prv?.lineHighlights?.[lineIndex]} />
-                  </div>
-                ))}
-              </div>
-              <SlideCaption
+              <SlideStage
+                lines={prv ? prv.lines : ["—"]}
+                lineHighlights={prv?.lineHighlights}
+                compareVerseNumber={prv?.compare?.verseNumber}
                 caption={prv?.caption ?? ""}
                 lyricStyle={state.lyricStyle}
                 fontClassName={lyricFamily}
-                baseFontSize="10px"
-                ratio={PREVIEW_CAPTION_RATIO}
-                bottom="4px"
+                scale={state.scale}
+                captionMinFontSize={PREVIEW_CAPTION_MIN_SIZE}
               />
             </div>
           </div>
@@ -256,8 +233,8 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
               )}
             </div>
             <div
-              className="relative w-full rounded-2.5 overflow-hidden mt-1.5 flex items-center justify-center border-2 border-accent box-border flex-none"
-              style={{ aspectRatio: outputAspectRatio }}
+              className="relative w-full rounded-2.5 overflow-hidden mt-1.5 border-2 border-accent box-border flex-none"
+              style={{ aspectRatio: outputAspectRatio, containerType: "size" }}
             >
               <LookBackground look={nxtLook} black={state.black} preview />
               {nxt && (
@@ -265,24 +242,15 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
                   {nxt.label}
                 </div>
               )}
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 px-[8%] text-center overflow-hidden">
-                {(nxt ? nxt.lines : ["—"]).map((line, lineIndex) => (
-                  <div
-                    key={lineIndex}
-                    className={cx(lyricFamily, "text-[11px] leading-[1.28] font-semibold text-white line-clamp-2")}
-                    style={lyricStyleCss(state.lyricStyle)}
-                  >
-                    <HighlightedLine line={line} highlights={nxt?.lineHighlights?.[lineIndex]} />
-                  </div>
-                ))}
-              </div>
-              <SlideCaption
+              <SlideStage
+                lines={nxt ? nxt.lines : ["—"]}
+                lineHighlights={nxt?.lineHighlights}
+                compareVerseNumber={nxt?.compare?.verseNumber}
                 caption={nxt?.caption ?? ""}
                 lyricStyle={state.lyricStyle}
                 fontClassName={lyricFamily}
-                baseFontSize="11px"
-                ratio={PREVIEW_CAPTION_RATIO}
-                bottom="4px"
+                scale={state.scale}
+                captionMinFontSize={PREVIEW_CAPTION_MIN_SIZE}
               />
             </div>
           </div>
@@ -370,7 +338,6 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
                   </div>
                   <span className="w-1.5 h-1.5 rounded-full bg-ok flex-none" />
                   <span className="text-[11.5px] text-text truncate flex-1 min-w-0">{output.name}</span>
-                  {output.chords && <span title="Chords shown" className="text-accent text-[10px] flex-none">♪</span>}
                   <span className="font-mono text-[10.5px] text-muted whitespace-nowrap flex-none">{output.liveState}</span>
                 </div>
               ))}

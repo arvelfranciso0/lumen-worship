@@ -25,8 +25,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getBibleTranslationData: (code) => ipcRenderer.invoke("repo:getBibleTranslationData", code).then(
     (raw) => raw ? (raw.format === "xml" ? parseBibleXml(raw.text) : JSON.parse(raw.text)) : null
   ),
-  upsertBibleCollection: (collection) => ipcRenderer.invoke("repo:upsertBibleCollection", collection),
-  deleteBibleCollection: (id) => ipcRenderer.invoke("repo:deleteBibleCollection", id),
   setSongMetaOverride: (songId, patch) => ipcRenderer.invoke("repo:setSongMetaOverride", songId, patch),
 });
 

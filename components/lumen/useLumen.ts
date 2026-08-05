@@ -1,15 +1,15 @@
 "use client";
 
-import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getRepository } from "@/lib/repository";
 import { normalizeBibleLanguage, parseBibleXml } from "../../electron/bibleXml.js";
 import { cx } from "./cx";
 import {
-  addHighlightRange, BIBLE_DOWNLOADS_URL, bibleHighlightKey, bookAbbreviation, canonicalBookNumber,
-  DEFAULT_LAYOUT_SIZES, DEFAULT_LAYOUT_VISIBILITY,
+  addHighlightRange, BIBLE_DOWNLOADS_URL, bibleHighlightKey, bookAbbreviation, bookNumberOf, canonicalBookNumber,
+  DEFAULT_LAYOUT_SIZES, DEFAULT_LAYOUT_VISIBILITY, findBookAcrossTranslations,
   DEFAULT_LYRIC_FONT, DEFAULT_LYRIC_STYLE, DEFAULT_TRANSLATION, LAYOUT_SIZE_LIMITS, LOADING_PASSAGE, LOOKS,
   LYRIC_FONTS, MISSING_PASSAGE, NOT_DOWNLOADED_PASSAGE, resolveCompareTranslation, SONGS, subtractHighlightRange,
-  type BibleCollection, type BibleHighlights, type BibleTranslation, type CustomBackground,
+  type BibleHighlights, type BibleTranslation, type CustomBackground,
   type DownloadedBibleTranslation, type HighlightRange,
   type LayoutPanelId, type LayoutSizes, type LayoutVisibility, type Lineup, type LiveHighlightSelection,
   type LyricFontId, type LyricStyle,
@@ -22,6 +22,8 @@ import {
 import { getElectronCompat } from "./electronCompat";
 import { getElectronDisplay, type OutputState, type OutputStatus } from "./electronDisplay";
 import { getElectronShell } from "./electronShell";
+import { fitForLines } from "./stage";
+import { DEFAULT_TRANSITION_MS, speedPctToDurationMs } from "./useSlideTransition";
 import { getElectronUpdater, type UpdateStatus } from "./electronUpdater";
 import type { ParsedSong } from "./songImport";
 import { useBibleTranslation } from "./useBibleTranslation";
@@ -226,8 +228,6 @@ const TOUR_SEEN_DEFAULT: TourSeenFlags = { songs: false, bible: false, lineups: 
 // screen.
 const BLANK_SLIDE: Slide = { label: "", lines: [], slideNumber: 0, caption: "" };
 
-const SONG_USAGE_HISTORY_CAP = 20;
-const BIBLE_HISTORY_CAP = 20;
 const UNDO_STACK_CAP = 50;
 
 // Undo/redo only tracks "content" edits — deliberately excludes navigation
@@ -236,7 +236,7 @@ const UNDO_STACK_CAP = 50;
 // operator by jumping them somewhere else in the app.
 const HISTORY_TRACKED_KEYS: (keyof LumenState)[] = [
   "songOverrides", "songMetaOverrides", "setIds", "setName", "lyricStyle",
-  "customBackgrounds", "bibleHighlights", "favs", "bibleFavorites", "lineups",
+  "customBackgrounds", "bibleHighlights", "favs", "lineups",
 ];
 
 function pickTrackedKeys(source: LumenState, keys: (keyof LumenState)[]): Partial<LumenState> {
@@ -259,7 +259,6 @@ type LumenState = {
   black: boolean;
   settingsOpen: boolean;
   font: LyricFontId;
-  chords: boolean;
   theme: "dark" | "light" | null;
   mode: Mode;
   book: string;
@@ -302,14 +301,10 @@ type LumenState = {
   // ---- Redesign additions (persisted) ----
   performanceMode: boolean;
   transitionType: "cut" | "fade" | "slide" | "zoom" | "push";
-  transitionSpeedPct: number;
-  bibleFavorites: Record<string, boolean>;
-  bibleHistory: { key: string; label: string; viewedAt: number }[];
+  transitionDurationMs: number;
   operatorNotes: string;
   tourSeen: TourSeenFlags;
-  songUsageHistory: Record<string, number[]>;
   deletedLookIds: string[];
-  bibleCollections: BibleCollection[];
   songMetaOverrides: Record<string, Partial<Song>>;
 
   // ---- Redesign additions (ephemeral — never persisted) ----
@@ -335,12 +330,10 @@ type LumenState = {
   globalSearchQuery: string;
   songEditorOpen: boolean;
   songEditorMode: "create" | "edit";
-  bulkSelectMode: boolean;
-  bulkSelectedIds: string[];
-  bibleSubTab: "browse" | "compare" | "history" | "favorites" | "collections";
+  bibleSubTab: "browse" | "compare";
   // Session-only key transpose, reset whenever the live song/slide changes —
-  // deliberately not persisted or sent to the audience output (operator-only,
-  // like the existing chords toggle).
+  // deliberately not persisted or sent to the audience output. Operator-only:
+  // it changes the key shown in the song header, not anything on screen.
   transposeSemitones: number;
   // Panel show/hide is layoutVisibility (persisted) alone — a hidden panel
   // collapses to a one-click vertical strip on desktop rather than vanishing,
@@ -364,13 +357,18 @@ type Slide = {
   // through from Section (see data.ts) since Slide is otherwise just a
   // read-only projection of it.
   lookId?: string; note?: string;
+  // Bible Compare only. When set, `lines` holds both translations' wording of
+  // the same verse (primary first) and `caption` names both — so a compare
+  // slide is just a slide, and every surface renders it without a special case
+  // of its own. `verseNumber` is the superscript both lines carry.
+  compare?: { verseNumber: string };
 };
 
 const INITIAL_STATE: LumenState = {
   query: "", chip: "All", sort: "Recent", songId: "s3", idx: 2,
   favs: { s1: true, s3: true, s6: true },
   look: "aurora", scale: 1, presenting: false, blank: false, black: false,
-  settingsOpen: false, font: DEFAULT_LYRIC_FONT, chords: false, theme: null,
+  settingsOpen: false, font: DEFAULT_LYRIC_FONT, theme: null,
   mode: "songs", book: "Genesis", chapter: 1, trans: DEFAULT_TRANSLATION,
   setIds: ["s1", "s3", "s4", "s6"], setName: "Set 1", activeLineupId: null, setPanelOpen: false,
   songOverrides: {}, lyricsEditorOpen: false,
@@ -386,10 +384,10 @@ const INITIAL_STATE: LumenState = {
   hasSeenOnboarding: false,
 
   performanceMode: false,
-  transitionType: "cut", transitionSpeedPct: 50,
-  bibleFavorites: {}, bibleHistory: [], operatorNotes: "",
-  tourSeen: TOUR_SEEN_DEFAULT, songUsageHistory: {}, deletedLookIds: [],
-  bibleCollections: [], songMetaOverrides: {},
+  transitionType: "cut", transitionDurationMs: DEFAULT_TRANSITION_MS,
+  operatorNotes: "",
+  tourSeen: TOUR_SEEN_DEFAULT, deletedLookIds: [],
+  songMetaOverrides: {},
 
   confirmDialog: null, saveStatus: "idle",
   displaysModalOpen: false, hotkeysOpen: false, globalSearchOpen: false, globalSearchQuery: "",
@@ -397,7 +395,6 @@ const INITIAL_STATE: LumenState = {
   transitionRowOpen: true, backgroundCategory: "All", backgroundApplyAllArmed: false,
   operatorNotesOpen: false, liveSelection: null, highlightColor: "#fde047",
   songEditorOpen: false, songEditorMode: "create",
-  bulkSelectMode: false, bulkSelectedIds: [],
   bibleSubTab: "browse", transposeSemitones: 0,
   sidebarDrawerOpen: false, mobileView: "slides",
   tourStep: 0, tourMode: null, compareMode: null,
@@ -484,7 +481,6 @@ export function useLumen(props: LumenProps = {}) {
         customBackgrounds: [...data.customBackgrounds].reverse(),
         downloadedTranslations,
         songOverrides: data.songOverrides,
-        bibleCollections: data.bibleCollections,
         songMetaOverrides: data.songMetaOverrides,
         ...data.prefs,
         // Migrates the old single global hasSeenOnboarding flag into the new
@@ -493,6 +489,12 @@ export function useLumen(props: LumenProps = {}) {
         ...(data.prefs.tourSeen
           ? {}
           : { tourSeen: data.prefs.hasSeenOnboarding ? { songs: true, bible: true, lineups: true } : TOUR_SEEN_DEFAULT }),
+        // Transition speed used to be stored as a 0-100 percentage. Convert an
+        // existing one forward so the operator keeps the speed they set instead
+        // of being silently reset to the default.
+        ...(data.prefs.transitionDurationMs === undefined && data.prefs.transitionSpeedPct !== undefined
+          ? { transitionDurationMs: speedPctToDurationMs(data.prefs.transitionSpeedPct) }
+          : {}),
         // Lands on the first translation in the list (most recently
         // imported/downloaded — same order as the Settings list) at Genesis
         // 1, rather than the hardcoded DEFAULT_TRANSLATION code that
@@ -532,14 +534,14 @@ export function useLumen(props: LumenProps = {}) {
       patch({ saveStatus: "saving" });
       getRepository().setPrefs({
         favs: state.favs, look: state.look, scale: state.scale, theme: state.theme,
-        font: state.font, chords: state.chords, setIds: state.setIds, setName: state.setName,
+        font: state.font, setIds: state.setIds, setName: state.setName,
         layoutSizes: state.layoutSizes, layoutVisibility: state.layoutVisibility, lyricStyle: state.lyricStyle,
         bibleHighlights: state.bibleHighlights, outputEnabled: state.outputEnabled, outputDisplayId: state.outputDisplayId,
         autoUpdateEnabled: state.autoUpdateEnabled, hasSeenOnboarding: state.hasSeenOnboarding,
         performanceMode: state.performanceMode, transitionType: state.transitionType,
-        transitionSpeedPct: state.transitionSpeedPct, bibleFavorites: state.bibleFavorites,
-        bibleHistory: state.bibleHistory, operatorNotes: state.operatorNotes, tourSeen: state.tourSeen,
-        songUsageHistory: state.songUsageHistory, deletedLookIds: state.deletedLookIds,
+        transitionDurationMs: state.transitionDurationMs,
+        operatorNotes: state.operatorNotes, tourSeen: state.tourSeen,
+        deletedLookIds: state.deletedLookIds,
       }).then(() => {
         patch({ saveStatus: "saved" });
         setTimeout(() => patch({ saveStatus: "idle" }), 1500);
@@ -548,11 +550,11 @@ export function useLumen(props: LumenProps = {}) {
     return () => clearTimeout(persistTimeout);
   }, [
     patch,
-    state.favs, state.look, state.scale, state.theme, state.font, state.chords, state.setIds, state.setName,
+    state.favs, state.look, state.scale, state.theme, state.font, state.setIds, state.setName,
     state.layoutSizes, state.layoutVisibility, state.lyricStyle, state.bibleHighlights,
     state.outputEnabled, state.outputDisplayId, state.autoUpdateEnabled, state.hasSeenOnboarding,
-    state.performanceMode, state.transitionType, state.transitionSpeedPct, state.bibleFavorites,
-    state.bibleHistory, state.operatorNotes, state.tourSeen, state.songUsageHistory, state.deletedLookIds,
+    state.performanceMode, state.transitionType, state.transitionDurationMs,
+    state.operatorNotes, state.tourSeen, state.deletedLookIds,
   ]);
 
   const [bibleCache, setBibleCache] = useState<Record<string, BibleTranslation>>({});
@@ -666,12 +668,23 @@ export function useLumen(props: LumenProps = {}) {
   }, [state.compareMode, compareTranslationBCode, patch]);
 
   const compareTranslationB = useBibleTranslation(compareTranslationBCode);
-  const compareVerseTextB = useMemo(() => {
+
+  // The compared translation's wording at any verse position — deliberately not
+  // limited to the live verse, because every surface that shows slide text
+  // (Slides, Previous, Next up, and the neighbours across a chapter boundary)
+  // has to show the comparison too. A preview that silently drops back to one
+  // translation would be showing something the operator will never put on
+  // screen. Returns null whenever comparison isn't running or that verse has no
+  // counterpart, which is what makes callers fall back to a normal slide.
+  const compareTextAt = useCallback((bookName: string, chapterNumber: number, verseIndex: number): string | null => {
     if (!compareTranslationBCode || !compareTranslationB) return null;
-    const bookB = compareTranslationB.books.find((entry) => entry.name === state.book);
-    const chapterB = bookB?.chapters.find((entry) => entry.number === state.chapter);
-    return chapterB?.verses[state.idx]?.text ?? null;
-  }, [compareTranslationBCode, compareTranslationB, state.book, state.chapter, state.idx]);
+    // By canonical book number, never by name: the two translations may be in
+    // different languages, where the same book is called something else entirely
+    // ("Proverbs" / "Mga Panultihon").
+    const bookB = findBookAcrossTranslations(compareTranslationB.books, bookNumberOf(bibleBooks, bookName), bookName);
+    const chapterB = bookB?.chapters.find((entry) => entry.number === chapterNumber);
+    return chapterB?.verses[verseIndex]?.text ?? null;
+  }, [compareTranslationBCode, compareTranslationB, bibleBooks]);
 
   // songMetaOverrides is applied on top of both custom and built-in songs —
   // lets tags/CCLI/title/etc. be edited on any song, not just custom-*
@@ -923,12 +936,39 @@ export function useLumen(props: LumenProps = {}) {
     const link = parsed.meta.link ?? null;
     const data = await file.arrayBuffer();
     getRepository().addBibleTranslation({ code, language, name, license, link, data, format });
-    patch((previousState) => ({
-      downloadedTranslations: [
-        { code, language, name, license, link, downloadedAt: Date.now(), sizeBytes: data.byteLength },
-        ...previousState.downloadedTranslations.filter((entry) => entry.code !== code),
-      ],
-    }));
+    patch((previousState) => {
+      // The very first import is the one that has to move the app: until now
+      // state.trans has pointed at DEFAULT_TRANSLATION, a code nothing is ever
+      // imported as, so the Bible tab has been showing an empty passage. The
+      // launch-time hydration already lands on a real translation, but it only
+      // runs at launch — so before this, a first-time import left the operator
+      // staring at the same empty view until they restarted the app.
+      //
+      // Later imports deliberately leave the live position alone: swapping what
+      // is on screen mid-service, because a second translation finished
+      // importing, would be worse than doing nothing.
+      const isFirstImport = previousState.downloadedTranslations.length === 0;
+      const firstBook = parsed.books[0];
+      return {
+        downloadedTranslations: [
+          { code, language, name, license, link, downloadedAt: Date.now(), sizeBytes: data.byteLength },
+          ...previousState.downloadedTranslations.filter((entry) => entry.code !== code),
+        ],
+        // The first book by the file's own ordering, not a hardcoded "Genesis":
+        // book names are localized, and a New-Testament-only file starts at
+        // Matthew.
+        ...(isFirstImport && firstBook
+          ? {
+            trans: code,
+            book: firstBook.name,
+            chapter: firstBook.chapters[0]?.number ?? 1,
+            idx: 0,
+            black: false,
+            blank: false,
+          }
+          : {}),
+      };
+    });
     setBibleCache((previousCache) => withBibleCacheEntry(previousCache, code, parsed, state.trans));
     setBibleLoadFailed((previous) => (previous[code] ? { ...previous, [code]: false } : previous));
   }, [patch, state.trans]);
@@ -1004,28 +1044,35 @@ export function useLumen(props: LumenProps = {}) {
     saveLyrics(updated);
   }, [song.sections, saveLyrics]);
 
-  const setSlideNote = useCallback((sectionIndex: number, note: string) => {
-    const updated = song.sections.map((section, index) => (index === sectionIndex ? { ...section, note } : section));
-    saveLyrics(updated);
-  }, [song.sections, saveLyrics]);
+  // No setSlideNote: the per-slide cue editor was removed from SlidesPanel, so
+  // nothing writes Section.note any more. The field and its Global-search index
+  // stay so notes saved by earlier builds are still findable rather than
+  // silently orphaned.
 
   const setSlideLook = useCallback((sectionIndex: number, lookId: string | undefined) => {
     const updated = song.sections.map((section, index) => (index === sectionIndex ? { ...section, lookId } : section));
     saveLyrics(updated);
   }, [song.sections, saveLyrics]);
 
-  // Bulk-applies a look to every section sharing sectionIndex's label
-  // ("apply to all"), or to that label's sections from sectionIndex onward
-  // ("apply to remaining") — both still just one saveLyrics call.
-  const applySlideLookToLabel = useCallback((sectionIndex: number, lookId: string | undefined, scope: "all" | "remaining") => {
+  // Picking a background normally applies to every slide sharing the current
+  // slide's label, so a song's three Choruses get one background rather than one
+  // each. Unchanged behaviour — this is what a plain pick in the Backgrounds
+  // panel does.
+  const applySlideLookToLabel = useCallback((sectionIndex: number, lookId: string | undefined) => {
     const label = song.sections[sectionIndex]?.label;
     if (label === undefined) return;
-    const updated = song.sections.map((section, index) => {
-      if (section.label !== label) return section;
-      if (scope === "remaining" && index < sectionIndex) return section;
-      return { ...section, lookId };
-    });
-    saveLyrics(updated);
+    saveLyrics(song.sections.map((section) => (section.label === label ? { ...section, lookId } : section)));
+  }, [song.sections, saveLyrics]);
+
+  // Sets — or clears, with undefined — the per-slide override on *every* slide of
+  // the current song, in one saveLyrics call.
+  //
+  // Separate from the label-scoped version above because the Backgrounds panel's
+  // "Apply to all"/"Apply to remaining" buttons used to route through it: the
+  // button said "all" and meant "all the Choruses", which is why pressing it
+  // appeared to do nothing whenever the rest of the deck used a different label.
+  const applyLookToAllSlides = useCallback((lookId: string | undefined) => {
+    saveLyrics(song.sections.map((section) => ({ ...section, lookId })));
   }, [song.sections, saveLyrics]);
 
   const addSong = useCallback((parsed: ParsedSong) => {
@@ -1082,18 +1129,6 @@ export function useLumen(props: LumenProps = {}) {
     patch((previousState) => ({ customSongs: [newSong, ...previousState.customSongs] }));
   }, [allSongs, state.songOverrides, patch]);
 
-  // Recorded whenever a song becomes the selected/live song (Sidebar song
-  // click, Header's set-panel jump) — there's no dedicated "history" field on
-  // Song itself, so this lives as its own capped-per-song timestamp list.
-  const recordSongUsage = useCallback((songId: string) => {
-    patch((previousState) => ({
-      songUsageHistory: {
-        ...previousState.songUsageHistory,
-        [songId]: [Date.now(), ...(previousState.songUsageHistory[songId] ?? [])].slice(0, SONG_USAGE_HISTORY_CAP),
-      },
-    }));
-  }, [patch]);
-
   const askConfirm = useCallback((options: ConfirmDialogState) => {
     patch({ confirmDialog: options });
   }, [patch]);
@@ -1102,76 +1137,30 @@ export function useLumen(props: LumenProps = {}) {
     patch({ confirmDialog: null });
   }, [patch]);
 
-  const toggleBibleFavorite = useCallback((key: string) => {
-    patch((previousState) => ({ bibleFavorites: { ...previousState.bibleFavorites, [key]: !previousState.bibleFavorites[key] } }));
-  }, [patch]);
-
-  // Records the most recently viewed Bible reference — de-duplicated (a
-  // re-visit moves it back to the front rather than appearing twice) and
-  // capped, mirroring the BIBLE_CACHE_LIMIT eviction pattern above.
-  const recordBibleHistory = useCallback((key: string, label: string) => {
-    patch((previousState) => ({
-      bibleHistory: [
-        { key, label, viewedAt: Date.now() },
-        ...previousState.bibleHistory.filter((entry) => entry.key !== key),
-      ].slice(0, BIBLE_HISTORY_CAP),
-    }));
-  }, [patch]);
-
-  const upsertBibleCollection = useCallback((collection: BibleCollection) => {
-    getRepository().upsertBibleCollection(collection);
-    patch((previousState) => ({
-      bibleCollections: previousState.bibleCollections.some((entry) => entry.id === collection.id)
-        ? previousState.bibleCollections.map((entry) => (entry.id === collection.id ? collection : entry))
-        : [collection, ...previousState.bibleCollections],
-    }));
-  }, [patch]);
-
-  const createBibleCollection = useCallback((name: string) => {
-    const id = "coll-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    upsertBibleCollection({ id, name, verseRefs: [] });
-  }, [upsertBibleCollection]);
-
-  const deleteBibleCollection = useCallback((id: string) => {
-    getRepository().deleteBibleCollection(id);
-    patch((previousState) => ({ bibleCollections: previousState.bibleCollections.filter((entry) => entry.id !== id) }));
-  }, [patch]);
-
-  const addVerseToCollection = useCallback((collectionId: string, verseRef: { book: string; chapter: number; verse: number }) => {
-    patch((previousState) => {
-      const target = previousState.bibleCollections.find((entry) => entry.id === collectionId);
-      if (!target) return {};
-      const exists = target.verseRefs.some((ref) => ref.book === verseRef.book && ref.chapter === verseRef.chapter && ref.verse === verseRef.verse);
-      if (exists) return {};
-      const updated = { ...target, verseRefs: [...target.verseRefs, verseRef] };
-      getRepository().upsertBibleCollection(updated);
-      return { bibleCollections: previousState.bibleCollections.map((entry) => (entry.id === collectionId ? updated : entry)) };
-    });
-  }, [patch]);
-
-  const removeVerseFromCollection = useCallback((collectionId: string, verseRef: { book: string; chapter: number; verse: number }) => {
-    patch((previousState) => {
-      const target = previousState.bibleCollections.find((entry) => entry.id === collectionId);
-      if (!target) return {};
-      const updated = {
-        ...target,
-        verseRefs: target.verseRefs.filter((ref) => !(ref.book === verseRef.book && ref.chapter === verseRef.chapter && ref.verse === verseRef.verse)),
-      };
-      getRepository().upsertBibleCollection(updated);
-      return { bibleCollections: previousState.bibleCollections.map((entry) => (entry.id === collectionId ? updated : entry)) };
-    });
-  }, [patch]);
-
   const slides = useMemo<Slide[]>(() => {
     if (state.mode === "bible") {
       return passage.map((verseText, verseIndex) => {
         const key = bibleHighlightKey(state.trans, state.book, state.chapter, vnum(verseIndex));
+        const verseLabel = String(vlabel(verseIndex));
+        // Compact reference caption ("PSA 23:2 KJV") — kept short so it reads
+        // as a footnote under the verse rather than a second line of content.
+        const reference = bookAbbreviation(state.book, bibleLanguage) + " " + state.chapter + ":" + verseLabel + " ";
+        const compareText = compareTextAt(state.book, state.chapter, verseIndex);
+        if (compareText && compareTranslationBCode) {
+          return {
+            label: "v" + verseLabel, lines: [verseText, compareText],
+            // The compared translation has no highlight store of its own —
+            // highlights are recorded against the primary reference only.
+            lineHighlights: [state.bibleHighlights[key] ?? [], []],
+            slideNumber: verseIndex + 1,
+            caption: reference + shortTransLabel(state.trans) + " - " + shortTransLabel(compareTranslationBCode),
+            compare: { verseNumber: verseLabel },
+          };
+        }
         return {
-          label: "v" + vlabel(verseIndex), lines: [verseText], lineHighlights: [state.bibleHighlights[key] ?? []],
-          // Compact reference caption ("PSA 23:2 KJV") — kept short so it reads
-          // as a footnote under the verse rather than a second line of content.
+          label: "v" + verseLabel, lines: [verseText], lineHighlights: [state.bibleHighlights[key] ?? []],
           slideNumber: verseIndex + 1,
-          caption: bookAbbreviation(state.book, bibleLanguage) + " " + state.chapter + ":" + vlabel(verseIndex) + " " + shortTransLabel(state.trans),
+          caption: reference + shortTransLabel(state.trans),
         };
       });
     }
@@ -1179,7 +1168,10 @@ export function useLumen(props: LumenProps = {}) {
       label: section.label, lines: section.lines, lineHighlights: section.lineHighlights,
       slideNumber: sectionIndex + 1, caption: "", lookId: section.lookId, note: section.note,
     }));
-  }, [state.mode, passage, vnum, vlabel, state.trans, state.book, state.chapter, state.bibleHighlights, song, bibleLanguage]);
+  }, [
+    state.mode, passage, vnum, vlabel, state.trans, state.book, state.chapter, state.bibleHighlights,
+    song, bibleLanguage, compareTextAt, compareTranslationBCode,
+  ]);
 
   // Effective slide count for any song, override included — needed to land on
   // the *last* slide of the previous song when stepping backwards over a set
@@ -1235,8 +1227,6 @@ export function useLumen(props: LumenProps = {}) {
 
   const lyricFamily = (LYRIC_FONTS.find((font) => font.id === (state.font || props.lyricFont)) ?? LYRIC_FONTS[0]).className;
 
-  const canvas = "absolute inset-0 flex flex-col items-center justify-center p-[6%_8%] text-center z-[1]";
-
   const bible = state.mode === "bible";
 
   // The deck has two extra positions the operator can deliberately step onto:
@@ -1254,43 +1244,22 @@ export function useLumen(props: LumenProps = {}) {
   const atEndOverflow = idx >= slideCount;
   const cur = slides[idx] ?? BLANK_SLIDE;
 
-  // When Bible Compare is active, the Live output (and the real audience
-  // screen, via OutputState.compare below) shows both translations' wording
-  // stacked instead of the normal single-slide text — each line prefixed with
-  // the same superscript verse number, and both translation codes folded into
-  // one reference caption ("PSA 23:2 KJV - NIV") rather than a label per line,
-  // so the two wordings read as a single passage.
+  // The audience-facing half of Bible Compare: both translations' wording
+  // stacked, each line prefixed with the same superscript verse number, and both
+  // translation codes folded into one reference caption ("PSA 23:2 KJV - NIV")
+  // rather than a label per line, so the two wordings read as a single passage.
+  //
+  // Read straight off the live slide rather than assembled a second time here —
+  // the slide *is* the compare projection (see the slides memo), which is what
+  // keeps Slides/Previous/Next up showing exactly what goes live instead of
+  // quietly falling back to one translation.
   const liveCompare = useMemo(() => {
-    // compareTranslationBCode, not state.compareMode — see its definition for
-    // why the request has to be re-validated before anything reaches the screen.
-    if (!bible || !compareTranslationBCode || !compareVerseTextB) return null;
-    const primaryText = cur.lines[0] ?? "";
-    if (!primaryText) return null;
-    const verseNumber = String(vlabel(idx));
-    return {
-      verseNumber,
-      lines: [primaryText, compareVerseTextB] as [string, string],
-      caption: bookAbbreviation(state.book, bibleLanguage) + " " + state.chapter + ":" + verseNumber + " "
-        + shortTransLabel(state.trans) + " - " + shortTransLabel(compareTranslationBCode),
-    };
-  }, [bible, compareTranslationBCode, compareVerseTextB, cur.lines, state.trans, state.book, state.chapter, vlabel, idx, bibleLanguage]);
-
-  // Records chapter-level Bible reading history (not per-verse — vnum(idx)
-  // stepping within the same chapter doesn't need a new entry each time,
-  // since recordBibleHistory dedupes by key and this key is chapter-scoped).
-  // This is a genuine effect (logging a navigation event when the viewed
-  // chapter changes), not state derived from render — eslint's stricter
-  // set-state-in-effect check doesn't distinguish the two.
-  useEffect(() => {
-    if (!bible || !translation) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    recordBibleHistory(state.trans + "|" + state.book + "|" + state.chapter, ref + "  ·  " + shortTransLabel(state.trans));
-    // recordBibleHistory/ref intentionally omitted: recordBibleHistory is a
-    // stable useCallback ([patch] only) and ref is purely derived from
-    // state.book/state.chapter, both already listed below — including them
-    // would just be redundant, not fix any staleness.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bible, translation, state.trans, state.book, state.chapter]);
+    if (!cur.compare) return null;
+    // An undownloaded chapter yields blank verse text by design; a reference
+    // with nothing under it is worse than showing nothing at all.
+    if (!cur.lines.some((line) => line.trim().length > 0)) return null;
+    return { verseNumber: cur.compare.verseNumber, lines: cur.lines, caption: cur.caption };
+  }, [cur]);
 
   // Builds the Slide shape for a verse at some other book/chapter position, so
   // the Previous/Next up boxes can preview across a boundary go() will actually
@@ -1304,12 +1273,25 @@ export function useLumen(props: LumenProps = {}) {
     if (!verse) return undefined;
     const label = formatVerseLabel(verse);
     const key = bibleHighlightKey(state.trans, position.book, position.chapter, verse.number);
+    const reference = bookAbbreviation(position.book, bibleLanguage) + " " + position.chapter + ":" + label + " ";
+    // Compare applies across a chapter/book boundary too — Next up has to show
+    // what the next step will actually put on screen, comparison included.
+    const compareText = compareTextAt(position.book, position.chapter, position.verseIndex);
+    if (compareText && compareTranslationBCode) {
+      return {
+        label: "v" + label, lines: [verse.text, compareText],
+        lineHighlights: [state.bibleHighlights[key] ?? [], []],
+        slideNumber: position.verseIndex + 1,
+        caption: reference + shortTransLabel(state.trans) + " - " + shortTransLabel(compareTranslationBCode),
+        compare: { verseNumber: String(label) },
+      };
+    }
     return {
       label: "v" + label, lines: [verse.text], lineHighlights: [state.bibleHighlights[key] ?? []],
       slideNumber: position.verseIndex + 1,
-      caption: bookAbbreviation(position.book, bibleLanguage) + " " + position.chapter + ":" + label + " " + shortTransLabel(state.trans),
+      caption: reference + shortTransLabel(state.trans),
     };
-  }, [bibleBooks, state.trans, state.bibleHighlights, bibleLanguage]);
+  }, [bibleBooks, state.trans, state.bibleHighlights, bibleLanguage, compareTextAt, compareTranslationBCode]);
 
   // Same for a slide belonging to a neighbouring song in the set.
   const setSongSlideAt = useCallback((neighbour: { songId: string; idx: number } | null): Slide | undefined => {
@@ -1478,17 +1460,10 @@ export function useLumen(props: LumenProps = {}) {
     return filtered;
   }, [allSongs, state.query, state.chip, state.favs, state.sort]);
 
-  const longestLineLength = cur.lines.reduce((maxLength, line) => Math.max(maxLength, line.length), 0);
-  const fit = longestLineLength > 110 ? 0.62 : longestLineLength > 70 ? 0.78 : 1;
-  const bigLine: CSSProperties = {
-    fontSize: 26 * state.scale * fit + "px", lineHeight: 1.34, fontWeight: state.lyricStyle.bold ? 700 : 600,
-    fontStyle: state.lyricStyle.italic ? "italic" : "normal",
-    letterSpacing: "-0.015em", color: state.lyricStyle.color || "#fff",
-    WebkitTextStroke: state.lyricStyle.outlineWidth
-      ? state.lyricStyle.outlineWidth + "px " + (state.lyricStyle.outlineColor || "rgba(0,0,0,.55)")
-      : undefined,
-    textShadow: "0 2px 24px rgba(0,0,0,.5)",
-  };
+  // Only still computed here because the audience window renders outside React's
+  // tree and needs it in the pushed OutputState; every surface inside the app
+  // derives its own from its own lines via fitForLines.
+  const fit = fitForLines(cur.lines);
 
   // ---- Second-monitor "audience output" (Electron only; a no-op in the
   // plain browser build, since getElectronDisplay() returns null there) ----
@@ -1626,13 +1601,13 @@ export function useLumen(props: LumenProps = {}) {
       lyricStyle: state.lyricStyle, fontClassName: lyricFamily,
       scale: state.scale, fit, caption: !hidden ? cur.caption : "",
       slideKey: state.mode + "|" + (bible ? state.book + "|" + state.chapter : song.id) + "|" + idx,
-      transitionType: state.transitionType, transitionSpeedPct: state.transitionSpeedPct, performanceMode: state.performanceMode,
+      transitionType: state.transitionType, transitionDurationMs: state.transitionDurationMs, performanceMode: state.performanceMode,
       compare: liveCompare ?? undefined,
     };
     electronDisplay.sendState(payload);
   }, [
     outputStatus.active, cur, look, allLooks, state.black, hidden, state.lyricStyle, lyricFamily, state.scale, fit,
-    state.mode, bible, state.book, state.chapter, song.id, idx, state.transitionType, state.transitionSpeedPct, state.performanceMode,
+    state.mode, bible, state.book, state.chapter, song.id, idx, state.transitionType, state.transitionDurationMs, state.performanceMode,
     liveCompare,
   ]);
 
@@ -1684,7 +1659,7 @@ export function useLumen(props: LumenProps = {}) {
 
   return {
     state, patch, theme, accent, ref, passage, vnum, vlabel, song, look, allLooks, slides, go, idx, cur, nxt, prv, hidden,
-    bible, list, chipBase, tabStyle, pill, toolBtn, canvas, lyricFamily, fit, bigLine,
+    bible, list, chipBase, tabStyle, pill, toolBtn, lyricFamily, fit,
     setSongs, inSet, toggleSetSong, saveLyrics, applyLiveHighlight, removeLiveHighlight, addSong, deleteSong, allSongs, toggleFavorite,
     createLineup, updateLineup, deleteLineup, activateLineup, reorderLineupSongs,
     addSongToLineup, removeSongFromLineup, renameLineup,
@@ -1694,11 +1669,10 @@ export function useLumen(props: LumenProps = {}) {
     updateStatus, installUpdate, startPresenting, prefsLoaded,
     gpuAccelerationDisabled, setGpuAccelerationDisabled,
     undo, redo, canUndo, canRedo,
-    setSongMetaOverride, duplicateSongAsReprise, recordSongUsage,
+    setSongMetaOverride, duplicateSongAsReprise,
     askConfirm, closeConfirm,
-    toggleBibleFavorite, recordBibleHistory,
-    upsertBibleCollection, createBibleCollection, deleteBibleCollection, addVerseToCollection, removeVerseFromCollection,
-    duplicateSlide, mergeSlideWithNext, splitSlide, reorderSlides, setSlideNote, setSlideLook, applySlideLookToLabel,
+    duplicateSlide, mergeSlideWithNext, splitSlide, reorderSlides, setSlideLook,
+    applySlideLookToLabel, applyLookToAllSlides,
     liveCompare, boundaryNextLabel, boundaryPrevLabel, canGoNext, canGoPrev,
     atStartOverflow, atEndOverflow, slideCount, compareTranslationBCode,
   };

@@ -11,33 +11,48 @@ import type { UseLumen } from "./useLumen";
 // (it was a modal before the handoff redesign, and a block inside Settings
 // before that).
 //
-// Targeting, matching the design: picking a look normally applies to every
-// slide sharing the current slide's section label (so "Chorus" gets one
-// background, not one per repeat). "Apply to all" arms a one-shot that sets
-// the deck-wide default instead and clears every per-slide override;
-// "Apply to remaining" pushes the current look forward from here on.
+// Targeting: picking a look normally applies to every slide sharing the current
+// slide's section label (so "Chorus" gets one background, not one per repeat).
+// The two buttons override that reach:
+//   - "Apply to all" arms a one-shot — the next background picked becomes the
+//     deck-wide default and clears every per-slide override.
+//   - "Apply to remaining" takes no pick at all: it pushes the live slide's
+//     current background onto every slide in the deck immediately.
+// Both are deck-wide. They previously routed through a label-scoped helper, so
+// "all" quietly meant "all the slides with this same label".
 export function BackgroundsPanel({ lumen }: { lumen: UseLumen }) {
   const {
-    state, patch, bible, idx, cur, allLooks, addBackground, deleteBackground, askConfirm,
-    setSlideLook, applySlideLookToLabel,
+    state, patch, bible, idx, cur, slideCount, allLooks, addBackground, deleteBackground, askConfirm,
+    setSlideLook, applySlideLookToLabel, applyLookToAllSlides,
   } = lumen;
   const backgroundFileInputRef = useRef<HTMLInputElement>(null);
   const category = state.backgroundCategory;
   const armed = state.backgroundApplyAllArmed;
+
+  // The blank overflow positions sit one step outside the deck, where every
+  // per-slide write would silently miss. Clamping keeps the buttons meaningful
+  // there rather than looking broken.
+  const slideIndex = Math.min(Math.max(idx, 0), Math.max(slideCount - 1, 0));
 
   // The look this panel considers "current": a per-slide override if the live
   // slide has one, otherwise the deck-wide default.
   const targetLookId = (!bible && cur.lookId) || state.look;
 
   const selectLook = (lookId: string) => {
+    // Bible verses have no per-slide overrides to hold a background of their
+    // own, so every pick there is already deck-wide by nature.
     if (armed || bible) {
       patch({ look: lookId, backgroundApplyAllArmed: false });
-      if (!bible) applySlideLookToLabel(idx, undefined, "all");
+      if (!bible) applyLookToAllSlides(undefined);
       return;
     }
-    setSlideLook(idx, lookId);
-    applySlideLookToLabel(idx, lookId, "all");
+    setSlideLook(slideIndex, lookId);
+    applySlideLookToLabel(slideIndex, lookId);
   };
+
+  // Song mode only — the button is disabled in Bible mode, where there are no
+  // per-slide overrides for this to write.
+  const applyToRemaining = () => applyLookToAllSlides(targetLookId);
 
   const deleteBuiltinLook = (id: string) => {
     patch((previousState) => ({ deletedLookIds: [...previousState.deletedLookIds, id] }));
@@ -66,19 +81,30 @@ export function BackgroundsPanel({ lumen }: { lumen: UseLumen }) {
               Restore hidden
             </InteractiveButton>
           )}
+          {/* Armed state relabels itself: the button's whole effect is on the
+              *next* click elsewhere, so with a static label it read as a control
+              that did nothing. */}
+          {/* Both are disabled in Bible mode: verses carry no per-slide
+              background of their own, so every pick there is already deck-wide
+              and these two have nothing left to change. */}
           <button
             onClick={() => patch((s) => ({ backgroundApplyAllArmed: !s.backgroundApplyAllArmed }))}
-            title="Next background you pick becomes the deck-wide default and clears per-section overrides"
+            title={bible
+              ? "Not needed in Bible mode — a background picked here already applies to every verse"
+              : "Arms a one-shot — the next background you pick below applies to every slide in the deck"}
             disabled={bible}
             className={cx(
               "h-6 px-2.5 rounded-full text-[11px] border disabled:opacity-40 not-disabled:cursor-pointer",
-              armed ? "border-accent bg-accent-soft text-accent" : "border-border bg-transparent text-muted"
+              armed ? "border-accent bg-accent-soft text-accent" : "border-border bg-transparent text-muted not-disabled:hover:text-text"
             )}
           >
-            Apply to all
+            {armed && !bible ? "Pick a background…" : "Apply to all"}
           </button>
           <button
-            onClick={() => applySlideLookToLabel(idx, targetLookId, "remaining")}
+            onClick={applyToRemaining}
+            title={bible
+              ? "Not needed in Bible mode — a background picked here already applies to every verse"
+              : "Applies this slide's current background to every slide in the deck"}
             disabled={bible}
             className="h-6 px-2.5 rounded-full border border-border bg-transparent text-muted text-[11px] disabled:opacity-40 not-disabled:cursor-pointer not-disabled:hover:text-text"
           >

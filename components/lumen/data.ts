@@ -191,6 +191,38 @@ export function canonicalBookNumber(bookName: string): number | null {
   return cebuanoIndex === -1 ? null : cebuanoIndex + 1;
 }
 
+// The canonical number of a book named in some *other* translation's language.
+// Prefers the book's own number as that translation recorded it (every parsed
+// translation numbers its books 1-66), falling back to the name tables only when
+// the name isn't in the given list at all.
+export function bookNumberOf<BookType extends { number: number; name: string }>(
+  books: BookType[], bookName: string
+): number | null {
+  const known = books.find((book) => book.name === bookName);
+  return known ? known.number : canonicalBookNumber(bookName);
+}
+
+// The same book in a different translation.
+//
+// Book names are localized — "Proverbs" is "Mga Panultihon" in Cebuano — so
+// matching translations on the name string fails for every book whose name is
+// actually translated, which is nearly all of them. Bible Compare did exactly
+// that and reported "This verse isn't in one of the two translations" for a
+// verse that was present in both. The canonical 1-66 number is the only
+// identifier that survives crossing a language boundary.
+//
+// The name is still tried as a fallback, for a translation whose numbering is
+// unusual but whose names happen to line up.
+export function findBookAcrossTranslations<BookType extends { number: number; name: string }>(
+  books: BookType[], bookNumber: number | null, bookName: string
+): BookType | undefined {
+  if (bookNumber !== null) {
+    const byNumber = books.find((book) => book.number === bookNumber);
+    if (byNumber) return byNumber;
+  }
+  return books.find((book) => book.name === bookName);
+}
+
 export type LyricFontId =
   | "sans" | "serif" | "inter" | "poppins" | "playfair" | "merriweather" | "bebas"
   | "arial" | "helvetica" | "times" | "georgia" | "courier" | "verdana"
@@ -267,17 +299,14 @@ export type Lineup = {
   songIds: string[];
 };
 
-// A named set of Bible verse references. Translation-agnostic on purpose — only
-// the reference is stored, so the text resolves live against whichever
-// translation is selected when the collection is opened.
-export type BibleCollection = {
-  id: string;
-  name: string;
-  verseRefs: { book: string; chapter: number; verse: number }[];
-};
-
 // Which sidebar tab a product tour belongs to; each is shown at most once, then
 // remembered (see TourSeenFlags / Settings' "Replay").
+//
+// One tour per tab, deliberately — there is no separate tour for the Create
+// lineup dialog. That walkthrough is part of the lineups tour, which opens the
+// dialog itself when it reaches those steps. A second tour covering the same
+// dialog meant two sequences with two step counts, and skipping one of them
+// simply started the other.
 export type TourMode = "songs" | "bible" | "lineups";
 export type TourSeenFlags = Record<TourMode, boolean>;
 

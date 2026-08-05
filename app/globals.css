@@ -88,8 +88,13 @@
   --border: #e5e5e9;
   --border2: #d7d7dd;
   --text: #131316;
-  --muted: #6b6b76;
-  --faint: #9a9aa5;
+  /* Darkened for readability on light backgrounds. The previous --faint
+     (#9a9aa5) sat at about 2.8:1 against white — below the 4.5:1 WCAG AA
+     threshold — and it carries most of the small uppercase section labels and
+     captions in this UI, which is why light mode read as washed out. These land
+     near 7.4:1 and 4.8:1 respectively. Dark mode is unchanged. */
+  --muted: #55555f;
+  --faint: #71717d;
   --accent-soft: rgba(139, 92, 246, .12);
   --shadow: 0 1px 2px rgba(18, 18, 22, .06), 0 12px 28px rgba(18, 18, 22, .08);
   --shadow-sm: 0 1px 2px rgba(18, 18, 22, .06);

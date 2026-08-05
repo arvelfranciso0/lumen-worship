@@ -85,6 +85,20 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
     updateStatus.status === "available" || updateStatus.status === "downloaded"
       ? updateStatus.releaseNotes
       : null;
+  // The card leads with a headline rather than a status strip, so each state
+  // needs a sentence that stands on its own as a title.
+  const updateCardTitle =
+    updateStatus.status === "downloaded"
+      ? "Lumen " + updateStatus.version + " ready to install"
+      : updateStatus.status === "available"
+        ? "Lumen " + updateStatus.version + " available"
+        : updateStatus.status === "downloading"
+          ? "Downloading update… " + Math.round(updateStatus.percent) + "%"
+          : updateStatus.status === "checking"
+            ? "Checking for updates…"
+            : updateStatus.status === "error"
+              ? "Update check failed"
+              : "You're up to date";
 
   const [updatePanelOpen, setUpdatePanelOpen] = useState(false);
 
@@ -247,9 +261,21 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
             >
               ↷
             </InteractiveButton>
-            {saveStatusLabel && (
-              <span className="font-mono text-[10.5px] text-faint w-11.5">{saveStatusLabel}</span>
-            )}
+            {/* Always rendered, faded rather than unmounted. Conditionally
+                mounting it changed the width of this whole right-hand group, so
+                every control in it — Undo/Redo included — slid sideways each
+                time a save started and finished. Reserving the space costs a few
+                idle pixels and keeps the toolbar still. aria-hidden while empty
+                so a screen reader doesn't announce a blank status. */}
+            <span
+              aria-hidden={saveStatusLabel === "" ? true : undefined}
+              className={cx(
+                "font-mono text-[10.5px] text-faint w-11.5 flex-none transition-opacity duration-200",
+                saveStatusLabel ? "opacity-100" : "opacity-0"
+              )}
+            >
+              {saveStatusLabel || "Saved"}
+            </span>
 
             {state.performanceMode && (
               <span className="h-8.5 flex items-center px-2.5 rounded-2.25 bg-accent-soft text-accent text-[11px] font-semibold">
@@ -267,24 +293,23 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
           </>
         )}
 
+        {/* A labelled "Updates" control with a badge dot, matching the design
+            reference — the bell emoji it replaces read as a notification tray
+            rather than as this app's updater. */}
         <InteractiveButton
           onClick={() => setUpdatePanelOpen((open) => !open)}
           title={updateLabel}
-          className="relative h-8.5 w-8.5 flex-none flex items-center justify-center rounded-2.25 border border-border bg-panel2 text-[14px] cursor-pointer hover:bg-raise hover:text-text"
+          className={cx(
+            "relative h-8.5 px-3 flex-none flex items-center rounded-2.25 border border-border bg-panel2 text-[13px] text-muted cursor-pointer hover:bg-raise hover:text-text",
+            isShaking && "animate-[bellShake_0.65s_ease-in-out]",
+          )}
         >
-          <span
-            className={cx(
-              "inline-block",
-              isShaking && "animate-[bellShake_0.65s_ease-in-out]",
-            )}
-          >
-            🔔
-          </span>
+          Updates
           {updatePending && (
             <span
               className={cx(
-                "absolute top-1 right-1 w-2 h-2 rounded-full ring-2 ring-panel2",
-                updateReady ? "bg-ok" : "bg-accent",
+                "absolute -top-1 -right-1 w-2.25 h-2.25 rounded-full ring-2 ring-panel",
+                updateReady ? "bg-ok" : "bg-danger",
               )}
             />
           )}
@@ -296,60 +321,58 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
               onClick={() => setUpdatePanelOpen(false)}
               className="fixed inset-0 z-90"
             />
+            {/* One padded card — headline, description, actions — rather than
+                the header strip / scroll body / footer bar it replaces. */}
             <div
               onClick={(e) => e.stopPropagation()}
-              className="absolute top-[calc(100%+8px)] left-0 z-100 w-90 rounded-xl border border-border2 bg-panel shadow-app overflow-hidden"
+              className="absolute top-[calc(100%+10px)] left-0 z-100 w-75 rounded-2xl border border-border2 bg-panel shadow-app p-4.5"
             >
-              <div className="p-[10px_14px] border-b border-border flex items-center justify-between">
-                <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">
-                  Updates
-                </span>
-                <span
-                  className={cx(
-                    "font-mono text-[10px]",
-                    updatePending ? "text-accent" : "text-faint",
-                  )}
-                >
-                  {updateLabel}
-                </span>
+              <div className="text-[15px] font-semibold text-text tracking-[-0.01em] leading-[1.35]">
+                {updateCardTitle}
               </div>
-              <div className="p-[12px_14px] max-h-70 overflow-y-auto">
+              <div className="mt-2 max-h-52 overflow-y-auto">
                 {updateReleaseNotes ? (
-                  // Rendering the GitHub release body's own HTML — always
+                  // Rendering the GitHub release body's own markdown — always
                   // this app's own release notes (see the type comment in
                   // electronUpdater.ts), not third-party or user content.
-                  <div className="text-[12.5px] text-muted leading-[1.6] [&_h1]:text-text [&_h2]:text-text [&_h3]:text-text [&_h1]:text-[14px] [&_h2]:text-[13px] [&_h3]:text-[13px] [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mb-1.5 [&_h2]:mb-1.5 [&_h3]:mb-1.5 [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-4.5 [&_ul]:mb-2 [&_li]:mb-1 [&_a]:text-accent [&_a]:underline [&_strong]:text-text [&_code]:font-mono [&_code]:text-[11.5px] [&_code]:bg-panel2 [&_code]:px-1 [&_code]:py-px [&_code]:rounded-1">
+                  <div className="text-[13px] text-muted leading-[1.55] [&_h1]:text-text [&_h2]:text-text [&_h3]:text-text [&_h1]:text-[13.5px] [&_h2]:text-[13px] [&_h3]:text-[13px] [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mb-1.5 [&_h2]:mb-1.5 [&_h3]:mb-1.5 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-4.5 [&_ul]:mb-2 [&_li]:mb-1 [&_a]:text-accent [&_a]:underline [&_strong]:text-text [&_code]:font-mono [&_code]:text-[12px] [&_code]:bg-panel2 [&_code]:px-1 [&_code]:py-px [&_code]:rounded-1">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {updateReleaseNotes}
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <div className="text-[12.5px] text-muted leading-[1.6]">
+                  <div className="text-[13px] text-muted leading-[1.55]">
                     {updateStatus.status === "checking"
                       ? "Checking GitHub for a newer version…"
                       : updateStatus.status === "downloading"
-                        ? "Downloading the update in the background…"
+                        ? "Downloading the update in the background. You can keep working — it installs when you're ready."
                         : updateStatus.status === "error"
-                          ? "Couldn't check for updates. Will try again on next launch."
+                          ? "Couldn't check for updates. Lumen will try again on next launch."
                           : "You're on the latest version — v" +
                             process.env.NEXT_PUBLIC_APP_VERSION +
                             "."}
                   </div>
                 )}
               </div>
-              {updateReady && (
-                <div className="p-[10px_14px] border-t border-border bg-panel2">
+              <div className="flex items-center gap-2.5 mt-4">
+                {updateReady && (
                   <button
                     onClick={() => {
                       installUpdate();
                       setUpdatePanelOpen(false);
                     }}
-                    className="w-full h-9 rounded-2.25 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer hover:brightness-110"
+                    className="h-9.5 px-4 rounded-2.5 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer shadow-app-sm hover:brightness-110"
                   >
-                    Install & restart
+                    Install &amp; restart
                   </button>
-                </div>
-              )}
+                )}
+                <button
+                  onClick={() => setUpdatePanelOpen(false)}
+                  className="h-9.5 px-4 rounded-2.5 border border-border2 bg-transparent text-muted text-[13px] font-medium cursor-pointer hover:bg-panel2 hover:text-text"
+                >
+                  {updateReady ? "Later" : "Close"}
+                </button>
+              </div>
             </div>
           </>
         )}
