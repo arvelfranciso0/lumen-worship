@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { cx } from "./cx";
 import { isCustomBackground, LOOK_CATEGORIES } from "./data";
 import { InteractiveButton } from "./Interactive";
@@ -58,10 +58,10 @@ export function BackgroundsPanel({ lumen }: { lumen: UseLumen }) {
     patch((previousState) => ({ deletedLookIds: [...previousState.deletedLookIds, id] }));
   };
 
-  const filteredLooks = category === "All" ? allLooks : allLooks.filter((lookOption) => {
+  const filteredLooks = useMemo(() => category === "All" ? allLooks : allLooks.filter((lookOption) => {
     const custom = isCustomBackground(lookOption);
     return custom ? category === (lookOption.mediaType === "video" ? "Video" : "Image") : lookOption.kind === category;
-  });
+  }), [category, allLooks]);
 
   return (
     <div

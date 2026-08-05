@@ -1,8 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { LumenApp } from "@/components/lumen/LumenApp";
-import { OutputWindowApp } from "@/components/lumen/OutputWindowApp";
+
+// Only one of these ever renders per window (see the route check below) — a
+// static import of both would ship the operator window's bundle with the
+// output window's code and vice versa. Dynamic imports split each into its
+// own chunk, fetched only once the route is actually known.
+const LumenApp = dynamic(() => import("@/components/lumen/LumenApp").then((mod) => mod.LumenApp), { ssr: false });
+const OutputWindowApp = dynamic(
+  () => import("@/components/lumen/OutputWindowApp").then((mod) => mod.OutputWindowApp),
+  { ssr: false }
+);
 
 type Route = "pending" | "operator" | "output";
 

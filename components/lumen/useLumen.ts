@@ -182,23 +182,40 @@ function downscaleImage(file: File, maxDimension: number): Promise<{ blob: Blob;
   });
 }
 
-const BIBLE_CACHE_LIMIT = 2;
+const BIBLE_CACHE_LIMIT = 4;
 
-// Keeps only the most-recently-added translations in memory — holding every
+// Keeps only the most-recently-used translations in memory — holding every
 // translation ever viewed in a session, unbounded (each can be several MB
-// parsed), is real memory pressure on a low-RAM device. Never evicts
-// `activeCode` (whichever translation is currently on screen), so switching
-// away and back never causes a visible "Loading translation…" flash for the
-// one still being viewed.
+// parsed), is real memory pressure on a low-RAM device. Recency is tracked by
+// object key insertion order, so the entry is always deleted before being
+// re-inserted — reassigning an already-present key in place leaves it at its
+// original (stale) position and would make eviction below target whichever
+// translation was *first added* rather than *least recently used*, thrashing
+// as soon as more than BIBLE_CACHE_LIMIT translations are cycled through (see
+// touchBibleCacheEntry, which relies on this to bump a cache hit). Never
+// evicts `activeCode` (whichever translation is currently on screen), so
+// switching away and back never causes a visible "Loading translation…"
+// flash for the one still being viewed.
 function withBibleCacheEntry(
   cache: Record<string, BibleTranslation>, code: string, data: BibleTranslation, activeCode: string
 ): Record<string, BibleTranslation> {
-  const next = { ...cache, [code]: data };
+  const { [code]: _evicted, ...rest } = cache;
+  const next = { ...rest, [code]: data };
   const evictable = Object.keys(next).filter((key) => key !== code && key !== activeCode);
   while (Object.keys(next).length > BIBLE_CACHE_LIMIT && evictable.length > 0) {
     delete next[evictable.shift() as string];
   }
   return next;
+}
+
+// Bumps an already-cached translation to most-recently-used without
+// re-fetching/re-parsing it — called whenever state.trans switches back to a
+// translation still sitting in the cache, so cycling between more
+// translations than BIBLE_CACHE_LIMIT doesn't evict-and-reparse ones still in
+// active rotation (see withBibleCacheEntry's eviction order above).
+function touchBibleCacheEntry(cache: Record<string, BibleTranslation>, code: string): Record<string, BibleTranslation> {
+  const data = cache[code];
+  return data ? withBibleCacheEntry(cache, code, data, code) : cache;
 }
 
 // Next/Previous boundary rules (Bible chapter/book crossing, set-song crossing,
@@ -573,7 +590,10 @@ export function useLumen(props: LumenProps = {}) {
   const [bibleRefreshTick, setBibleRefreshTick] = useState(0);
 
   useEffect(() => {
-    if (bibleCacheRef.current[state.trans]) return;
+    if (bibleCacheRef.current[state.trans]) {
+      setBibleCache((previousCache) => touchBibleCacheEntry(previousCache, state.trans));
+      return;
+    }
     let cancelled = false;
     getRepository().getBibleTranslationData(state.trans).then((data) => {
       if (cancelled) return;

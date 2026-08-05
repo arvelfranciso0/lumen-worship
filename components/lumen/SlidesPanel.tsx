@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { BackgroundsPanel } from "./BackgroundsPanel";
 import { cx } from "./cx";
 import { LookBackground } from "./LookBackground";
@@ -42,7 +42,12 @@ export function SlidesPanel({ lumen }: { lumen: UseLumen }) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const showGroupLabels = !bible && grouped;
-  const groups = groupSlides(slides, showGroupLabels);
+  const groups = useMemo(() => groupSlides(slides, showGroupLabels), [slides, showGroupLabels]);
+
+  // Looked up once per allLooks change instead of a linear allLooks.find() per
+  // slide per render — grouped slides can otherwise re-scan the whole looks
+  // list on every unrelated keystroke.
+  const looksById = useMemo(() => new Map(allLooks.map((lookOption) => [lookOption.id, lookOption])), [allLooks]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -83,7 +88,7 @@ export function SlidesPanel({ lumen }: { lumen: UseLumen }) {
             )}
             <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(140px,1fr))]">
               {group.items.map(({ slide, index }) => {
-                const effectiveLook = slide.lookId ? allLooks.find((l) => l.id === slide.lookId) : undefined;
+                const effectiveLook = slide.lookId ? looksById.get(slide.lookId) : undefined;
                 const isLive = index === currentSlideIndex;
                 const canMerge = !bible && index < slides.length - 1 && slides[index + 1].label === slide.label;
                 return (

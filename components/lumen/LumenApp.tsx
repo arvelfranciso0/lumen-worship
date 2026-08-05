@@ -1,24 +1,33 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { CSSProperties } from "react";
-import { BibleTranslationsPanel } from "./BibleTranslationsPanel";
-import { ConfirmDialog } from "./ConfirmDialog";
-import { DisplaysModal } from "./DisplaysModal";
-import { GlobalSearchModal } from "./GlobalSearchModal";
 import { Header } from "./Header";
-import { HotkeysModal } from "./HotkeysModal";
-import { LineupModal } from "./LineupModal";
 import { MainPanel } from "./MainPanel";
 import { MobileTabBar } from "./MobileTabBar";
-import { PresentationOverlay } from "./PresentationOverlay";
 import { PreviewPanel } from "./PreviewPanel";
 import { ResizeHandle } from "./ResizeHandle";
 import { Sidebar } from "./Sidebar";
-import { SettingsModal } from "./SettingsModal";
-import { SongEditorModal } from "./SongEditorModal";
-import { TourOverlay } from "./TourOverlay";
 import { useLumen, type LumenProps } from "./useLumen";
 import { useViewportBreakpoint } from "./useViewportBreakpoint";
+
+// Each of these is a modal/overlay that is closed far more often than it is
+// open (some — Settings, the Song editor, Lineups, Hotkeys, Displays, Bible
+// translations, global search — are never even mounted until the operator
+// explicitly opens them; see the `xOpen &&` guards below). Loading them via
+// next/dynamic instead of a static import keeps their code out of the bundle
+// that's parsed/compiled on every launch, splitting it into its own chunk
+// fetched only the first time it's actually rendered.
+const SettingsModal = dynamic(() => import("./SettingsModal").then((mod) => mod.SettingsModal), { ssr: false });
+const SongEditorModal = dynamic(() => import("./SongEditorModal").then((mod) => mod.SongEditorModal), { ssr: false });
+const LineupModal = dynamic(() => import("./LineupModal").then((mod) => mod.LineupModal), { ssr: false });
+const PresentationOverlay = dynamic(() => import("./PresentationOverlay").then((mod) => mod.PresentationOverlay), { ssr: false });
+const TourOverlay = dynamic(() => import("./TourOverlay").then((mod) => mod.TourOverlay), { ssr: false });
+const ConfirmDialog = dynamic(() => import("./ConfirmDialog").then((mod) => mod.ConfirmDialog), { ssr: false });
+const HotkeysModal = dynamic(() => import("./HotkeysModal").then((mod) => mod.HotkeysModal), { ssr: false });
+const DisplaysModal = dynamic(() => import("./DisplaysModal").then((mod) => mod.DisplaysModal), { ssr: false });
+const BibleTranslationsPanel = dynamic(() => import("./BibleTranslationsPanel").then((mod) => mod.BibleTranslationsPanel), { ssr: false });
+const GlobalSearchModal = dynamic(() => import("./GlobalSearchModal").then((mod) => mod.GlobalSearchModal), { ssr: false });
 
 export function LumenApp(props: LumenProps) {
   const lumen = useLumen(props);
@@ -108,16 +117,20 @@ export function LumenApp(props: LumenProps) {
         {showPreview && <PreviewPanel lumen={lumen} breakpoint={breakpoint} />}
       </div>
       {isMobile && <MobileTabBar lumen={lumen} />}
-      <SettingsModal lumen={lumen} />
-      <SongEditorModal lumen={lumen} />
-      <LineupModal lumen={lumen} />
-      <PresentationOverlay lumen={lumen} />
+      {lumen.state.settingsOpen && <SettingsModal lumen={lumen} />}
+      {lumen.state.songEditorOpen && <SongEditorModal lumen={lumen} />}
+      {lumen.state.lineupModalOpen && <LineupModal lumen={lumen} />}
+      {lumen.state.presenting && <PresentationOverlay lumen={lumen} />}
+      {/* Not gated on a single boolean like the others — it decides on its own,
+          from useLumen's prefsLoaded/tourSeen state, whether to auto-start the
+          very first time a mode is visited, so it must stay mounted to make
+          that call. Still dynamically imported above for its own chunk. */}
       <TourOverlay lumen={lumen} />
-      <ConfirmDialog lumen={lumen} />
-      <HotkeysModal lumen={lumen} />
-      <DisplaysModal lumen={lumen} />
-      <BibleTranslationsPanel lumen={lumen} />
-      <GlobalSearchModal lumen={lumen} />
+      {lumen.state.confirmDialog && <ConfirmDialog lumen={lumen} />}
+      {lumen.state.hotkeysOpen && <HotkeysModal lumen={lumen} />}
+      {lumen.state.displaysModalOpen && <DisplaysModal lumen={lumen} />}
+      {lumen.state.bibleTranslationsPanelOpen && <BibleTranslationsPanel lumen={lumen} />}
+      {lumen.state.globalSearchOpen && <GlobalSearchModal lumen={lumen} />}
     </div>
   );
 }

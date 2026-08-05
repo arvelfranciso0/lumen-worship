@@ -1,13 +1,30 @@
 "use client";
 
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { cx } from "./cx";
 import { InteractiveButton } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 import type { Breakpoint } from "./useViewportBreakpoint";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+
+// react-markdown pulls in the whole micromark/mdast/unified stack (remark-gfm
+// included) just to render the release notes inside the rarely-opened
+// "Updates" popover — loaded as its own chunk, fetched only the first time
+// that popover is actually opened, instead of parsed on every launch.
+const ReleaseNotesMarkdown = dynamic(
+  () =>
+    Promise.all([import("react-markdown"), import("remark-gfm")]).then(
+      ([reactMarkdownModule, remarkGfmModule]) => {
+        function ReleaseNotesMarkdownComponent({ children }: { children: string }) {
+          const ReactMarkdown = reactMarkdownModule.default;
+          return <ReactMarkdown remarkPlugins={[remarkGfmModule.default]}>{children}</ReactMarkdown>;
+        }
+        return ReleaseNotesMarkdownComponent;
+      }
+    ),
+  { ssr: false }
+);
 
 const SHAKE_DURATION_MS = 650;
 
@@ -336,9 +353,9 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
                   // this app's own release notes (see the type comment in
                   // electronUpdater.ts), not third-party or user content.
                   <div className="text-[13px] text-muted leading-[1.55] [&_h1]:text-text [&_h2]:text-text [&_h3]:text-text [&_h1]:text-[13.5px] [&_h2]:text-[13px] [&_h3]:text-[13px] [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mb-1.5 [&_h2]:mb-1.5 [&_h3]:mb-1.5 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-4.5 [&_ul]:mb-2 [&_li]:mb-1 [&_a]:text-accent [&_a]:underline [&_strong]:text-text [&_code]:font-mono [&_code]:text-[12px] [&_code]:bg-panel2 [&_code]:px-1 [&_code]:py-px [&_code]:rounded-1">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReleaseNotesMarkdown>
                       {updateReleaseNotes}
-                    </ReactMarkdown>
+                    </ReleaseNotesMarkdown>
                   </div>
                 ) : (
                   <div className="text-[13px] text-muted leading-[1.55]">

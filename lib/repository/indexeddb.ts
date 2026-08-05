@@ -25,11 +25,19 @@ type StoredBibleTranslation = {
   name: string;
   license: string;
   link: string | null;
-  data: ArrayBuffer;
   downloadedAt: number;
   sizeBytes: number;
-  // Absent on records written before XML support existed — undefined is
-  // treated as "json" below, so old records keep parsing exactly as before.
+  // Parsed once, at import time (see addBibleTranslation below), and
+  // persisted directly — so getBibleTranslationData can hand it back as-is
+  // instead of re-running JSON.parse/parseBibleXml over the raw file on
+  // every read.
+  parsedData?: BibleTranslation;
+  // Raw file bytes + format flag, only present on rows written before
+  // parsedData existed — undefined `format` on one of these is treated as
+  // "json" below, so old records keep parsing exactly as before. New imports
+  // never write these; kept only so existing installs don't need
+  // re-importing.
+  data?: ArrayBuffer;
   format?: "json" | "xml";
 };
 
@@ -149,9 +157,15 @@ export function createIndexedDbRepository(): AppRepository {
 
     async setPrefs(patch: PersistedPrefs) {
       const db = await dbPromise;
-      await Promise.all(
-        Object.entries(patch).map(([key, value]) => put(db, "prefs", { key, value }))
-      );
+      const tx = db.transaction("prefs", "readwrite");
+      const store = tx.objectStore("prefs");
+      for (const [key, value] of Object.entries(patch)) {
+        store.put({ key, value });
+      }
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
     },
 
     async addBackground(input: NewBackgroundInput) {
@@ -169,9 +183,15 @@ export function createIndexedDbRepository(): AppRepository {
 
     async addBibleTranslation(input: NewBibleTranslationInput) {
       const db = await dbPromise;
+      // Parsed once, here at import, rather than storing the raw bytes
+      // verbatim — otherwise every later getBibleTranslationData call (every
+      // translation switch, every Compare lookup) would re-run
+      // JSON.parse/parseBibleXml over a multi-MB file from scratch.
+      const text = new TextDecoder().decode(input.data);
+      const parsedData = input.format === "xml" ? (parseBibleXml(text) as BibleTranslation) : (JSON.parse(text) as BibleTranslation);
       const record: StoredBibleTranslation = {
         code: input.code, language: input.language, name: input.name, license: input.license, link: input.link,
-        data: input.data, downloadedAt: Date.now(), sizeBytes: input.data.byteLength, format: input.format,
+        parsedData, downloadedAt: Date.now(), sizeBytes: input.data.byteLength,
       };
       await put(db, "bibleTranslations", record);
     },
@@ -185,7 +205,11 @@ export function createIndexedDbRepository(): AppRepository {
       const db = await dbPromise;
       const row = await getOne<StoredBibleTranslation>(db, "bibleTranslations", code);
       if (!row) return null;
-      const text = new TextDecoder().decode(row.data);
+      if (row.parsedData) return row.parsedData;
+      // Legacy row, written before addBibleTranslation parsed at import time
+      // — still has to be parsed here, same as before, so an existing import
+      // doesn't need re-importing after this change.
+      const text = new TextDecoder().decode(row.data as ArrayBuffer);
       return row.format === "xml" ? (parseBibleXml(text) as BibleTranslation) : (JSON.parse(text) as BibleTranslation);
     },
 

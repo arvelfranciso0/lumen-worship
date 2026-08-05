@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { cx } from "./cx";
 import { CountdownControl } from "./CountdownControl";
 import { InteractiveButton } from "./Interactive";
@@ -58,9 +58,9 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
 
   // Per-slide background override (song mode, set from the Backgrounds panel)
   // — falls back to the global look whenever a slide doesn't have its own.
-  const curLook = (cur.lookId && allLooks.find((l) => l.id === cur.lookId)) || look;
-  const nxtLook = (nxt?.lookId && allLooks.find((l) => l.id === nxt.lookId)) || look;
-  const prvLook = (prv?.lookId && allLooks.find((l) => l.id === prv.lookId)) || look;
+  const curLook = useMemo(() => (cur.lookId && allLooks.find((l) => l.id === cur.lookId)) || look, [cur, allLooks, look]);
+  const nxtLook = useMemo(() => (nxt?.lookId && allLooks.find((l) => l.id === nxt.lookId)) || look, [nxt, allLooks, look]);
+  const prvLook = useMemo(() => (prv?.lookId && allLooks.find((l) => l.id === prv.lookId)) || look, [prv, allLooks, look]);
   const slideTransitionStyle = useSlideTransition(state.transitionType, state.transitionDurationMs, state.performanceMode);
 
   // Lets the operator highlight text by selecting it directly on the Live

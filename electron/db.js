@@ -82,6 +82,12 @@ function rowToDownloadedBibleTranslation(row) {
 
 function createDb(dbPath) {
   const db = new DatabaseSync(dbPath);
+  // WAL mode replaces per-statement fsync-backed rollback-journal commits
+  // with a much cheaper append-to-log commit (fsync only on checkpoint), so
+  // the many individual auto-committed writes below (one per prefs key,
+  // one per song/lineup/etc. upsert) no longer each block the main process
+  // — and therefore output-window IPC — for a full disk fsync.
+  db.exec("PRAGMA journal_mode = WAL");
   db.exec(SCHEMA);
   migrateSchema(db);
   const backgroundsDir = path.join(path.dirname(dbPath), "backgrounds");
@@ -149,15 +155,29 @@ function createDb(dbPath) {
         `INSERT INTO prefs (key, value) VALUES (?, ?)
          ON CONFLICT(key) DO UPDATE SET value=excluded.value`
       );
-      for (const [key, value] of Object.entries(patch)) {
-        stmt.run(key, JSON.stringify(value));
+      // One commit/fsync for the whole debounced flush instead of one per
+      // key — setPrefs writes ~20 keys at a time, and without an explicit
+      // transaction each stmt.run() is its own implicit commit.
+      db.exec("BEGIN");
+      try {
+        for (const [key, value] of Object.entries(patch)) {
+          stmt.run(key, JSON.stringify(value));
+        }
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
       }
     },
 
-    addBackground({ id, name, mediaType, mimeType, data }) {
+    // async: writes the uploaded media with fs.promises rather than
+    // writeFileSync, so a large background file doesn't block the main
+    // process's event loop (and with it every IPC channel, including the
+    // output window) for the duration of the write.
+    async addBackground({ id, name, mediaType, mimeType, data }) {
       const extension = mimeType.split("/")[1] || "bin";
       const fileName = id + "." + extension;
-      fs.writeFileSync(path.join(backgroundsDir, fileName), Buffer.from(data));
+      await fs.promises.writeFile(path.join(backgroundsDir, fileName), Buffer.from(data));
       db.prepare(
         `INSERT INTO backgrounds (id, name, media_type, mime_type, file_name) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
@@ -173,9 +193,12 @@ function createDb(dbPath) {
       db.prepare("DELETE FROM backgrounds WHERE id = ?").run(id);
     },
 
-    addBibleTranslation({ code, language, name, license, link, data, format }) {
+    // async: same reasoning as addBackground — a downloaded translation can
+    // be several MB, and writeFileSync would stall the main process for the
+    // whole write.
+    async addBibleTranslation({ code, language, name, license, link, data, format }) {
       const fileName = code + "." + format;
-      fs.writeFileSync(path.join(bibleTranslationsDir, fileName), Buffer.from(data));
+      await fs.promises.writeFile(path.join(bibleTranslationsDir, fileName), Buffer.from(data));
       db.prepare(
         `INSERT INTO bible_translations (code, language, name, license, link, file_name, downloaded_at, size_bytes, format)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -200,11 +223,12 @@ function createDb(dbPath) {
     // second-monitor audience output. preload.js's getBibleTranslationData
     // does the actual JSON.parse/parseBibleXml instead, in the renderer's
     // own isolated context.
-    getBibleTranslationData(code) {
+    async getBibleTranslationData(code) {
       const row = db.prepare("SELECT file_name, format FROM bible_translations WHERE code = ?").get(code);
       if (!row) return null;
       try {
-        return { text: fs.readFileSync(path.join(bibleTranslationsDir, row.file_name), "utf-8"), format: row.format };
+        const text = await fs.promises.readFile(path.join(bibleTranslationsDir, row.file_name), "utf-8");
+        return { text, format: row.format };
       } catch {
         return null;
       }
