@@ -99,7 +99,7 @@ export function SlidesPanel({ lumen }: { lumen: UseLumen }) {
                     onDragOver={(dragEvent) => dragEvent.preventDefault()}
                     onDrop={() => { if (draggedIndex !== null) reorderSlides(draggedIndex, index); setDraggedIndex(null); }}
                     onDragEnd={() => setDraggedIndex(null)}
-                    onClick={() => patch({ idx: index, black: false, blank: false })}
+                    onClick={() => patch({ idx: index })}
                     className={cx(
                       "relative rounded-2.5 cursor-pointer bg-panel border",
                       isLive ? "border-accent shadow-[0_0_0_3px_var(--accent-soft)]" : "border-border",

@@ -50,9 +50,13 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
     hidden,
     setSongs,
     outputStatus,
+    secondaryDisplayAvailable,
     updateStatus,
     installUpdate,
     startPresenting,
+    stopPresenting,
+    presentCountdown,
+    isPresenting,
     undo,
     redo,
     canUndo,
@@ -70,12 +74,17 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
     : hidden
       ? "bg-warn"
       : "bg-border2";
+  // Reflects display *detection*, independent of whether output is actually
+  // presenting (state.outputEnabled) — a second display being plugged in
+  // should read as "ready", never as if it were already live, and "no
+  // display" must resolve immediately rather than sitting on a generic
+  // "Waiting…" that never distinguishes the two.
   const outputLabel =
     outputStatus.active && outputStatus.display
       ? "Output · " + outputStatus.display.label
-      : state.outputEnabled
-        ? "Output · Waiting…"
-        : "Output · Off";
+      : secondaryDisplayAvailable
+        ? "Output · Ready"
+        : "Output · No display";
 
   // "available"/"downloading"/"downloaded" all mean "there's a pending update
   // worth flagging" via the badge dot and shake; only "downloaded" is
@@ -207,7 +216,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
                     No songs in this set yet
                   </div>
                   <div className="text-[11.5px] mt-1 leading-normal">
-                    Open a song and click “Add to set” to add it here.
+                    Add songs to this lineup from the Lineups tab.
                   </div>
                 </div>
               ) : (
@@ -220,8 +229,6 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
                           mode: "songs",
                           songId: s.id,
                           idx: 0,
-                          black: false,
-                          blank: false,
                           setPanelOpen: false,
                         });
                       }}
@@ -419,11 +426,23 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
 
         <InteractiveButton
           data-tour="present"
-          onClick={startPresenting}
-          className="h-8.5 px-4 rounded-2.25 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer shadow-app-sm flex items-center gap-2 hover:brightness-110"
+          onClick={isPresenting ? stopPresenting : startPresenting}
+          className={cx(
+            "h-8.5 px-4 rounded-2.25 text-[13px] cursor-pointer flex items-center gap-2",
+            isPresenting
+              ? "border border-border2 bg-raise text-muted font-medium"
+              : "border-none bg-accent text-white font-semibold shadow-app-sm hover:brightness-110"
+          )}
         >
-          Present
-          <span className="font-mono text-[10px] opacity-70">F5</span>
+          {isPresenting ? "Stop Presenting" : "Present"}
+          {presentCountdown !== null && (
+            <span className="inline-flex items-center justify-center w-4.5 h-4.5 rounded-full bg-white/22 text-white font-mono text-[11px] font-semibold">
+              {presentCountdown}
+            </span>
+          )}
+          {presentCountdown === null && !isPresenting && (
+            <span className="font-mono text-[10px] opacity-70">F5</span>
+          )}
         </InteractiveButton>
       </div>
     </header>

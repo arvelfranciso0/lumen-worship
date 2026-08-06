@@ -63,7 +63,10 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const [popoverSize, setPopoverSize] = useState<Size>(POPOVER_ESTIMATE);
 
-  const tourContext: TourContext = { hasBibleTranslations: state.downloadedTranslations.length > 0 };
+  const tourContext: TourContext = {
+    hasBibleTranslations: state.downloadedTranslations.length > 0,
+    hasMultipleBibleTranslations: state.downloadedTranslations.length >= 2,
+  };
 
   // Resolved once per tour rather than on every render. Recomputing live would
   // renumber the sequence the instant a translation imports — the Bible tour
@@ -99,7 +102,8 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
     state.lineupModalOpen && !state.editingLineupId ? "lineupModal"
       : state.bibleTranslationsPanelOpen ? "bibleTranslations"
         : state.songEditorOpen ? "songEditor"
-          : "page";
+          : state.mode === "bible" && state.bibleSubTab === "compare" ? "bibleCompare"
+            : "page";
 
   const steps = activeSteps;
   const step = steps ? steps[state.tourStep] : null;
@@ -207,6 +211,10 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
     songEditor: {
       open: { songEditorOpen: true, songEditorMode: "create" },
       close: { songEditorOpen: false },
+    },
+    bibleCompare: {
+      open: { bibleSubTab: "compare" },
+      close: { bibleSubTab: "browse" },
     },
   };
 

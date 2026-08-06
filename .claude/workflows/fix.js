@@ -9,8 +9,24 @@ export const meta = {
   ],
 }
 
-const description = args?.description
-const filesHint = args?.files || ''
+// Workflow's `args` sometimes arrives as a JSON-encoded string instead of the
+// parsed object it's documented to be — normalize defensively rather than
+// trusting the shape.
+function normalizeArgs(rawArgs) {
+  if (rawArgs && typeof rawArgs === 'object') return rawArgs
+  if (typeof rawArgs === 'string') {
+    try {
+      const parsed = JSON.parse(rawArgs)
+      if (parsed && typeof parsed === 'object') return parsed
+    } catch { /* not JSON — treat the whole string as the description below */ }
+    return { description: rawArgs }
+  }
+  return {}
+}
+
+const normalizedArgs = normalizeArgs(args)
+const description = normalizedArgs.description
+const filesHint = normalizedArgs.files || ''
 
 if (!description) {
   throw new Error('fix workflow requires args.description (what is broken and how to reproduce it)')

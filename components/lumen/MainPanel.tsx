@@ -21,7 +21,7 @@ const OUTLINE_WIDTH_DEFAULT = 2;
 // about what is *currently on the audience screen* lives in PreviewPanel.
 export function MainPanel({ lumen }: { lumen: UseLumen }) {
   const {
-    state, patch, bible, song, idx, ref, inSet, toggleSetSong,
+    state, patch, bible, song, idx, ref,
     vlabel, currentTransMeta, shortTransLabel, applyLiveHighlight, removeLiveHighlight,
     atStartOverflow, atEndOverflow, slideCount,
   } = lumen;
@@ -118,21 +118,6 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
             Edit lyrics
           </InteractiveButton>
         )}
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] text-muted">Add to set</span>
-          <InteractiveButton
-            onClick={bible ? undefined : () => toggleSetSong(song.id)}
-            disabled={bible}
-            title={inSet ? "In set" : "Add to set"}
-            className={cx(
-              "h-5 w-9 px-0.5 rounded-full border flex items-center disabled:cursor-not-allowed disabled:opacity-50",
-              inSet ? "border-accent bg-accent justify-end" : "border-border bg-panel2 justify-start",
-              !bible && "cursor-pointer"
-            )}
-          >
-            <span className="w-4 h-4 rounded-full bg-white shadow-app-sm" />
-          </InteractiveButton>
-        </div>
       </div>
 
       {/* text styling toolbar */}

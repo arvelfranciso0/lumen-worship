@@ -36,6 +36,36 @@ const SCHEMA = `
 // against an already-created table, so a fresh column needs an explicit
 // ALTER TABLE. Each is wrapped since SQLite errors on adding a column that
 // already exists.
+
+// `code` reaches here straight from the imported file's own `code`/`id`
+// XML attribute (see electron/bibleXml.js) — entirely attacker-controlled.
+// Used unsanitized, a value like "../../../../some/path" would let
+// path.join(bibleTranslationsDir, code + "." + format) write (and later,
+// via getBibleTranslationData/deleteBibleTranslation reading the same
+// value back out of the DB, read or delete) a file outside
+// bibleTranslationsDir entirely. Strip it down to safe filename characters
+// before it ever reaches the filesystem — the same class of bug
+// addBackground avoids by keying its file names off an app-generated id
+// instead of anything file-supplied.
+function sanitizeFileNameSegment(value) {
+  const sanitized = String(value).replace(/[^a-zA-Z0-9_-]/g, "_");
+  return sanitized || "translation";
+}
+
+// Defense-in-depth on top of sanitizeFileNameSegment: verifies the resolved
+// path actually stays under dir, rather than trusting that every fileName
+// built elsewhere was correctly sanitized/allowlisted piece by piece — e.g.
+// this would still catch it if a future field got concatenated into a
+// fileName without remembering to sanitize that specific piece.
+function resolveWithinDir(dir, fileName) {
+  const resolvedDir = path.resolve(dir);
+  const resolved = path.resolve(dir, fileName);
+  if (resolved !== resolvedDir && !resolved.startsWith(resolvedDir + path.sep)) {
+    throw new Error("resolved path escapes its containing directory: " + fileName);
+  }
+  return resolved;
+}
+
 function migrateSchema(db) {
   for (const statement of [
     "ALTER TABLE bible_translations ADD COLUMN language TEXT DEFAULT ''",
@@ -197,8 +227,16 @@ function createDb(dbPath) {
     // be several MB, and writeFileSync would stall the main process for the
     // whole write.
     async addBibleTranslation({ code, language, name, license, link, data, format }) {
-      const fileName = code + "." + format;
-      await fs.promises.writeFile(path.join(bibleTranslationsDir, fileName), Buffer.from(data));
+      // Allowlist, not sanitizeFileNameSegment — format is concatenated
+      // directly onto the (separately sanitized) code segment, so a
+      // stripped-but-still-attacker-chosen value here could still reopen a
+      // path escape (e.g. via repeated separator characters); every real
+      // caller only ever passes "xml" or "json" (see useLumen.ts's
+      // importBibleTranslation), so anything else just becomes "json".
+      const safeFormat = format === "xml" ? "xml" : "json";
+      const fileName = sanitizeFileNameSegment(code) + "." + safeFormat;
+      const filePath = resolveWithinDir(bibleTranslationsDir, fileName);
+      await fs.promises.writeFile(filePath, Buffer.from(data));
       db.prepare(
         `INSERT INTO bible_translations (code, language, name, license, link, file_name, downloaded_at, size_bytes, format)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -206,7 +244,7 @@ function createDb(dbPath) {
            language=excluded.language, name=excluded.name, license=excluded.license, link=excluded.link,
            file_name=excluded.file_name, downloaded_at=excluded.downloaded_at, size_bytes=excluded.size_bytes,
            format=excluded.format`
-      ).run(code, language, name, license, link, fileName, Date.now(), data.byteLength, format);
+      ).run(code, language, name, license, link, fileName, Date.now(), data.byteLength, safeFormat);
     },
 
     deleteBibleTranslation(code) {

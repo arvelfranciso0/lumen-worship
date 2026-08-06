@@ -10,6 +10,11 @@ let db;
 let staticServer;
 let operatorWindow;
 let outputWindow = null;
+// The most recent payload the operator pushed via output:state, kept here
+// (not just relayed) so it can be replayed once the output window actually
+// finishes loading — see the output:ready handler below for why the very
+// first push otherwise never reaches it.
+let lastOutputStatePayload = null;
 let updateStatus = { status: "idle" };
 // Defaults to off (opt-in) until the DB's persisted prefs say otherwise —
 // read directly from db.loadAll() in app.whenReady, since the main process
@@ -154,6 +159,19 @@ async function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      // Electron sandboxes preload scripts by default (since v20) — under
+      // that sandbox, preload's require() only resolves a small built-in
+      // allowlist ('electron', 'events', ...), not arbitrary project files.
+      // preload.js requires ./bibleXml.js directly (see that file's own
+      // header comment on why), which silently crashed the entire preload
+      // script under the sandbox default — meaning NONE of its
+      // contextBridge.exposeInMainWorld calls ever ran, not just the Bible
+      // one: electronAPI, electronDisplay (the second-monitor bridge),
+      // electronShell, electronCompat, electronUpdater were all missing from
+      // the renderer. contextIsolation/nodeIntegration above already keep
+      // the page itself sandboxed from Node; this only restores the
+      // preload's own ability to require its sibling file.
+      sandbox: false,
     },
   });
   operatorWindow.loadURL(await resolveAppUrl());
@@ -241,6 +259,9 @@ async function openOutputWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      // See the same option on operatorWindow's webPreferences above for why
+      // this is required — this window loads the identical preload.js.
+      sandbox: false,
     },
   });
   outputWindow = win;
@@ -258,10 +279,6 @@ async function openOutputWindow() {
     if (outputWindow === win) outputWindow = null;
     broadcastOutputStatus();
   });
-  // Surfaces any renderer-side error (e.g. a JS exception before
-  // OutputWindowApp can call notifyReady) directly, instead of the window
-  // just silently never showing with no clue why.
-  if (!app.isPackaged) win.webContents.openDevTools({ mode: "detached" });
   // Broadcast right away so the operator UI reflects "active" as soon as the
   // window exists, rather than only after the page inside it finishes
   // loading (loadURL below can take a moment on a cold dev server).
@@ -422,7 +439,12 @@ function registerIpcHandlers() {
   // One-way, high-frequency: the operator window pushes the current live
   // slide/style/background on every change; relayed straight through to
   // whichever window is the audience output, if one is open.
-  ipcMain.on("output:state", (_event, payload) => {
+  ipcMain.on("output:state", (event, payload) => {
+    // Only the operator window ever legitimately pushes state — matters more
+    // now that a payload is cached and replayed on every future output:ready
+    // (e.g. an output-window reload), not just relayed once.
+    if (BrowserWindow.fromWebContents(event.sender) !== operatorWindow) return;
+    lastOutputStatePayload = payload;
     if (outputWindow && !outputWindow.isDestroyed()) outputWindow.webContents.send("output:state", payload);
   });
 
@@ -433,6 +455,17 @@ function registerIpcHandlers() {
     const win = BrowserWindow.fromWebContents(event.sender);
     console.log("[output] output:ready received; is the tracked output window?", win === outputWindow);
     if (win !== outputWindow || win.isDestroyed()) return;
+    // Replay the last state the operator pushed, if any — output:state events
+    // sent by useLumen while this window was still loading (the operator's
+    // push effect fires as soon as outputStatus.active flips true, which
+    // openOutputWindow() broadcasts immediately on window creation, well
+    // before loadURL resolves and OutputWindowApp's listener exists) were
+    // dispatched to a webContents with nobody listening yet and are gone for
+    // good. Without this, the window sits on OutputWindowApp's black default
+    // state until the next unrelated live-slide change happens to fire the
+    // push effect again. Sent before setFullScreen/show so the window is
+    // already showing the real background the instant it becomes visible.
+    if (lastOutputStatePayload) win.webContents.send("output:state", lastOutputStatePayload);
     const display = resolveOutputDisplay();
     if (display) win.setBounds(display.bounds);
     win.setFullScreen(true);

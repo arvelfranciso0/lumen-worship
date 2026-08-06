@@ -82,7 +82,8 @@ export function DisplaysModal({ lumen }: { lumen: UseLumen }) {
             </div>
             {!hasSecondaryDisplay ? (
               <div className="p-[12px_14px] border border-border rounded-xl bg-panel2 text-[12.5px] text-muted leading-normal">
-                No second monitor detected. Connect one (HDMI/DisplayPort) to show a fullscreen, chrome-free output there automatically.
+                No second monitor detected. Connect one (HDMI/DisplayPort, or a wireless/virtual
+                display app) to show a fullscreen, chrome-free output there automatically.
               </div>
             ) : (
               <div className="flex flex-col gap-2">

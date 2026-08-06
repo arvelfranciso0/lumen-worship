@@ -2,8 +2,9 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { stepSurface, tourStepsFor, type TourContext, type TourStep } from "./tourSteps.ts";
 
-const EMPTY_LIBRARY: TourContext = { hasBibleTranslations: false };
-const WITH_TRANSLATION: TourContext = { hasBibleTranslations: true };
+const EMPTY_LIBRARY: TourContext = { hasBibleTranslations: false, hasMultipleBibleTranslations: false };
+const WITH_TRANSLATION: TourContext = { hasBibleTranslations: true, hasMultipleBibleTranslations: false };
+const WITH_TWO_TRANSLATIONS: TourContext = { hasBibleTranslations: true, hasMultipleBibleTranslations: true };
 const ALL_MODES = ["songs", "bible", "lineups"] as const;
 
 // A tour walks onto a surface by opening it and off by closing it. For that to
@@ -99,6 +100,32 @@ describe("bible tour — translation already installed", () => {
     const emptyTargets = new Set(tourStepsFor("bible", EMPTY_LIBRARY).map((step) => step.target));
     const shared = STEPS.map((step) => step.target).filter((target) => emptyTargets.has(target));
     assert.deepEqual(shared, ["present"]);
+  });
+
+  test("no compare step appears with only one translation", () => {
+    for (const step of STEPS) {
+      assert.notEqual(step.target, "bible-compare-toggle");
+      assert.notEqual(step.target, "bible-compare-versions");
+      assert.notEqual(stepSurface(step), "bibleCompare");
+    }
+  });
+});
+
+describe("bible tour — two translations installed", () => {
+  const STEPS = tourStepsFor("bible", WITH_TWO_TRANSLATIONS);
+
+  test("adds the compare steps between picking a verse and going live", () => {
+    assert.deepEqual(
+      STEPS.map((step) => [step.target, stepSurface(step)]),
+      [
+        ["bible-version", "page"],
+        ["bible-nav", "page"],
+        ["bible-verse", "page"],
+        ["bible-compare-toggle", "bibleCompare"],
+        ["bible-compare-versions", "bibleCompare"],
+        ["present", "page"],
+      ]
+    );
   });
 });
 

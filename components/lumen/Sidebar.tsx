@@ -3,13 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BibleComparePanel } from "./BibleComparePanel";
 import { matchBibleBooks, parseBibleQuery, resolveBibleQueryTarget } from "./bibleSearch";
-import { CHIPS, SONGS, SORTS, type Song } from "./data";
+import { CHIPS, SORTS, type Song } from "./data";
 import { cx } from "./cx";
 import { InteractiveButton, InteractiveInput } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 import type { Breakpoint } from "./useViewportBreakpoint";
-
-const RECENT = SONGS.slice(0, 3);
 
 const BIBLE_SUB_TABS: { id: "browse" | "compare"; label: string }[] = [
   { id: "browse", label: "Browse" },
@@ -48,7 +46,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
     const current = state.downloadedTranslations.find((entry) => entry.code === state.trans);
     if (current?.language === language) return;
     const firstOfLanguage = state.downloadedTranslations.find((entry) => entry.language === language);
-    if (firstOfLanguage) patch({ trans: firstOfLanguage.code, idx: 0, black: false, blank: false });
+    if (firstOfLanguage) patch({ trans: firstOfLanguage.code, idx: 0 });
   };
 
   // Keeps the live verse in view. Jumping to "Genesis 1:1" selects the verse
@@ -60,15 +58,17 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
     activeVerseRef.current?.scrollIntoView({ block: "nearest" });
   }, [idx, state.book, state.chapter, state.bibleSubTab, state.mode]);
 
-  const [viewingLineupId, setViewingLineupId] = useState<string | null>(null);
   const [draggedSongIndex, setDraggedSongIndex] = useState<number | null>(null);
   const lineupsMode = state.mode === "lineups";
 
+  // Lives in shared state (not local to Sidebar) — BackgroundsPanel reads it
+  // to scope background edits to whichever lineup is currently open here
+  // (see lineupScopeId in useLumen.ts).
   useEffect(() => {
-    if (!lineupsMode) setViewingLineupId(null);
-  }, [lineupsMode]);
+    if (!lineupsMode) patch({ viewingLineupId: null });
+  }, [lineupsMode, patch]);
 
-  const viewingLineup = state.lineups.find((lineup) => lineup.id === viewingLineupId) || null;
+  const viewingLineup = state.lineups.find((lineup) => lineup.id === state.viewingLineupId) || null;
   const lineupSongs = (viewingLineup?.songIds ?? [])
     .map((songId) => allSongs.find((candidate) => candidate.id === songId))
     .filter((maybeSong): maybeSong is (typeof allSongs)[number] => !!maybeSong);
@@ -92,7 +92,6 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
     if (!bibleTarget) return;
     patch({
       book: bibleTarget.book, chapter: bibleTarget.chapter, idx: bibleTarget.verseIndex,
-      black: false, blank: false,
       // Back to Browse: a reference jump that landed the operator on the Compare
       // tab would look like it had done nothing.
       bibleSubTab: "browse",
@@ -104,7 +103,6 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
       ? visibleBibleBooks.length + " books"
       : passage.length + " verses")
     : list.length + " songs";
-  const showRecent = state.chip === "All" && !state.query;
 
   return (
     // Desktop is the only breakpoint where the operator drags this width;
@@ -122,9 +120,9 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
     >
       <div className="p-[14px_14px_10px] flex flex-col gap-2.5 border-b border-border">
         <div className="flex p-0.75 gap-0.75 rounded-[10px] bg-panel2 border border-border">
-          <button onClick={() => patch({ mode: "songs", idx: 0, black: false, blank: false })} className={tabStyle(state.mode === "songs")}>Songs</button>
-          <button onClick={() => patch({ mode: "bible", idx: 0, black: false, blank: false })} className={tabStyle(state.mode === "bible")}>Bible</button>
-          <button onClick={() => patch({ mode: "lineups", idx: 0, black: false, blank: false })} className={tabStyle(lineupsMode)}>Lineups</button>
+          <button onClick={() => patch({ mode: "songs", idx: 0 })} className={tabStyle(state.mode === "songs")}>Songs</button>
+          <button onClick={() => patch({ mode: "bible", idx: 0 })} className={tabStyle(state.mode === "bible")}>Bible</button>
+          <button onClick={() => patch({ mode: "lineups", idx: 0 })} className={tabStyle(lineupsMode)}>Lineups</button>
         </div>
 
         {!lineupsMode && (
@@ -285,6 +283,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
             {BIBLE_SUB_TABS.map((tab) => (
               <button
                 key={tab.id}
+                data-tour={tab.id === "compare" ? "bible-compare-toggle" : undefined}
                 onClick={() => patch({ bibleSubTab: tab.id })}
                 className={cx(
                   "flex-none h-6 px-2.5 rounded-full border text-[11px] cursor-pointer mb-2",
@@ -317,7 +316,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
                     <div
                       key={verseIndex}
                       ref={verseIndex === idx ? activeVerseRef : undefined}
-                      onClick={() => patch({ idx: verseIndex, black: false, blank: false })}
+                      onClick={() => patch({ idx: verseIndex })}
                       className={cx(
                         "flex gap-2.25 p-[8px_9px] rounded-2.25 cursor-pointer border",
                         verseIndex === idx ? "border-accent bg-accent-soft" : "border-transparent bg-panel2"
@@ -357,30 +356,6 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
 
       {state.mode === "songs" && (
         <div className="flex-1 overflow-y-auto p-[10px_10px_20px]">
-          {showRecent && (
-            <>
-              <div className="p-[8px_6px_6px] text-[11px] font-semibold tracking-[.06em] uppercase text-faint">
-                Recently used
-              </div>
-              <div className="flex flex-col gap-0.5 mb-2.5">
-                {RECENT.map((recentSong) => (
-                  <button
-                    key={recentSong.id}
-                    onClick={() => patch({ songId: recentSong.id, idx: 0 })}
-                    className={cx(
-                      "flex items-center gap-2.25 w-full p-[7px_8px] rounded-2 border border-transparent text-text cursor-pointer",
-                      recentSong.id === state.songId ? "bg-raise" : "bg-transparent"
-                    )}
-                  >
-                    <span className="font-mono text-[10px] text-faint w-8.5 text-left">{recentSong.when}</span>
-                    <span className="flex-1 text-left text-[13px] truncate">{recentSong.title}</span>
-                    <span className="font-mono text-[10px] text-faint">{recentSong.key}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-
           <div className="flex items-center justify-between p-[8px_6px_6px]">
             <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">
               Library
@@ -421,7 +396,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
               return (
                 <div
                   key={songEntry.id}
-                  onClick={() => patch({ songId: songEntry.id, idx: 0, black: false, blank: false })}
+                  onClick={() => patch({ songId: songEntry.id, idx: 0 })}
                   className={cx(
                     "p-[11px_12px_10px] rounded-xl cursor-pointer border",
                     on
@@ -514,7 +489,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
               {state.lineups.map((lineup) => (
                 <div
                   key={lineup.id}
-                  onClick={() => setViewingLineupId(lineup.id)}
+                  onClick={() => patch({ viewingLineupId: lineup.id })}
                   className="flex items-center gap-2.5 p-[11px_12px] rounded-xl cursor-pointer border border-border bg-panel2"
                 >
                   <div className="flex-1 min-w-0">
@@ -561,7 +536,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
           allSongs={allSongs}
           draggedSongIndex={draggedSongIndex}
           setDraggedSongIndex={setDraggedSongIndex}
-          onBack={() => setViewingLineupId(null)}
+          onBack={() => patch({ viewingLineupId: null })}
         />
       )}
     </aside>
@@ -681,7 +656,7 @@ function LineupDetail({
                   setDraggedLibrarySongId(null);
                 }}
                 onDragEnd={() => setDraggedSongIndex(null)}
-                onClick={() => patch({ songId: lineupSong.id, idx: 0, black: false, blank: false })}
+                onClick={() => patch({ songId: lineupSong.id, idx: 0 })}
                 className={cx(
                   "flex items-start gap-2 p-[11px_12px_10px] rounded-xl cursor-pointer border",
                   on ? "border-accent bg-accent-soft shadow-[0_0_0_3px_var(--accent-soft)]" : "border-border bg-panel2 shadow-none",

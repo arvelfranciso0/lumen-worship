@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { cx } from "./cx";
-import { CountdownControl } from "./CountdownControl";
 import { InteractiveButton } from "./Interactive";
 import { LookBackground } from "./LookBackground";
 import { SlideStage } from "./SlideStage";
@@ -48,7 +47,7 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
   const {
     state, patch, go, cur, nxt, prv, idx, hidden, look, allLooks, lyricFamily,
     outputAspectRatio, outputStatus, boundaryPrevLabel, boundaryNextLabel, startPresenting,
-    canGoNext, canGoPrev, atEndOverflow, atStartOverflow, slideCount,
+    canGoNext, canGoPrev, atEndOverflow, atStartOverflow, slideCount, isPresenting,
   } = lumen;
 
   const isMobile = breakpoint === "mobile";
@@ -140,14 +139,16 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
       )}
       style={panelWidth === undefined ? undefined : { width: panelWidth }}
     >
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3.5">
+      {/* FIXED TOP: Live output / Previous / Next up / progress / transport
+          are the operator's always-on situational awareness — kept out of
+          the scroll container below so expanding Operator notes can never
+          push them out of view. */}
+      <div className="flex-none flex flex-col gap-3.5">
         {/* LIVE OUTPUT */}
         <div className="flex flex-col gap-2.5 flex-none">
           <div className="flex items-center gap-2.5 flex-none">
             <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Live output</span>
             <span className="text-[12.5px] text-muted truncate">{cur.label}</span>
-            <div className="flex-1" />
-            <CountdownControl />
           </div>
           {/* containerType "size" is what makes this box a scale model of the
               audience screen: everything SlideStage draws inside it is sized in
@@ -161,13 +162,17 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
             className="relative w-full rounded-2xl overflow-hidden border border-border2 bg-black shadow-app flex-none"
             style={{ aspectRatio: outputAspectRatio, containerType: "size" }}
           >
-            {/* preview when a different live decode is already showing this same
-                background elsewhere (PresentationOverlay or the second-monitor
-                OutputWindowApp) — avoids two simultaneous full video decodes of
-                the same source, real CPU cost on low-end hardware. Has no visual
-                effect for image/gradient looks, which render identically either
-                way. */}
-            <LookBackground look={curLook} black={state.black} preview={state.presenting || outputStatus.active} />
+            {/* preview only while PresentationOverlay is covering this entire
+                window (state.presenting, single-monitor fallback) — the Live
+                output box sits behind it then, so its own decode would just be
+                wasted CPU. NOT set for outputStatus.active: the second-monitor
+                OutputWindowApp runs in its own BrowserWindow/renderer process,
+                so this box is the operator's only way to see the audience
+                background actually playing — freezing it on a still poster
+                the moment a second display connects would defeat the point of
+                a live preview. Has no visual effect for image/gradient looks,
+                which render identically either way. */}
+            <LookBackground look={curLook} black={state.black} preview={state.presenting} />
             <SlideStage
               stageRef={liveOutputRef}
               selectable
@@ -183,10 +188,12 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
               transitionKey={idx}
               captionMinFontSize={LIVE_CAPTION_MIN_SIZE}
             />
-            <div className="absolute top-2 left-2 flex items-center gap-1.5 p-[4px_8px] rounded-5 bg-[rgba(0,0,0,.45)] backdrop-blur">
-              <span className="w-1.5 h-1.5 rounded-full bg-danger" />
-              <span className="font-mono text-[9.5px] text-white tracking-[.06em]">LIVE</span>
-            </div>
+            {isPresenting && (
+              <div className="absolute top-2 left-2 flex items-center gap-1.5 p-[4px_8px] rounded-5 bg-[rgba(0,0,0,.45)] backdrop-blur">
+                <span className="w-1.5 h-1.5 rounded-full bg-danger" />
+                <span className="font-mono text-[9.5px] text-white tracking-[.06em]">LIVE</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -298,6 +305,13 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
           </InteractiveButton>
         </div>
 
+      </div>
+
+      {/* SCROLLABLE BOTTOM: everything below the transport row is secondary
+          to the live preview, so this region gets its own scroll boundary
+          — expanding Operator notes only grows this container, never the
+          fixed top region above. */}
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3.5">
         <div className="flex gap-2 flex-none mt-3 pt-3 border-t border-border" data-tour="transport">
           <button
             onClick={() => patch((s) => ({ blank: !s.blank, black: false }))}

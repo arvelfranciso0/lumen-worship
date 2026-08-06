@@ -12,7 +12,13 @@ export type PersistedPrefs = Partial<{
   layoutVisibility: LayoutVisibility;
   lyricStyle: LyricStyle;
   bibleHighlights: BibleHighlights;
-  outputEnabled: boolean;
+  // outputEnabled deliberately does NOT live here anymore — it used to be
+  // persisted, which meant relaunching the app (or a stale write from a
+  // previous session) could silently resume second-monitor presenting
+  // without the user ever clicking Present. It's now session-only runtime
+  // state in useLumen's LumenState. An existing install may still have an
+  // `outputEnabled` key sitting in storage from before this change; it's
+  // simply never read back into PersistedPrefs, so it's inert.
   outputDisplayId: number | "auto";
   autoUpdateEnabled: boolean;
   // Deliberately no longer written/read once tourSeen exists — see the
@@ -27,6 +33,15 @@ export type PersistedPrefs = Partial<{
   operatorNotes: string;
   tourSeen: TourSeenFlags;
   deletedLookIds: string[];
+  // Per-lineup slide background overrides — keyed by lineup id, then song id,
+  // holding an array of Look/CustomBackground ids parallel to that song's
+  // sections (mirrors Section.lookId, see data.ts). Deliberately kept out of
+  // songOverrides/the shared Song record: a background picked for a song
+  // while editing it *inside* a lineup must not change that song in the main
+  // Songs library or in any other lineup containing it. `null` entries (JSON
+  // round-tripping turns an omitted/undefined array slot into `null`) mean
+  // "no lineup-specific pick for this slide yet".
+  lineupSongLooks: Record<string, Record<string, (string | null)[]>>;
 }>;
 
 export type PersistedData = {

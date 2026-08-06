@@ -253,7 +253,7 @@ const UNDO_STACK_CAP = 50;
 // operator by jumping them somewhere else in the app.
 const HISTORY_TRACKED_KEYS: (keyof LumenState)[] = [
   "songOverrides", "songMetaOverrides", "setIds", "setName", "lyricStyle",
-  "customBackgrounds", "bibleHighlights", "favs", "lineups",
+  "customBackgrounds", "bibleHighlights", "favs", "lineups", "lineupSongLooks",
 ];
 
 function pickTrackedKeys(source: LumenState, keys: (keyof LumenState)[]): Partial<LumenState> {
@@ -272,6 +272,11 @@ type LumenState = {
   look: string;
   scale: number;
   presenting: boolean;
+  // 3/2/1 countdown shown on the Present button between the click and actual
+  // presenting starting — null when no countdown is running. Deliberately
+  // NOT persisted (same reasoning as outputEnabled below): it's a transient
+  // in-session animation, never something to resume across a reload.
+  presentCountdown: number | null;
   blank: boolean;
   black: boolean;
   settingsOpen: boolean;
@@ -292,18 +297,36 @@ type LumenState = {
   lineups: Lineup[];
   lineupModalOpen: boolean;
   editingLineupId: string | null;
+  // Which lineup's detail view (Sidebar's LineupDetail) is currently open —
+  // ephemeral, never persisted. This, not activeLineupId (the lineup loaded
+  // into the running set/presentation), is "the lineup currently being
+  // edited": an operator can browse into and tweak a lineup's song
+  // backgrounds ahead of time without ever activating it. Lifted out of
+  // Sidebar's own local state so BackgroundsPanel (a sibling) can read it to
+  // scope background edits — see lineupScopeId below.
+  viewingLineupId: string | null;
   layoutSizes: LayoutSizes;
   layoutVisibility: LayoutVisibility;
   customBackgrounds: CustomBackground[];
   downloadedTranslations: DownloadedBibleTranslation[];
   lyricStyle: LyricStyle;
   bibleHighlights: BibleHighlights;
-  // Whether a second-monitor "audience output" window should be open, and
-  // which display it targets — "auto" picks the first non-primary display.
-  // Persisted like any other pref; the actual window lives in the Electron
-  // main process (see electronDisplay.ts / OutputWindowApp.tsx) and is a
-  // no-op in the plain browser build.
+  // Whether a second-monitor "audience output" window should be open right
+  // now — the actual window lives in the Electron main process (see
+  // electronDisplay.ts / OutputWindowApp.tsx) and this is a no-op in the
+  // plain browser build. Deliberately NOT persisted (see loadAll's hydration
+  // and the setPrefs call below, both of which skip it): this flips true
+  // only from an explicit user action in the current session (Present/F5 via
+  // startPresenting, or the Displays modal toggle), never merely from a
+  // second display being detected and never resumed from a previous
+  // session — otherwise reopening the app with a monitor still (or newly)
+  // connected would silently start presenting again with nobody having
+  // clicked Present. `outputStatus` (derived from the main process, see
+  // below) is what reports whether a display is merely detected vs. actually
+  // live, independent of this flag.
   outputEnabled: boolean;
+  // Which display "auto"/a specific id should target — persisted, since it's
+  // just a targeting preference and carries no auto-present implication.
   outputDisplayId: number | "auto";
   // Whether the desktop build should check GitHub Releases for updates on
   // launch (see the header bell / electron/main.js). A no-op preference in
@@ -323,6 +346,10 @@ type LumenState = {
   tourSeen: TourSeenFlags;
   deletedLookIds: string[];
   songMetaOverrides: Record<string, Partial<Song>>;
+  // See PersistedPrefs.lineupSongLooks — kept separate from songOverrides so
+  // a background picked while editing a song *inside* a lineup never mutates
+  // that song's shared library record or leaks into another lineup.
+  lineupSongLooks: Record<string, Record<string, (string | null)[]>>;
 
   // ---- Redesign additions (ephemeral — never persisted) ----
   confirmDialog: ConfirmDialogState | null;
@@ -384,13 +411,13 @@ type Slide = {
 const INITIAL_STATE: LumenState = {
   query: "", chip: "All", sort: "Recent", songId: "s3", idx: 2,
   favs: { s1: true, s3: true, s6: true },
-  look: "aurora", scale: 1, presenting: false, blank: false, black: false,
+  look: "aurora", scale: 1, presenting: false, presentCountdown: null, blank: false, black: false,
   settingsOpen: false, font: DEFAULT_LYRIC_FONT, theme: null,
   mode: "songs", book: "Genesis", chapter: 1, trans: DEFAULT_TRANSLATION,
   setIds: ["s1", "s3", "s4", "s6"], setName: "Set 1", activeLineupId: null, setPanelOpen: false,
   songOverrides: {}, lyricsEditorOpen: false,
   customSongs: [], uploadOpen: false,
-  lineups: [], lineupModalOpen: false, editingLineupId: null,
+  lineups: [], lineupModalOpen: false, editingLineupId: null, viewingLineupId: null,
   layoutSizes: DEFAULT_LAYOUT_SIZES, layoutVisibility: DEFAULT_LAYOUT_VISIBILITY,
   customBackgrounds: [],
   downloadedTranslations: [],
@@ -405,6 +432,7 @@ const INITIAL_STATE: LumenState = {
   operatorNotes: "",
   tourSeen: TOUR_SEEN_DEFAULT, deletedLookIds: [],
   songMetaOverrides: {},
+  lineupSongLooks: {},
 
   confirmDialog: null, saveStatus: "idle",
   displaysModalOpen: false, hotkeysOpen: false, globalSearchOpen: false, globalSearchQuery: "",
@@ -500,6 +528,12 @@ export function useLumen(props: LumenProps = {}) {
         songOverrides: data.songOverrides,
         songMetaOverrides: data.songMetaOverrides,
         ...data.prefs,
+        // Force-off on every launch, overriding whatever `...data.prefs`
+        // above may have spread in. Older builds did persist this field, so
+        // an existing install can still have `outputEnabled: true` sitting
+        // in storage from a previous session — read it, then never trust it
+        // as "resume presenting". See the LumenState field comment for why.
+        outputEnabled: false,
         // Migrates the old single global hasSeenOnboarding flag into the new
         // per-mode tourSeen flags, once — only when a saved tourSeen isn't
         // already present (a fresh install has neither, and gets all-false).
@@ -553,12 +587,16 @@ export function useLumen(props: LumenProps = {}) {
         favs: state.favs, look: state.look, scale: state.scale, theme: state.theme,
         font: state.font, setIds: state.setIds, setName: state.setName,
         layoutSizes: state.layoutSizes, layoutVisibility: state.layoutVisibility, lyricStyle: state.lyricStyle,
-        bibleHighlights: state.bibleHighlights, outputEnabled: state.outputEnabled, outputDisplayId: state.outputDisplayId,
+        // outputEnabled is deliberately NOT persisted — see its LumenState
+        // field comment; only outputDisplayId (a targeting preference, not a
+        // "start presenting" trigger) is saved.
+        bibleHighlights: state.bibleHighlights, outputDisplayId: state.outputDisplayId,
         autoUpdateEnabled: state.autoUpdateEnabled, hasSeenOnboarding: state.hasSeenOnboarding,
         performanceMode: state.performanceMode, transitionType: state.transitionType,
         transitionDurationMs: state.transitionDurationMs,
         operatorNotes: state.operatorNotes, tourSeen: state.tourSeen,
         deletedLookIds: state.deletedLookIds,
+        lineupSongLooks: state.lineupSongLooks,
       }).then(() => {
         patch({ saveStatus: "saved" });
         setTimeout(() => patch({ saveStatus: "idle" }), 1500);
@@ -569,9 +607,9 @@ export function useLumen(props: LumenProps = {}) {
     patch,
     state.favs, state.look, state.scale, state.theme, state.font, state.setIds, state.setName,
     state.layoutSizes, state.layoutVisibility, state.lyricStyle, state.bibleHighlights,
-    state.outputEnabled, state.outputDisplayId, state.autoUpdateEnabled, state.hasSeenOnboarding,
+    state.outputDisplayId, state.autoUpdateEnabled, state.hasSeenOnboarding,
     state.performanceMode, state.transitionType, state.transitionDurationMs,
-    state.operatorNotes, state.tourSeen, state.deletedLookIds,
+    state.operatorNotes, state.tourSeen, state.deletedLookIds, state.lineupSongLooks,
   ]);
 
   const [bibleCache, setBibleCache] = useState<Record<string, BibleTranslation>>({});
@@ -718,34 +756,52 @@ export function useLumen(props: LumenProps = {}) {
     [state.customSongs, state.songMetaOverrides]
   );
 
-  const song = useMemo(() => {
-    const baseSong = allSongs.find((candidate) => candidate.id === state.songId) || allSongs[0];
-    const override = state.songOverrides[baseSong.id];
-    return override ? { ...baseSong, sections: override } : baseSong;
-  }, [state.songId, state.songOverrides, allSongs]);
   const allLooks = useMemo(
     () => [...state.customBackgrounds, ...LOOKS.filter((lookEntry) => !state.deletedLookIds.includes(lookEntry.id))],
     [state.customBackgrounds, state.deletedLookIds]
   );
+
+  // Which lineup (if any) the currently-viewed song's background edits should
+  // be scoped to. viewingLineupId (Sidebar's LineupDetail) wins over
+  // activeLineupId (the running/presenting lineup) since it's the more
+  // specific "the operator opened this lineup and clicked this song" signal;
+  // activeLineupId only stands in for the rarer case of landing on a lineup's
+  // song without going through LineupDetail (e.g. GlobalSearchModal's jump).
+  // Guarded to only apply when the viewed song is actually a member of that
+  // lineup, so a stale id never silently scopes an unrelated song's edits.
+  const lineupScopeId = useMemo(() => {
+    const candidateId = state.viewingLineupId ?? state.activeLineupId;
+    if (!candidateId) return null;
+    const candidateLineup = state.lineups.find((entry) => entry.id === candidateId);
+    return candidateLineup && candidateLineup.songIds.includes(state.songId) ? candidateId : null;
+  }, [state.viewingLineupId, state.activeLineupId, state.lineups, state.songId]);
+
+  const song = useMemo(() => {
+    const baseSong = allSongs.find((candidate) => candidate.id === state.songId) || allSongs[0];
+    const override = state.songOverrides[baseSong.id];
+    const baseSections = override ?? baseSong.sections;
+    if (!lineupScopeId) return override ? { ...baseSong, sections: baseSections } : baseSong;
+    // Lineup-scoped backgrounds layer on top of (but never write back to)
+    // songOverrides/the shared Song record — see PersistedPrefs.lineupSongLooks.
+    // A slide with no lineup-specific pick yet falls back to the song's own
+    // (shared) background, and only once that's unset too to the first
+    // available background — never to the shared, mutable `state.look`
+    // pref, which would make a lineup's fallback depend on whatever the
+    // operator last clicked elsewhere.
+    const lineupLookIds = state.lineupSongLooks[lineupScopeId]?.[baseSong.id];
+    const sections = baseSections.map((section, sectionIndex) => {
+      const lineupLookId = lineupLookIds?.[sectionIndex];
+      const lookId = lineupLookId != null ? lineupLookId : (section.lookId ?? allLooks[0]?.id);
+      return { ...section, lookId };
+    });
+    return { ...baseSong, sections };
+  }, [state.songId, state.songOverrides, allSongs, lineupScopeId, state.lineupSongLooks, allLooks]);
   const look = useMemo(() => allLooks.find((lookEntry) => lookEntry.id === state.look) || allLooks[0] || LOOKS[0], [allLooks, state.look]);
 
   const setSongs = useMemo(
     () => state.setIds.map((songId) => allSongs.find((candidate) => candidate.id === songId)).filter((maybeSong): maybeSong is Song => !!maybeSong),
     [state.setIds, allSongs]
   );
-  const inSet = state.mode === "songs" && state.setIds.includes(song.id);
-  const toggleSetSong = useCallback((songId: string) => {
-    patch((previousState) => ({
-      setIds: previousState.setIds.includes(songId)
-        ? previousState.setIds.filter((existingSongId) => existingSongId !== songId)
-        : [...previousState.setIds, songId],
-      // Editing the working set by hand detaches it from whichever saved
-      // lineup it was copied from — otherwise the header would keep
-      // claiming a song count that no longer matches that lineup.
-      activeLineupId: null,
-    }));
-  }, [patch]);
-
   const createLineup = useCallback((name: string, songIds: string[]) => {
     const lineupId = "lineup-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const lineup: Lineup = { id: lineupId, name, songIds };
@@ -768,14 +824,21 @@ export function useLumen(props: LumenProps = {}) {
 
   const deleteLineup = useCallback((lineupId: string) => {
     getRepository().deleteLineup(lineupId);
-    patch((previousState) => ({
-      lineups: previousState.lineups.filter((lineup) => lineup.id !== lineupId),
-      // The header shows the working set's name/count, copied from the
-      // lineup that seeded it — if that's the lineup just deleted, the
-      // label would otherwise keep pointing at a lineup that no longer
-      // exists anywhere in the Lineups tab.
-      ...(previousState.activeLineupId === lineupId ? { setName: "Untitled set", activeLineupId: null } : {}),
-    }));
+    patch((previousState) => {
+      // Drops this lineup's slot in lineupSongLooks along with it — otherwise
+      // the per-lineup background data just accumulates forever for a lineup
+      // that no longer exists anywhere in the app.
+      const { [lineupId]: _removedLineupLooks, ...remainingLineupSongLooks } = previousState.lineupSongLooks;
+      return {
+        lineups: previousState.lineups.filter((lineup) => lineup.id !== lineupId),
+        lineupSongLooks: remainingLineupSongLooks,
+        // The header shows the working set's name/count, copied from the
+        // lineup that seeded it — if that's the lineup just deleted, the
+        // label would otherwise keep pointing at a lineup that no longer
+        // exists anywhere in the Lineups tab.
+        ...(previousState.activeLineupId === lineupId ? { setName: "Untitled set", activeLineupId: null } : {}),
+      };
+    });
   }, [patch]);
 
   const activateLineup = useCallback((lineupId: string) => {
@@ -1069,10 +1132,40 @@ export function useLumen(props: LumenProps = {}) {
   // stay so notes saved by earlier builds are still findable rather than
   // silently orphaned.
 
+  // Writes a lookId to some subset of the current song's slides. Outside a
+  // lineup this is exactly the old behaviour (a plain songOverrides write via
+  // saveLyrics). *Inside* one (lineupScopeId set), it writes into
+  // lineupSongLooks[lineupScopeId][song.id] instead — a background picked for
+  // a song while editing it inside a lineup must never touch that song's
+  // shared library record or show up in any other lineup containing it (see
+  // the `song` useMemo above for how this layers back on read).
+  const setSectionLooks = useCallback((sectionIndexes: number[], lookId: string | undefined) => {
+    if (lineupScopeId) {
+      const targetSongId = song.id;
+      patch((previousState) => {
+        const forLineup = previousState.lineupSongLooks[lineupScopeId] ?? {};
+        // song.sections is already the merged (lineup-aware) view, so its
+        // length is always right here even on the very first pick for this
+        // song/lineup pair, when there's no stored override array yet.
+        const currentLookIds: (string | null)[] = forLineup[targetSongId] ?? song.sections.map(() => null);
+        const nextLookIds = currentLookIds.slice();
+        for (const sectionIndex of sectionIndexes) nextLookIds[sectionIndex] = lookId ?? null;
+        return {
+          lineupSongLooks: {
+            ...previousState.lineupSongLooks,
+            [lineupScopeId]: { ...forLineup, [targetSongId]: nextLookIds },
+          },
+        };
+      });
+      return;
+    }
+    const sectionIndexSet = new Set(sectionIndexes);
+    saveLyrics(song.sections.map((section, index) => (sectionIndexSet.has(index) ? { ...section, lookId } : section)));
+  }, [lineupScopeId, song.id, song.sections, patch, saveLyrics]);
+
   const setSlideLook = useCallback((sectionIndex: number, lookId: string | undefined) => {
-    const updated = song.sections.map((section, index) => (index === sectionIndex ? { ...section, lookId } : section));
-    saveLyrics(updated);
-  }, [song.sections, saveLyrics]);
+    setSectionLooks([sectionIndex], lookId);
+  }, [setSectionLooks]);
 
   // Picking a background normally applies to every slide sharing the current
   // slide's label, so a song's three Choruses get one background rather than one
@@ -1081,19 +1174,25 @@ export function useLumen(props: LumenProps = {}) {
   const applySlideLookToLabel = useCallback((sectionIndex: number, lookId: string | undefined) => {
     const label = song.sections[sectionIndex]?.label;
     if (label === undefined) return;
-    saveLyrics(song.sections.map((section) => (section.label === label ? { ...section, lookId } : section)));
-  }, [song.sections, saveLyrics]);
+    const matchingIndexes = song.sections.reduce<number[]>(
+      (indexes, section, index) => (section.label === label ? [...indexes, index] : indexes), []
+    );
+    setSectionLooks(matchingIndexes, lookId);
+  }, [song.sections, setSectionLooks]);
 
   // Sets — or clears, with undefined — the per-slide override on *every* slide of
-  // the current song, in one saveLyrics call.
+  // the current song, in one write.
   //
   // Separate from the label-scoped version above because the Backgrounds panel's
   // "Apply to all"/"Apply to remaining" buttons used to route through it: the
   // button said "all" and meant "all the Choruses", which is why pressing it
   // appeared to do nothing whenever the rest of the deck used a different label.
+  // Deck-wide still means "every slide of this one song" — not every song in
+  // the lineup — but which storage that lands in (shared vs. lineup-scoped)
+  // is exactly what setSectionLooks decides.
   const applyLookToAllSlides = useCallback((lookId: string | undefined) => {
-    saveLyrics(song.sections.map((section) => ({ ...section, lookId })));
-  }, [song.sections, saveLyrics]);
+    setSectionLooks(song.sections.map((_section, index) => index), lookId);
+  }, [song.sections, setSectionLooks]);
 
   const addSong = useCallback((parsed: ParsedSong) => {
     const newSongId = "custom-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -1218,30 +1317,33 @@ export function useLumen(props: LumenProps = {}) {
   const go = useCallback((direction: number) => {
     if (direction === 0) return;
     setState((previousState) => {
-      const clearedFlags = { black: false, blank: false };
       const count = previousState.mode === "bible" ? passage.length : song.sections.length;
       const currentIndex = Math.min(Math.max(previousState.idx, PAST_START_INDEX), count);
       const step = resolveDeckStep(currentIndex, count, direction);
 
       if (step.kind === "hold") return previousState;
-      if (step.kind === "index") return { ...previousState, idx: step.idx, ...clearedFlags };
+      // Deliberately does NOT touch black/blank — Blank/Black is only ever
+      // toggled by its own button (see PreviewPanel's blackout controls), so
+      // navigating slides/verses while blacked out keeps the output blank
+      // until the operator explicitly turns it back off.
+      if (step.kind === "index") return { ...previousState, idx: step.idx };
 
       if (previousState.mode === "bible") {
         const position = direction > 0
           ? resolveNextVerse(bibleBooks, previousState.book, previousState.chapter, currentIndex)
           : resolvePreviousVerse(bibleBooks, previousState.book, previousState.chapter, currentIndex);
         if (position) {
-          return { ...previousState, book: position.book, chapter: position.chapter, idx: position.verseIndex, ...clearedFlags };
+          return { ...previousState, book: position.book, chapter: position.chapter, idx: position.verseIndex };
         }
       } else if (previousState.mode === "lineups") {
         const neighbour = resolveAdjacentSetSong(previousState.setIds, previousState.songId, direction, sectionCountOf);
         if (neighbour) {
-          return { ...previousState, songId: neighbour.songId, idx: neighbour.idx, ...clearedFlags };
+          return { ...previousState, songId: neighbour.songId, idx: neighbour.idx };
         }
       }
 
       // Nothing to cross into: land on the blank end-of-the-line position.
-      return { ...previousState, idx: step.overflowIndex, ...clearedFlags };
+      return { ...previousState, idx: step.overflowIndex };
     });
   }, [passage.length, song.sections.length, bibleBooks, sectionCountOf]);
 
@@ -1321,11 +1423,22 @@ export function useLumen(props: LumenProps = {}) {
     const sections = state.songOverrides[neighbour.songId] ?? baseSong.sections;
     const section = sections[neighbour.idx];
     if (!section) return undefined;
+    // This preview only ever crosses into the neighbouring song of the
+    // *running* set (see go()'s "lineups" branch below), so activeLineupId —
+    // not lineupScopeId, which can point at a lineup being merely browsed —
+    // is the right scope: it must show the same background the operator
+    // would actually land on.
+    const lineupLookId = state.activeLineupId
+      ? state.lineupSongLooks[state.activeLineupId]?.[neighbour.songId]?.[neighbour.idx]
+      : undefined;
+    const lookId = lineupLookId != null
+      ? lineupLookId
+      : section.lookId ?? (state.activeLineupId ? allLooks[0]?.id : undefined);
     return {
       label: section.label, lines: section.lines, lineHighlights: section.lineHighlights,
-      slideNumber: neighbour.idx + 1, caption: "", lookId: section.lookId, note: section.note,
+      slideNumber: neighbour.idx + 1, caption: "", lookId, note: section.note,
     };
-  }, [allSongs, state.songOverrides]);
+  }, [allSongs, state.songOverrides, state.activeLineupId, state.lineupSongLooks, allLooks]);
 
   // Previous/Next up previews show whatever go() would actually land on — the
   // adjacent slide normally, otherwise a synthesized preview of the next verse
@@ -1505,10 +1618,25 @@ export function useLumen(props: LumenProps = {}) {
     if (!electronDisplay) return;
     if (state.outputEnabled) {
       electronDisplay.openOutput(state.outputDisplayId).then((result) => {
-        if (!result.ok) console.error("Failed to open second-monitor output window:", result.reason);
+        if (!result.ok) {
+          // Fails once, loudly, and gives up rather than getting stuck: with
+          // no display to open onto (e.g. the monitor was unplugged between
+          // Present being clicked and this resolving, or the persisted
+          // outputDisplayId no longer matches anything connected), leaving
+          // outputEnabled true would keep Header/DisplaysModal reporting a
+          // presenting session that never actually started ("Waiting…"
+          // forever) with nothing to ever flip it back. Resetting it here
+          // both fixes that status and means this effect won't re-fire and
+          // retry on its own — a fresh attempt only happens from a new,
+          // deliberate Present click.
+          console.error("Failed to open second-monitor output window:", result.reason);
+          patch({ outputEnabled: false });
+          return;
+        }
         setOutputStatusFromOpenResult();
       }).catch((error) => {
         console.error("output:open IPC call failed:", error);
+        patch({ outputEnabled: false });
       });
     } else {
       electronDisplay.closeOutput().catch((error) => {
@@ -1521,7 +1649,7 @@ export function useLumen(props: LumenProps = {}) {
         console.error("display:status IPC call failed:", error);
       });
     }
-  }, [state.outputEnabled, state.outputDisplayId]);
+  }, [state.outputEnabled, state.outputDisplayId, patch]);
 
   // Present/F5/Fullscreen: if a second monitor is available, route the
   // audience view there (same mechanism as the Settings output toggle) and
@@ -1545,13 +1673,53 @@ export function useLumen(props: LumenProps = {}) {
     return targetDisplay && targetDisplay.height > 0 ? targetDisplay.width / targetDisplay.height : 16 / 9;
   }, [outputStatus.display, outputStatus.displays]);
 
-  const startPresenting = useCallback(() => {
-    if (secondaryDisplayAvailable) {
-      patch((previousState) => (previousState.outputEnabled ? {} : { outputEnabled: true }));
-      return;
+  // Ticking timer id for the 3-2-1 countdown below — a ref (not state) so it
+  // survives re-renders and stopPresenting/unmount can reliably clear
+  // whichever tick is currently in flight.
+  const presentCountdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPresentCountdownTimer = useCallback(() => {
+    if (presentCountdownTimerRef.current !== null) {
+      clearTimeout(presentCountdownTimerRef.current);
+      presentCountdownTimerRef.current = null;
     }
-    patch({ presenting: true });
-  }, [patch, secondaryDisplayAvailable]);
+  }, []);
+
+  useEffect(() => clearPresentCountdownTimer, [clearPresentCountdownTimer]);
+
+  const isPresenting = state.presenting || state.outputEnabled;
+
+  const startPresenting = useCallback(() => {
+    // Guards double-clicks/repeated F5 presses: no-op once presenting is
+    // already live, or while a countdown is already ticking.
+    if (isPresenting || presentCountdownTimerRef.current !== null || state.presentCountdown !== null) return;
+
+    const tick = (remainingSeconds: number) => {
+      if (remainingSeconds <= 0) {
+        presentCountdownTimerRef.current = null;
+        // Clearing the countdown and flipping the real presenting state land
+        // in the same patch/tick — this is the one moment actual presenting
+        // starts, so there is never a frame where the countdown is gone but
+        // isPresenting hasn't gone true yet.
+        patch((previousState) => ({
+          presentCountdown: null,
+          ...(secondaryDisplayAvailable
+            ? (previousState.outputEnabled ? {} : { outputEnabled: true })
+            : { presenting: true }),
+        }));
+        return;
+      }
+      patch({ presentCountdown: remainingSeconds });
+      presentCountdownTimerRef.current = setTimeout(() => tick(remainingSeconds - 1), 1000);
+    };
+
+    tick(3);
+  }, [isPresenting, patch, secondaryDisplayAvailable, state.presentCountdown]);
+
+  const stopPresenting = useCallback(() => {
+    clearPresentCountdownTimer();
+    patch({ presentCountdown: null, presenting: false, outputEnabled: false });
+  }, [clearPresentCountdownTimer, patch]);
 
   // Mirrors state.presenting into the operator BrowserWindow's real OS
   // fullscreen state (a no-op in the plain browser build). Only reached in
@@ -1570,8 +1738,14 @@ export function useLumen(props: LumenProps = {}) {
       const isCmdOrCtrl = keyboardEvent.metaKey || keyboardEvent.ctrlKey;
       if (pressedKey === "F5") { keyboardEvent.preventDefault(); startPresenting(); return; }
       if (pressedKey === "Escape") {
+        // Routed through stopPresenting (not a raw `presenting: false` patch)
+        // so Escape also cancels an in-flight countdown and drops
+        // outputEnabled — otherwise a countdown started right before Escape
+        // would keep ticking and still start presenting a moment later,
+        // ignoring the Escape press entirely.
+        stopPresenting();
         patch({
-          presenting: false, settingsOpen: false, setPanelOpen: false, lyricsEditorOpen: false, uploadOpen: false,
+          settingsOpen: false, setPanelOpen: false, lyricsEditorOpen: false, uploadOpen: false,
           lineupModalOpen: false, editingLineupId: null, displaysModalOpen: false, hotkeysOpen: false,
           globalSearchOpen: false, globalSearchQuery: "", songEditorOpen: false,
           bibleTranslationsPanelOpen: false, sidebarDrawerOpen: false,
@@ -1605,7 +1779,7 @@ export function useLumen(props: LumenProps = {}) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, patch, startPresenting, undo, redo]);
+  }, [go, patch, startPresenting, stopPresenting, undo, redo]);
 
   // Pushes the current live slide to the output window on every change —
   // this is the one place that assembles exactly what OutputWindowApp needs,
@@ -1680,13 +1854,13 @@ export function useLumen(props: LumenProps = {}) {
   return {
     state, patch, theme, accent, ref, passage, vnum, vlabel, song, look, allLooks, slides, go, idx, cur, nxt, prv, hidden,
     bible, list, chipBase, tabStyle, pill, toolBtn, lyricFamily, fit,
-    setSongs, inSet, toggleSetSong, saveLyrics, applyLiveHighlight, removeLiveHighlight, addSong, deleteSong, allSongs, toggleFavorite,
+    setSongs, saveLyrics, applyLiveHighlight, removeLiveHighlight, addSong, deleteSong, allSongs, toggleFavorite,
     createLineup, updateLineup, deleteLineup, activateLineup, reorderLineupSongs,
     addSongToLineup, removeSongFromLineup, renameLineup,
     adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
-    bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus, outputAspectRatio,
+    bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus, outputAspectRatio, secondaryDisplayAvailable,
     importBibleTranslation, removeBibleTranslation, openBibleDownloadsPage, bibleImportError,
-    updateStatus, installUpdate, startPresenting, prefsLoaded,
+    updateStatus, installUpdate, startPresenting, stopPresenting, isPresenting, presentCountdown: state.presentCountdown, prefsLoaded,
     gpuAccelerationDisabled, setGpuAccelerationDisabled,
     undo, redo, canUndo, canRedo,
     setSongMetaOverride, duplicateSongAsReprise,

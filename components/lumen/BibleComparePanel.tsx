@@ -45,7 +45,7 @@ export function BibleComparePanel({ lumen }: { lumen: UseLumen }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="text-[10.5px] font-semibold tracking-[.06em] uppercase text-faint">Compare 2 translations</div>
-      <div className="flex gap-2">
+      <div className="flex gap-2" data-tour="bible-compare-versions">
         <select
           value={state.trans}
           onChange={(changeEvent) => patch({ trans: changeEvent.target.value })}

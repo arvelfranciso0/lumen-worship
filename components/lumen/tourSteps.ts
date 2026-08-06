@@ -2,13 +2,20 @@ import type { TourMode } from "./data";
 
 // What the tour needs to know about the app to decide which steps apply. Kept
 // to plain data so the step list stays pure and testable.
-export type TourContext = { hasBibleTranslations: boolean };
+export type TourContext = {
+  hasBibleTranslations: boolean;
+  // At least two translations downloaded — the minimum Compare needs to show
+  // its dropdowns instead of its "needs 2 translations" prompt. Kept separate
+  // from hasBibleTranslations rather than derived from it inline, so the
+  // Compare steps' gating reads the same way as every other step's.
+  hasMultipleBibleTranslations: boolean;
+};
 
 // Where a step's target element lives. A tour walks onto a surface by opening
 // it and walks off by closing it, so a sequence can lead the operator into a
 // dialog, guide them through it, and bring them back out — instead of pointing
 // at the button that opens the dialog and then going silent once it's up.
-export type TourSurface = "page" | "bibleTranslations" | "songEditor" | "lineupModal";
+export type TourSurface = "page" | "bibleTranslations" | "songEditor" | "lineupModal" | "bibleCompare";
 
 // Every step advances on a plain Next, and Skip is always available. The tour
 // describes the app; it never waits on the operator to complete a real action
@@ -33,6 +40,7 @@ export type TourStep = {
 
 const hasTranslations = (context: TourContext) => context.hasBibleTranslations;
 const needsTranslation = (context: TourContext) => !context.hasBibleTranslations;
+const hasMultipleTranslations = (context: TourContext) => context.hasMultipleBibleTranslations;
 
 export function stepSurface(step: TourStep): TourSurface {
   return step.surface ?? "page";
@@ -114,6 +122,21 @@ const ALL_STEPS: Record<TourMode, TourStep[]> = {
       title: "Pick a verse",
       body: "Each verse is its own slide. Click one to make it live; the arrow keys and transport buttons then step through, crossing into the next chapter or book on their own.",
       when: hasTranslations,
+    },
+    // --- Comparing translations: only offered once there are two to compare. ---
+    {
+      target: "bible-compare-toggle",
+      surface: "bibleCompare",
+      title: "Compare translations",
+      body: "Switch to Compare to see the same verse in two different translations side by side, instead of just the one you're browsing.",
+      when: hasMultipleTranslations,
+    },
+    {
+      target: "bible-compare-versions",
+      surface: "bibleCompare",
+      title: "Choose the two versions",
+      body: "The first dropdown shows your current version; the second — Compare with… — picks the translation to set beside it. Once both are chosen, that verse's text renders in both wordings, side by side.",
+      when: hasMultipleTranslations,
     },
     { target: "present", title: "Send it live", body: "Present (or F5) puts the current verse on the audience display — a second monitor if one's connected, otherwise fullscreen." },
   ],

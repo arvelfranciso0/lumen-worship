@@ -24,12 +24,12 @@ export function GlobalSearchModal({ lumen }: { lumen: UseLumen }) {
 
   const select = (result: SearchResult) => {
     if (result.kind === "song") {
-      patch({ mode: "songs", songId: result.id, idx: 0, black: false, blank: false, globalSearchOpen: false, globalSearchQuery: "" });
+      patch({ mode: "songs", songId: result.id, idx: 0, globalSearchOpen: false, globalSearchQuery: "" });
     } else if (result.kind === "slide-note") {
       const songId = result.id.split("|")[0];
-      patch({ mode: "songs", songId, idx: 0, black: false, blank: false, globalSearchOpen: false, globalSearchQuery: "" });
+      patch({ mode: "songs", songId, idx: 0, globalSearchOpen: false, globalSearchQuery: "" });
     } else if (result.kind === "bible-book") {
-      patch({ mode: "bible", book: result.id, chapter: 1, idx: 0, black: false, blank: false, globalSearchOpen: false, globalSearchQuery: "" });
+      patch({ mode: "bible", book: result.id, chapter: 1, idx: 0, globalSearchOpen: false, globalSearchQuery: "" });
     } else if (result.kind === "lineup") {
       const lineup = state.lineups.find((entry) => entry.id === result.id);
       if (lineup) patch({ setIds: lineup.songIds, setName: lineup.name, activeLineupId: lineup.id, mode: "lineups", globalSearchOpen: false, globalSearchQuery: "" });

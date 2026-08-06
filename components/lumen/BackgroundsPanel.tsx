@@ -43,7 +43,16 @@ export function BackgroundsPanel({ lumen }: { lumen: UseLumen }) {
     // own, so every pick there is already deck-wide by nature.
     if (armed || bible) {
       patch({ look: lookId, backgroundApplyAllArmed: false });
-      if (!bible) applyLookToAllSlides(undefined);
+      // Write the picked lookId onto every slide explicitly rather than
+      // clearing to undefined and relying on a downstream "no override ->
+      // deck default" fallback: inside a lineup, setSectionLooks stores that
+      // clear as a lineup-scoped null, and the `song` useMemo's fallback for
+      // an unset lineup pick deliberately never reads back the shared,
+      // mutable `state.look` pref (see its comment) — it lands on the first
+      // available background instead. An explicit write works the same
+      // in and out of a lineup, and outside one is a no-op behavioural change
+      // since state.look already equals lookId.
+      if (!bible) applyLookToAllSlides(lookId);
       return;
     }
     setSlideLook(slideIndex, lookId);
@@ -91,7 +100,7 @@ export function BackgroundsPanel({ lumen }: { lumen: UseLumen }) {
             onClick={() => patch((s) => ({ backgroundApplyAllArmed: !s.backgroundApplyAllArmed }))}
             title={bible
               ? "Not needed in Bible mode — a background picked here already applies to every verse"
-              : "Arms a one-shot — the next background you pick below applies to every slide in the deck"}
+              : "Choose a background to apply everywhere at once"}
             disabled={bible}
             className={cx(
               "h-6 px-2.5 rounded-full text-[11px] border disabled:opacity-40 not-disabled:cursor-pointer",
