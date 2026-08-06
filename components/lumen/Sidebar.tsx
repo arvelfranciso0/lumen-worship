@@ -75,6 +75,19 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
 
   const hasBibleTranslations = state.downloadedTranslations.length > 0;
 
+  // CHIPS' curated categories (Hymn/Contemporary/Español) stay first, in
+  // their existing order — anything else present in the actual song list
+  // (the category field is free text, see SongEditorModal) is appended after
+  // them, alphabetically. Without this, a song saved with a new category
+  // (e.g. "Youth") had no way to ever show up as a filter chip at all.
+  const songFilterChips = useMemo(() => {
+    const curated = CHIPS.slice(2);
+    const discovered = Array.from(new Set(allSongs.map((songEntry) => songEntry.cat).filter(Boolean)))
+      .filter((cat) => !curated.includes(cat))
+      .sort();
+    return [...CHIPS.slice(0, 2), ...curated, ...discovered];
+  }, [allSongs]);
+
   // Bible search. The box wrote state.query all along, but only the song list
   // ever read it — in Bible mode every book rendered regardless, so typing a
   // reference did nothing. The book list is now filtered as you type, and Enter
@@ -158,7 +171,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
             further down), which is where the operator-screen design puts them. */}
         {!bible && (
           <div className="flex flex-wrap gap-1.5">
-            {CHIPS.map((chip) => (
+            {songFilterChips.map((chip) => (
               <button key={chip} onClick={() => patch({ chip })} className={chipBase(state.chip === chip)}>
                 {chip}
               </button>
@@ -580,8 +593,12 @@ function LineupDetail({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-[10px_10px_20px]">
-      <div className="flex items-center gap-2 p-[4px_6px_12px]">
+    // Three independent regions rather than one big scroller: the header
+    // (title/rename/Active/Delete) always stays put, the active song list
+    // and the "All songs" library each get their own flex-1/bounded scroll
+    // area, so scrolling one never carries the others along with it.
+    <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-none flex items-center gap-2 p-[14px_10px_12px]">
         <button onClick={onBack} className="border-none cursor-pointer text-[16px] text-muted p-0.5 leading-none" title="Back to lineups">
           ←
         </button>
@@ -630,6 +647,7 @@ function LineupDetail({
         </InteractiveButton>
       </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto p-[0_10px_8px]">
       {lineupSongs.length === 0 ? (
         <div className="flex flex-col items-center gap-2 text-center p-[24px_18px] text-muted">
           <div className="text-[13px] font-semibold text-text">No songs in this lineup</div>
@@ -692,6 +710,7 @@ function LineupDetail({
           })}
         </div>
       )}
+      </div>
 
       <div
         onDragOver={(dragEvent) => dragEvent.preventDefault()}
@@ -699,15 +718,27 @@ function LineupDetail({
           if (draggedLibrarySongId) addSongToLineup(lineup.id, draggedLibrarySongId);
           setDraggedLibrarySongId(null);
         }}
-        className="mt-4 pt-3 border-t border-border"
+        className="flex-none p-[0_10px_20px] pt-3 border-t border-border"
       >
-        <button
-          onClick={() => setLibraryOpen((open) => !open)}
-          className="flex items-center gap-1.5 w-full border-none bg-transparent cursor-pointer p-[6px_2px] text-[11px] font-semibold tracking-[.06em] uppercase text-faint"
-        >
-          <span className={cx("transition-transform", libraryOpen && "rotate-90")}>▸</span>
-          All songs — drag or click + to add
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setLibraryOpen((open) => !open)}
+            className="flex items-center gap-1.5 flex-1 min-w-0 border-none bg-transparent cursor-pointer p-[6px_2px] text-[11px] font-semibold tracking-[.06em] uppercase text-faint"
+          >
+            <span className={cx("transition-transform", libraryOpen && "rotate-90")}>▸</span>
+            All songs — drag to add
+          </button>
+          {/* Opens the same song-creation flow as Library's "+ Upload song" —
+              this list only ever supported adding an *existing* song to the
+              lineup, with no way to create a brand new one from here. */}
+          <InteractiveButton
+            onClick={() => patch({ songEditorOpen: true, songEditorMode: "create" })}
+            title="Create a new song"
+            className="flex-none border-none bg-transparent cursor-pointer p-[6px_2px] text-[11px] font-semibold tracking-[.02em] text-accent hover:text-text"
+          >
+            + New
+          </InteractiveButton>
+        </div>
         {libraryOpen && (
           <div className="flex flex-col gap-1.5 mt-1.5">
             <InteractiveInput

@@ -44,9 +44,16 @@ export type StageWidthUnit = "cqw" | "vw";
 // every surface (and inside the audience window, which never runs useLumen), and
 // a measured fit would differ per box and reintroduce exactly the inconsistency
 // this module exists to remove.
+//
+// Thresholds are deliberately generous — this is a safety net for a genuinely
+// long line (a run-on verse, a lyric line that wasn't split), not a general
+// auto-size mechanism. Most slide/verse lines are well under 100 characters;
+// shrinking those too made the font size read as inconsistent between
+// ordinary slides instead of steady, which is what the fixed "Lyric size"
+// slider (state.scale) is supposed to guarantee.
 export function fitForLines(lines: string[]): number {
   const longestLineLength = lines.reduce((maxLength, line) => Math.max(maxLength, line.length), 0);
-  return longestLineLength > 110 ? 0.62 : longestLineLength > 70 ? 0.78 : 1;
+  return longestLineLength > 200 ? 0.72 : longestLineLength > 150 ? 0.88 : 1;
 }
 
 export function stageFontSize(scale: number, fit: number, unit: StageWidthUnit = "cqw"): string {

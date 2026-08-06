@@ -62,6 +62,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
     canUndo,
     canRedo,
   } = lumen;
+  const isPresentCounting = presentCountdown !== null;
   const themeLabel = theme === "dark" ? "☾ Dark" : "☀ Light";
   const setCountLabel =
     setSongs.length === 1 ? "1 song" : setSongs.length + " songs";
@@ -161,7 +162,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
   }, []);
 
   return (
-    <header className="h-14 flex-none flex items-center gap-5 p-[0_16px_0_18px] border-b border-border bg-panel">
+    <header className="h-14 flex-none flex items-center gap-5 p-[0_16px_0_18px] border-b border-border bg-panel overflow-x-auto">
       {isTablet && (
         <InteractiveButton
           onClick={() => patch((s) => ({ sidebarDrawerOpen: !s.sidebarDrawerOpen }))}
@@ -171,16 +172,24 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
           ☰
         </InteractiveButton>
       )}
-      <div className="flex items-center gap-2.5 w-73.5 flex-none">
+      <div className={cx("flex items-center gap-2.5 flex-none", isDesktop ? "w-73.5" : "w-auto")}>
         <div className="w-6.5 h-6.5 rounded-2">
           <Image src={"/lumen.png"} width={200} height={200} alt="Lume" />
         </div>
-        <div className="text-[15px] font-semibold tracking-[-0.01em]">
-          Lumen Worship
-        </div>
-        <div className="font-mono text-[10px] text-faint border border-border p-[2px_5px] rounded-[5px]">
-          v{process.env.NEXT_PUBLIC_APP_VERSION}
-        </div>
+        {/* Name + version badge dropped below desktop width — they're the
+            most reclaimable space in the header, and the icon alone still
+            identifies the app; see the right-hand group's isDesktop gating
+            below for the same reasoning applied to secondary controls. */}
+        {isDesktop && (
+          <>
+            <div className="text-[15px] font-semibold tracking-[-0.01em]">
+              Lumen Worship
+            </div>
+            <div className="font-mono text-[10px] text-faint border border-border p-[2px_5px] rounded-[5px]">
+              v{process.env.NEXT_PUBLIC_APP_VERSION}
+            </div>
+          </>
+        )}
       </div>
 
       <div className={cx("relative items-center gap-2 text-[13px] text-muted", isDesktop ? "flex" : "hidden")}>
@@ -317,98 +326,110 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
           </>
         )}
 
-        {/* A labelled "Updates" control with a badge dot, matching the design
-            reference — the bell emoji it replaces read as a notification tray
-            rather than as this app's updater. */}
-        <InteractiveButton
-          onClick={() => setUpdatePanelOpen((open) => !open)}
-          title={updateLabel}
-          className={cx(
-            "relative h-8.5 px-3 flex-none flex items-center rounded-2.25 border border-border bg-panel2 text-[13px] text-muted cursor-pointer hover:bg-raise hover:text-text",
-            isShaking && "animate-[bellShake_0.65s_ease-in-out]",
-          )}
-        >
-          Updates
-          {updatePending && (
-            <span
-              className={cx(
-                "absolute -top-1 -right-1 w-2.25 h-2.25 rounded-full ring-2 ring-panel",
-                updateReady ? "bg-ok" : "bg-danger",
-              )}
-            />
-          )}
-        </InteractiveButton>
-
-        {updatePanelOpen && (
+        {/* Updates and Output-status are secondary/informational controls —
+            dropped below desktop width (alongside Search/Undo/Redo/Hotkeys
+            above) so the header's minimum required width stays under the
+            tablet/mobile breakpoints, keeping Theme/Settings/Present (the
+            controls actually needed to run a service) always reachable. Both
+            remain reachable another way at those widths: an update still
+            auto-installs/prompts via updateStatus regardless, and output
+            routing is also available from Settings. */}
+        {isDesktop && (
           <>
-            <div
-              onClick={() => setUpdatePanelOpen(false)}
-              className="fixed inset-0 z-90"
-            />
-            {/* One padded card — headline, description, actions — rather than
-                the header strip / scroll body / footer bar it replaces. */}
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className="absolute top-[calc(100%+10px)] left-0 z-100 w-75 rounded-2xl border border-border2 bg-panel shadow-app p-4.5"
+            {/* A labelled "Updates" control with a badge dot, matching the design
+                reference — the bell emoji it replaces read as a notification tray
+                rather than as this app's updater. */}
+            <InteractiveButton
+              onClick={() => setUpdatePanelOpen((open) => !open)}
+              title={updateLabel}
+              className={cx(
+                "relative h-8.5 px-3 flex-none flex items-center rounded-2.25 border border-border bg-panel2 text-[13px] text-muted cursor-pointer hover:bg-raise hover:text-text",
+                isShaking && "animate-[bellShake_0.65s_ease-in-out]",
+              )}
             >
-              <div className="text-[15px] font-semibold text-text tracking-[-0.01em] leading-[1.35]">
-                {updateCardTitle}
-              </div>
-              <div className="mt-2 max-h-52 overflow-y-auto">
-                {updateReleaseNotes ? (
-                  // Rendering the GitHub release body's own markdown — always
-                  // this app's own release notes (see the type comment in
-                  // electronUpdater.ts), not third-party or user content.
-                  <div className="text-[13px] text-muted leading-[1.55] [&_h1]:text-text [&_h2]:text-text [&_h3]:text-text [&_h1]:text-[13.5px] [&_h2]:text-[13px] [&_h3]:text-[13px] [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mb-1.5 [&_h2]:mb-1.5 [&_h3]:mb-1.5 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-4.5 [&_ul]:mb-2 [&_li]:mb-1 [&_a]:text-accent [&_a]:underline [&_strong]:text-text [&_code]:font-mono [&_code]:text-[12px] [&_code]:bg-panel2 [&_code]:px-1 [&_code]:py-px [&_code]:rounded-1">
-                    <ReleaseNotesMarkdown>
-                      {updateReleaseNotes}
-                    </ReleaseNotesMarkdown>
-                  </div>
-                ) : (
-                  <div className="text-[13px] text-muted leading-[1.55]">
-                    {updateStatus.status === "checking"
-                      ? "Checking GitHub for a newer version…"
-                      : updateStatus.status === "downloading"
-                        ? "Downloading the update in the background. You can keep working — it installs when you're ready."
-                        : updateStatus.status === "error"
-                          ? "Couldn't check for updates. Lumen will try again on next launch."
-                          : "You're on the latest version — v" +
-                            process.env.NEXT_PUBLIC_APP_VERSION +
-                            "."}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2.5 mt-4">
-                {updateReady && (
-                  <button
-                    onClick={() => {
-                      installUpdate();
-                      setUpdatePanelOpen(false);
-                    }}
-                    className="h-9.5 px-4 rounded-2.5 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer shadow-app-sm hover:brightness-110"
-                  >
-                    Install &amp; restart
-                  </button>
-                )}
-                <button
+              Updates
+              {updatePending && (
+                <span
+                  className={cx(
+                    "absolute -top-1 -right-1 w-2.25 h-2.25 rounded-full ring-2 ring-panel",
+                    updateReady ? "bg-ok" : "bg-danger",
+                  )}
+                />
+              )}
+            </InteractiveButton>
+
+            {updatePanelOpen && (
+              <>
+                <div
                   onClick={() => setUpdatePanelOpen(false)}
-                  className="h-9.5 px-4 rounded-2.5 border border-border2 bg-transparent text-muted text-[13px] font-medium cursor-pointer hover:bg-panel2 hover:text-text"
+                  className="fixed inset-0 z-90"
+                />
+                {/* One padded card — headline, description, actions — rather than
+                    the header strip / scroll body / footer bar it replaces. */}
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute top-[calc(100%+10px)] left-0 z-100 w-75 rounded-2xl border border-border2 bg-panel shadow-app p-4.5"
                 >
-                  {updateReady ? "Later" : "Close"}
-                </button>
-              </div>
-            </div>
+                  <div className="text-[15px] font-semibold text-text tracking-[-0.01em] leading-[1.35]">
+                    {updateCardTitle}
+                  </div>
+                  <div className="mt-2 max-h-52 overflow-y-auto">
+                    {updateReleaseNotes ? (
+                      // Rendering the GitHub release body's own markdown — always
+                      // this app's own release notes (see the type comment in
+                      // electronUpdater.ts), not third-party or user content.
+                      <div className="text-[13px] text-muted leading-[1.55] [&_h1]:text-text [&_h2]:text-text [&_h3]:text-text [&_h1]:text-[13.5px] [&_h2]:text-[13px] [&_h3]:text-[13px] [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mb-1.5 [&_h2]:mb-1.5 [&_h3]:mb-1.5 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-4.5 [&_ul]:mb-2 [&_li]:mb-1 [&_a]:text-accent [&_a]:underline [&_strong]:text-text [&_code]:font-mono [&_code]:text-[12px] [&_code]:bg-panel2 [&_code]:px-1 [&_code]:py-px [&_code]:rounded-1">
+                        <ReleaseNotesMarkdown>
+                          {updateReleaseNotes}
+                        </ReleaseNotesMarkdown>
+                      </div>
+                    ) : (
+                      <div className="text-[13px] text-muted leading-[1.55]">
+                        {updateStatus.status === "checking"
+                          ? "Checking GitHub for a newer version…"
+                          : updateStatus.status === "downloading"
+                            ? "Downloading the update in the background. You can keep working — it installs when you're ready."
+                            : updateStatus.status === "error"
+                              ? "Couldn't check for updates. Lumen will try again on next launch."
+                              : "You're on the latest version — v" +
+                                process.env.NEXT_PUBLIC_APP_VERSION +
+                                "."}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2.5 mt-4">
+                    {updateReady && (
+                      <button
+                        onClick={() => {
+                          installUpdate();
+                          setUpdatePanelOpen(false);
+                        }}
+                        className="h-9.5 px-4 rounded-2.5 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer shadow-app-sm hover:brightness-110"
+                      >
+                        Install &amp; restart
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setUpdatePanelOpen(false)}
+                      className="h-9.5 px-4 rounded-2.5 border border-border2 bg-transparent text-muted text-[13px] font-medium cursor-pointer hover:bg-panel2 hover:text-text"
+                    >
+                      {updateReady ? "Later" : "Close"}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <InteractiveButton
+              onClick={() => patch({ displaysModalOpen: true })}
+              title="Configure second-monitor output"
+              className="flex items-center gap-2 p-[6px_10px] border border-border rounded-2.25 bg-panel2 text-[12px] text-muted cursor-pointer hover:bg-raise hover:text-text"
+            >
+              <span className={cx("w-1.5 h-1.5 rounded-full", outputDotClass)} />
+              {outputLabel}
+            </InteractiveButton>
           </>
         )}
-
-        <InteractiveButton
-          onClick={() => patch({ displaysModalOpen: true })}
-          title="Configure second-monitor output"
-          className="flex items-center gap-2 p-[6px_10px] border border-border rounded-2.25 bg-panel2 text-[12px] text-muted cursor-pointer hover:bg-raise hover:text-text"
-        >
-          <span className={cx("w-1.5 h-1.5 rounded-full", outputDotClass)} />
-          {outputLabel}
-        </InteractiveButton>
 
         <InteractiveButton
           onClick={() => patch({ theme: theme === "dark" ? "light" : "dark" })}
@@ -426,22 +447,33 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
 
         <InteractiveButton
           data-tour="present"
-          onClick={isPresenting ? stopPresenting : startPresenting}
+          // A click while the countdown is running now cancels it — previously
+          // this branch stayed on startPresenting, which no-ops while a count
+          // is already in flight (see its own guard in useLumen.ts), so the
+          // button visibly did nothing until the countdown finished on its own.
+          onClick={isPresenting || isPresentCounting ? stopPresenting : startPresenting}
           className={cx(
             "h-8.5 px-4 rounded-2.25 text-[13px] cursor-pointer flex items-center gap-2",
-            isPresenting
+            isPresenting || isPresentCounting
               ? "border border-border2 bg-raise text-muted font-medium"
               : "border-none bg-accent text-white font-semibold shadow-app-sm hover:brightness-110"
           )}
         >
-          {isPresenting ? "Stop Presenting" : "Present"}
-          {presentCountdown !== null && (
-            <span className="inline-flex items-center justify-center w-4.5 h-4.5 rounded-full bg-white/22 text-white font-mono text-[11px] font-semibold">
-              {presentCountdown}
+          {isPresentCounting ? (
+            <span className="inline-flex items-center gap-2">
+              <span>Starting in</span>
+              <span
+                key={presentCountdown}
+                className="font-mono text-[15px] font-bold inline-block animate-[lumenPresentTick_.7s_ease]"
+              >
+                {presentCountdown}
+              </span>
             </span>
-          )}
-          {presentCountdown === null && !isPresenting && (
-            <span className="font-mono text-[10px] opacity-70">F5</span>
+          ) : (
+            <>
+              {isPresenting ? "Stop Presenting" : "Present"}
+              {!isPresenting && <span className="font-mono text-[10px] opacity-70">F5</span>}
+            </>
           )}
         </InteractiveButton>
       </div>

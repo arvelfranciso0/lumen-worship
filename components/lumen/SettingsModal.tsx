@@ -29,7 +29,7 @@ export function SettingsModal({ lumen }: { lumen: UseLumen }) {
     >
       <div
         onClick={(clickEvent) => clickEvent.stopPropagation()}
-        className="w-155 max-h-[86vh] flex flex-col rounded-[18px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
+        className="w-155 max-w-[92vw] max-h-[86vh] flex flex-col rounded-[18px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
       >
         <div className="flex items-center justify-between p-[18px_20px_14px] border-b border-border">
           <div>

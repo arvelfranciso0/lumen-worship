@@ -23,6 +23,17 @@ let updateStatus = { status: "idle" };
 let autoUpdateEnabled = false;
 let hasCheckedForUpdate = false;
 
+// Defense-in-depth containment check, mirroring db.js's resolveWithinDir:
+// path.join already normalizes literal ".."/"." segments, but this catches
+// anything that reaches it pre-resolved to escape dir anyway (belt-and-
+// suspenders against the next handler added here forgetting to normalize).
+function resolveWithinDir(dir, fileName) {
+  const resolvedDir = path.resolve(dir);
+  const resolved = path.resolve(dir, fileName);
+  if (resolved !== resolvedDir && !resolved.startsWith(resolvedDir + path.sep)) return null;
+  return resolved;
+}
+
 function checkForUpdatesIfEnabled() {
   if (!app.isPackaged || !autoUpdateEnabled || hasCheckedForUpdate) return;
   hasCheckedForUpdate = true;
@@ -106,7 +117,10 @@ function startStaticServer(rootDir) {
     const server = http.createServer((req, res) => {
       const urlPath = decodeURIComponent((req.url || "/").split("?")[0]);
       const filePath = path.join(rootDir, urlPath === "/" ? "index.html" : urlPath);
-      if (!filePath.startsWith(rootDir)) {
+      // A trailing separator is required in the prefix check — otherwise a
+      // sibling directory whose name merely starts with rootDir's characters
+      // (e.g. "out-evil" next to "out") would incorrectly pass.
+      if (filePath !== rootDir && !filePath.startsWith(rootDir + path.sep)) {
         res.writeHead(403);
         res.end();
         return;
@@ -256,11 +270,19 @@ async function openOutputWindow() {
     x: display.bounds.x, y: display.bounds.y, width: display.bounds.width, height: display.bounds.height,
     frame: false, show: false, autoHideMenuBar: true, backgroundColor: "#000000", skipTaskbar: true,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      // Deliberately its own minimal preload, NOT the operator's preload.js —
+      // see preload-output.js's header comment. Exposing the full
+      // electronAPI/electronShell/electronCompat/electronUpdater surface here
+      // would hand this window (untrusted relative to the operator window: it
+      // only ever renders pushed state, never runs operator input) the same
+      // DB read/write/delete and update-install capability as the operator.
+      preload: path.join(__dirname, "preload-output.js"),
       contextIsolation: true,
       nodeIntegration: false,
       // See the same option on operatorWindow's webPreferences above for why
-      // this is required — this window loads the identical preload.js.
+      // this is required — sandboxed preload can't require() bibleXml.js.
+      // preload-output.js doesn't need that file, but sandbox is kept
+      // consistent with the operator window either way.
       sandbox: false,
     },
   });
@@ -343,7 +365,14 @@ app.whenReady().then(() => {
     // is exempt from the host-normalization Chromium applies to standard
     // schemes' authority component.
     const fileName = decodeURIComponent(new URL(request.url).pathname.replace(/^\//, ""));
-    const response = await net.fetch(pathToFileURL(path.join(backgroundsDir, fileName)).toString());
+    // Percent-encoding both the dots and slashes in fileName (e.g.
+    // "%2e%2e%2F...") survives the URL parser's dot-segment collapsing as an
+    // opaque path segment, and the decodeURIComponent above then reconstitutes
+    // a literal "../" sequence — resolveWithinDir catches that before the
+    // file is ever read, rather than trusting path.join alone.
+    const resolvedPath = resolveWithinDir(backgroundsDir, fileName);
+    if (!resolvedPath) return new Response(null, { status: 403 });
+    const response = await net.fetch(pathToFileURL(resolvedPath).toString());
     // A plain file:// fetch carries no CORS headers, so a <video> loaded
     // from this (cross-origin, relative to the http:// page) protocol
     // taints any canvas it's drawn to — which breaks poster-frame capture

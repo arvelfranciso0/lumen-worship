@@ -29,7 +29,7 @@ export function ConfirmDialog({ lumen }: { lumen: UseLumen }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-90 flex flex-col rounded-[16px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
+        className="w-90 max-w-[92vw] flex flex-col rounded-[16px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
       >
         <div className="p-[20px_20px_16px]">
           <div className="text-[15px] font-semibold tracking-[-0.02em]">{dialog.title}</div>

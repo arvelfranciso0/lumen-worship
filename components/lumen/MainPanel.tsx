@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { cx } from "./cx";
-import { DEFAULT_LYRIC_STYLE, LYRIC_FONT_GROUPS, LYRIC_FONTS } from "./data";
+import { LYRIC_FONT_GROUPS, LYRIC_FONTS } from "./data";
 import { InteractiveButton } from "./Interactive";
 import { SlidesPanel } from "./SlidesPanel";
 import { TransitionRow } from "./TransitionRow";
@@ -264,13 +264,6 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
           className="w-6 h-6 rounded-2 border border-border bg-panel2 text-text text-[12px] cursor-pointer"
         >
           A+
-        </button>
-        <div className="flex-1" />
-        <button
-          onClick={() => patch({ lyricStyle: DEFAULT_LYRIC_STYLE })}
-          className="text-[12px] text-muted border-none bg-transparent cursor-pointer px-1 py-0.5 hover:text-text"
-        >
-          Reset
         </button>
       </div>
 

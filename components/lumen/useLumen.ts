@@ -254,6 +254,15 @@ const UNDO_STACK_CAP = 50;
 const HISTORY_TRACKED_KEYS: (keyof LumenState)[] = [
   "songOverrides", "songMetaOverrides", "setIds", "setName", "lyricStyle",
   "customBackgrounds", "bibleHighlights", "favs", "lineups", "lineupSongLooks",
+  // customSongs was missing entirely, which is why deleting a song never
+  // pushed an undoable entry: clicking Undo afterward just reverted whatever
+  // unrelated tracked field happened to be on top of the stack instead
+  // (still a real change, hence the "Saved" flash, but not the one the
+  // operator was looking at). font/scale/transitionType/transitionDurationMs
+  // were the same gap for the style/transition toolbar, and
+  // downloadedTranslations was the same gap for removeBibleTranslation.
+  "customSongs", "font", "scale", "transitionType", "transitionDurationMs",
+  "downloadedTranslations",
 ];
 
 function pickTrackedKeys(source: LumenState, keys: (keyof LumenState)[]): Partial<LumenState> {
@@ -520,6 +529,12 @@ export function useLumen(props: LumenProps = {}) {
         ...entry,
         language: normalizeBibleLanguage(entry.language, entry.name),
       }));
+      // Marks this as a hydration replace, not a user edit — otherwise the
+      // undo-tracking effect below captures INITIAL_STATE's hardcoded demo
+      // values as an undoable snapshot, and one Ctrl+Z right after launch
+      // reverts (and then persists, via the setPrefs effect) real saved data
+      // back to those demo defaults.
+      isUndoRedoApplyingRef.current = true;
       patch({
         customSongs: [...data.customSongs].reverse(),
         lineups: [...data.lineups].reverse(),
@@ -581,6 +596,12 @@ export function useLumen(props: LumenProps = {}) {
   }, [patch]);
 
   useEffect(() => {
+    // Without this gate, this effect's very first run (on mount, before
+    // loadAll() below resolves) schedules a write of INITIAL_STATE's
+    // hardcoded demo values. If loadAll() takes longer than 400ms (slow
+    // disk, large media library, cold IndexedDB/SQLite open), that write
+    // fires first and clobbers the user's real saved prefs with defaults.
+    if (!prefsLoaded) return;
     const persistTimeout = setTimeout(() => {
       patch({ saveStatus: "saving" });
       getRepository().setPrefs({
@@ -604,7 +625,7 @@ export function useLumen(props: LumenProps = {}) {
     }, 400);
     return () => clearTimeout(persistTimeout);
   }, [
-    patch,
+    prefsLoaded, patch,
     state.favs, state.look, state.scale, state.theme, state.font, state.setIds, state.setName,
     state.layoutSizes, state.layoutVisibility, state.lyricStyle, state.bibleHighlights,
     state.outputDisplayId, state.autoUpdateEnabled, state.hasSeenOnboarding,
@@ -1079,6 +1100,27 @@ export function useLumen(props: LumenProps = {}) {
     patch((previousState) => ({ songOverrides: { ...previousState.songOverrides, [song.id]: sections } }));
   }, [patch, song.id]);
 
+  // Keeps every lineup's per-slide background array
+  // (lineupSongLooks[lineupId][songId]) positionally in sync with
+  // song.sections whenever slides are duplicated, merged, split, or
+  // reordered below — that array has no id of its own, just a raw index
+  // into sections (see the `song` memo above for how it's read back), so
+  // without this a lineup-scoped background silently ends up pinned to
+  // whatever unrelated slide now sits at the old index.
+  const reindexLineupSongLooks = useCallback((songId: string, transform: (lookIds: (string | null)[]) => (string | null)[]) => {
+    patch((previousState) => {
+      let changed = false;
+      const nextLineupSongLooks: typeof previousState.lineupSongLooks = {};
+      for (const [lineupId, songLooks] of Object.entries(previousState.lineupSongLooks)) {
+        const lookIds = songLooks[songId];
+        if (!lookIds) { nextLineupSongLooks[lineupId] = songLooks; continue; }
+        changed = true;
+        nextLineupSongLooks[lineupId] = { ...songLooks, [songId]: transform(lookIds) };
+      }
+      return changed ? { lineupSongLooks: nextLineupSongLooks } : {};
+    });
+  }, [patch]);
+
   // ---- Slide filmstrip editing (song mode only — Bible slides aren't
   // Section-based, so these operate on song.sections via saveLyrics, riding
   // the same songOverrides persistence with no new backend table). ----
@@ -1089,7 +1131,12 @@ export function useLumen(props: LumenProps = {}) {
     const next = song.sections.slice();
     next.splice(sectionIndex + 1, 0, { ...target, lines: [...target.lines] });
     saveLyrics(next);
-  }, [song.sections, saveLyrics]);
+    reindexLineupSongLooks(song.id, (lookIds) => {
+      const nextLookIds = lookIds.slice();
+      nextLookIds.splice(sectionIndex + 1, 0, nextLookIds[sectionIndex] ?? null);
+      return nextLookIds;
+    });
+  }, [song.sections, song.id, saveLyrics, reindexLineupSongLooks]);
 
   const mergeSlideWithNext = useCallback((sectionIndex: number) => {
     const current = song.sections[sectionIndex];
@@ -1099,25 +1146,40 @@ export function useLumen(props: LumenProps = {}) {
       label: current.label,
       lines: [...current.lines, ...next.lines],
       lineHighlights: (current.lineHighlights || current.lines.map(() => [])).concat(next.lineHighlights || next.lines.map(() => [])),
+      lookId: current.lookId,
+      note: current.note,
     };
     const updated = song.sections.slice();
     updated.splice(sectionIndex, 2, merged);
     saveLyrics(updated);
-  }, [song.sections, saveLyrics]);
+    reindexLineupSongLooks(song.id, (lookIds) => {
+      const nextLookIds = lookIds.slice();
+      nextLookIds.splice(sectionIndex, 2, nextLookIds[sectionIndex] ?? null);
+      return nextLookIds;
+    });
+  }, [song.sections, song.id, saveLyrics, reindexLineupSongLooks]);
 
   const splitSlide = useCallback((sectionIndex: number, atLineIndex: number) => {
     const target = song.sections[sectionIndex];
     if (!target || atLineIndex <= 0 || atLineIndex >= target.lines.length) return;
     const firstHalf: Section = {
       label: target.label, lines: target.lines.slice(0, atLineIndex), lineHighlights: target.lineHighlights?.slice(0, atLineIndex),
+      lookId: target.lookId, note: target.note,
     };
     const secondHalf: Section = {
       label: target.label, lines: target.lines.slice(atLineIndex), lineHighlights: target.lineHighlights?.slice(atLineIndex),
+      lookId: target.lookId, note: target.note,
     };
     const updated = song.sections.slice();
     updated.splice(sectionIndex, 1, firstHalf, secondHalf);
     saveLyrics(updated);
-  }, [song.sections, saveLyrics]);
+    reindexLineupSongLooks(song.id, (lookIds) => {
+      const nextLookIds = lookIds.slice();
+      const currentLookId = nextLookIds[sectionIndex] ?? null;
+      nextLookIds.splice(sectionIndex, 1, currentLookId, currentLookId);
+      return nextLookIds;
+    });
+  }, [song.sections, song.id, saveLyrics, reindexLineupSongLooks]);
 
   const reorderSlides = useCallback((fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
@@ -1125,7 +1187,13 @@ export function useLumen(props: LumenProps = {}) {
     const [moved] = updated.splice(fromIndex, 1);
     updated.splice(toIndex, 0, moved);
     saveLyrics(updated);
-  }, [song.sections, saveLyrics]);
+    reindexLineupSongLooks(song.id, (lookIds) => {
+      const nextLookIds = lookIds.slice();
+      const [movedLookId] = nextLookIds.splice(fromIndex, 1);
+      nextLookIds.splice(toIndex, 0, movedLookId);
+      return nextLookIds;
+    });
+  }, [song.sections, song.id, saveLyrics, reindexLineupSongLooks]);
 
   // No setSlideNote: the per-slide cue editor was removed from SlidesPanel, so
   // nothing writes Section.note any more. The field and its Global-search index

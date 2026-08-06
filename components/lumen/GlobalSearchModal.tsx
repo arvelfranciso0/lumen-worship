@@ -45,7 +45,7 @@ export function GlobalSearchModal({ lumen }: { lumen: UseLumen }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-130 max-h-[60vh] flex flex-col rounded-[18px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
+        className="w-130 max-w-[92vw] max-h-[60vh] flex flex-col rounded-[18px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
       >
         <div className="p-3 border-b border-border">
           <InteractiveInput

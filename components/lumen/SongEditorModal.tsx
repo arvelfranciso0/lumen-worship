@@ -126,7 +126,7 @@ export function SongEditorModal({ lumen }: { lumen: UseLumen }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-160 max-h-[84vh] flex flex-col rounded-[18px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
+        className="w-160 max-w-[92vw] max-h-[84vh] flex flex-col rounded-[18px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
       >
         <div className="flex items-center justify-between p-[18px_20px_14px] border-b border-border">
           <div>
