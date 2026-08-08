@@ -35,7 +35,7 @@ Things deliberately not built yet, recorded so the reasoning isn't rediscovered 
 
 - **Multi-simultaneous displays** — the app drives one optional second-monitor output window.
   Per-display content modes (mirror/stage/audience), role profiles and true N-display support
-  are deferred. See the comment block at the top of `components/lumen/DisplaysModal.tsx`.
+  are deferred. See the comment block at the top of `components/lumen/modals/DisplaysModal.tsx`.
 - **Chords** — to be reintroduced as part of the above: chord symbols would appear only on a
   **Stage** display, for the musicians, while the **Audience** display shows the same slide
   without them. This makes chords a property of a display's role rather than a global toggle.
@@ -54,12 +54,12 @@ Things deliberately not built yet, recorded so the reasoning isn't rediscovered 
 - **Persistence** — `lib/repository/` defines an `AppRepository` interface with two backends,
   picked at runtime by `getRepository()`:
   - `indexeddb.ts` — browser backend, raw `indexedDB`.
-  - `electron.ts` — pass-through to `window.electronAPI` (injected by `electron/preload.js`,
-    backed by `electron/db.js`, using Node's built-in `node:sqlite`).
-- **Electron shell** (`electron/main.js` + `preload.js` + `db.js`) — in production, serves the
-  static export (`out/`) via a small local HTTP server rather than `file://`, since Next's static
-  export emits absolute asset paths. Also owns the second-monitor "audience output" window and
-  the `electron-updater` auto-update flow.
+  - `electron.ts` — pass-through to `window.electronAPI` (injected by `electron/preload/index.js`,
+    backed by `electron/db/index.js`, using Node's built-in `node:sqlite`).
+- **Electron shell** (`electron/main/index.js` + `preload/index.js` + `preload/output.js` +
+  `db/index.js`) — in production, serves the static export (`out/`) via a small local HTTP server
+  rather than `file://`, since Next's static export emits absolute asset paths. Also owns the
+  second-monitor "audience output" window and the `electron-updater` auto-update flow.
 - **Styling** — Tailwind v4, CSS-first config (no `tailwind.config.js`); theme tokens live in
   `app/globals.css` via `@theme inline`, aliasing the app's own CSS custom properties so
   light/dark theme switching keeps working.
@@ -74,16 +74,23 @@ panels, conventions) — it's the canonical reference for working in this codeba
 
 ```
 app/page.tsx              single route, renders LumenApp
-components/lumen/          all UI + the useLumen state hook
+components/lumen/
   useLumen.ts               the app's one state hook (state, derived values, actions)
   LumenApp.tsx               top-level layout, wires everything to `lumen`
-  MainPanel.tsx               live output preview, text styling, previous/next
-  Sidebar.tsx / Toolbar.tsx / SlidesStrip.tsx / Header.tsx   the rest of the operator UI
-  PresentationOverlay.tsx    single-window fullscreen presentation fallback
-  OutputWindowApp.tsx        renders in the second-monitor output window (Electron)
-  electronDisplay.ts / electronShell.ts / electronUpdater.ts   typed window.electronAPI-style bridges
+  data.ts / cx.ts            shared domain types / tiny class-joiner utility
+  layout/                    Header.tsx, MainPanel.tsx, Sidebar.tsx, MobileTabBar.tsx, ResizeHandle.tsx
+  presentation/              SlideStage.tsx, SlidesPanel.tsx, PresentationOverlay.tsx, OutputWindowApp.tsx, ...
+  bible/                     BibleComparePanel.tsx, BibleTranslationsPanel.tsx, bibleSearch.ts, ...
+  tour/                      TourOverlay.tsx, tourPlacement.ts, tourSteps.ts
+  modals/                    SongEditorModal.tsx, ConfirmDialog.tsx, DisplaysModal.tsx, ...
+  search/                    globalSearch.ts
+  song/                      songImport.ts, navigation.ts, transpose.ts
+  hooks/                     useBackdropClose.ts, useDebouncedColor.ts, useSlideTransition.ts, ...
+  electron-bridges/          electronCompat.ts, electronDisplay.ts, electronShell.ts, electronUpdater.ts
+  ui/                        Interactive.tsx
 lib/repository/            AppRepository interface + IndexedDB/Electron backends
-electron/                  main.js (window/IPC/updater), preload.js (bridges), db.js (SQLite)
+electron/                  main/index.js (window/IPC/updater), preload/index.js + preload/output.js
+                            (bridges), db/index.js (SQLite), bibleXml.js (shared XML parser)
 scripts/convert-bible.mjs  XML → JSON Bible conversion (run outside this repo now)
 ```
 

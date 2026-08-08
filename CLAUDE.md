@@ -27,6 +27,11 @@ packaged Electron desktop app from the same Next.js static export (`output: "exp
 effectively one route (`app/page.tsx`) that renders `<LumenApp />`; everything else is client
 components under `components/lumen/`.
 
+`components/lumen/` groups by feature: `bible/`, `tour/`, `presentation/`, `layout/`, `modals/`,
+`electron-bridges/`, `search/`, `song/`, `hooks/`, `ui/`. `LumenApp.tsx`, `useLumen.ts`, `data.ts`,
+and `cx.ts` stay at the top level — the app entry, its one state hook, shared domain types, and a
+shared utility, none of which belong to a single feature.
+
 ### State: one hook, not context/Redux
 
 `components/lumen/useLumen.ts` is the single source of truth for the entire app — all state
@@ -43,7 +48,7 @@ library — if you need a new piece of state or action, it goes in this hook.
 `getRepository()` in `lib/repository/index.ts`:
 - `indexeddb.ts` — browser backend, raw `indexedDB` API.
 - `electron.ts` — thin pass-through to `window.electronAPI` (only present when running inside the
-  Electron shell; injected by `electron/preload.js`, backed by `electron/db.js`).
+  Electron shell; injected by `electron/preload/index.js`, backed by `electron/db/index.js`).
 
 Both backends store `prefs` as a generic key-value table (JSON-serialized value), so adding a new
 persisted preference is just adding a field to `PersistedPrefs` in `lib/repository/types.ts` and
@@ -52,13 +57,17 @@ either backend.
 
 ### Electron shell
 
-`electron/main.js` + `preload.js` + `db.js`. Two things worth knowing before touching this:
+`electron/main/index.js` + `preload/index.js` + `preload/output.js` + `db/index.js`, grouped by
+process role; `electron/bibleXml.js` stays at the `electron/` root since it's also imported
+cross-boundary by `lib/repository/indexeddb.ts` and `components/lumen/useLumen.ts`. Two things
+worth knowing before touching this:
 - Persistence uses Node's built-in `node:sqlite` (`DatabaseSync`), not `better-sqlite3` — chosen
   deliberately to avoid native-module rebuild issues; it works out of the box in the bundled
   Electron/Node runtime.
-- In production, `main.js` serves the static export (`out/`) via a small hand-rolled local HTTP
-  server rather than `win.loadFile()` / raw `file://`, because Next's static export emits absolute
-  asset paths (`/_next/...`) that break under `file://`. Don't "simplify" this back to `loadFile`.
+- In production, `main/index.js` serves the static export (`out/`) via a small hand-rolled local
+  HTTP server rather than `win.loadFile()` / raw `file://`, because Next's static export emits
+  absolute asset paths (`/_next/...`) that break under `file://`. Don't "simplify" this back to
+  `loadFile`.
 
 ### Tailwind v4 — CSS-first config, and a cascade-layer gotcha
 

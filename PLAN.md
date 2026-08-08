@@ -1,109 +1,146 @@
 # PLAN.md
 
 ## Task
-"Remove all the long comment and make it simple that explain what the function and write a rules
-on CLAUDE.md for a comment convention." — i.e.:
-1. Add a comment-style convention to `CLAUDE.md`.
-2. Rewrite the codebase's existing long, multi-line "why/history/rationale" comment blocks down to
-   short, one-line "what it does" comments, per that new convention.
+"For every code/file with many lines, separate them into a different file — proper code structure,
+like a senior developer. Example: `electron/main/index.js` shouldn't have the whole thing in one
+file. Move all repeated/same-functionality functions into helpers/utils."
 
-## Step 1 — done directly (not delegated)
-Added a `### Comments` subsection under `## Conventions` in `CLAUDE.md`:
-> Keep comments short — one line, stating what the function or block does. Do not write
-> multi-line comments explaining history, rationale, edge cases, or bugs avoided... If a
-> function's name and signature already make its purpose obvious, skip the comment entirely.
+Two things: (1) split large files by internal concern, (2) de-duplicate repeated functions into
+shared helper modules.
 
-This is the exact spec every editing pass below must follow.
+## Investigation (done directly, not delegated)
+- **Concrete duplicate found**: `resolveWithinDir` (a path-traversal guard) is defined verbatim,
+  independently, in both `electron/main/index.js:21` and `electron/db/index.js:43`. This is the
+  clearest instance of "same functionality, different files" in the codebase.
+- **Large-file survey** (line counts, excluding `.claude/workflows/*` tooling and test files):
+  `useLumen.ts` 1530, `Sidebar.tsx` 734, `data.ts` 533, `Header.tsx` 441, `electron/main/index.js`
+  398 (the user's own example), `PreviewPanel.tsx` 341, `MainPanel.tsx` 270, `TourOverlay.tsx` 258,
+  `electron/db/index.js` 253, `SongEditorModal.tsx` 211, `lib/repository/indexeddb.ts` 208.
+- `useLumen.ts` is explicitly documented in `CLAUDE.md` as a **deliberate** single-hook
+  architecture ("the single source of truth for the entire app... if you need a new piece of
+  state or action, it goes in this hook") — not a scaffold accident. Splitting it blindly would
+  contradict a decision the project already made on purpose, so the user was asked directly.
+  Answers received:
+  - **Overall scope**: "Everything, including `useLumen.ts`."
+  - **`useLumen.ts` specifically**: "Split its internals, keep one public hook" — extract
+    cohesive pieces into sub-hooks/helper modules that `useLumen.ts` still composes and exposes
+    through the exact same `UseLumen` return shape. External API is a hard constraint, not a
+    suggestion — every consumer of `useLumen()` (nearly every component in the app) must need
+    zero changes.
+- `electron/main/index.js`'s internal shape (read in full): app lifecycle bootstrap, a static
+  file server (`startStaticServer`/`ensureStaticServer`/`resolveAppUrl`/`MIME_TYPES`), the
+  fullscreen "audience output" window + display management (`serializeDisplay`/`listDisplays`/
+  `pickAutoDisplay`/`resolveOutputDisplay`/`outputStatusPayload`/`broadcastOutputStatus`/
+  `openOutputWindow`/`closeOutputWindow`/`retargetOutputWindow`/`handleDisplayRemoved`/
+  `handleDisplaysChanged`), IPC handler registration (`registerIpcHandlers`, ~75 lines), the
+  auto-updater status bridge (`checkForUpdatesIfEnabled`/`setUpdateStatus`/
+  `normalizeReleaseNotes`/the `autoUpdater.on(...)` listeners), and the `lumen-media` protocol
+  handler — five distinct concerns bolted into one file.
+- `electron/db/index.js`: schema + migration (`SCHEMA`, `migrateSchema`), row mappers
+  (`rowToSong`/`rowToLineup`/`rowToBackground`/`rowToDownloadedBibleTranslation`), the duplicated
+  `resolveWithinDir`/`sanitizeFileNameSegment` security helpers, then the `createDb` repository
+  factory itself.
+- `data.ts`: highlight-range helpers, book-name/abbreviation helpers, lyric font definitions, core
+  domain types (`Section`/`Song`/`Lineup`/layout types), a **74-line `SONGS` sample-data array**
+  and a **107-line `LOOKS` sample-data array**, Bible types/constants, UI filter constants — types
+  and runtime sample data are mixed together in one file.
+- `Sidebar.tsx`: one ~500-line `Sidebar` function plus a smaller `LineupDetail` helper — the bulk
+  is a single monolithic function body (song list / Bible browser / lineup list all inline), not
+  yet broken into sub-components at all.
 
-## Step 2 — sub-agent matching
-Read all six files in `.claude/agents/`. None has comment style / documentation conventions as its
-stated purpose:
-- `electron-pro` — Electron desktop apps (native integration, distribution, security, perf).
-- `nextjs-developer` — Next.js App Router / full-stack / SEO / perf.
-- `react-specialist` — React performance, state management, advanced patterns.
-- `typescript-pro` — advanced type-system patterns, generics, type-level programming.
-- `performance-engineer` — bottleneck/load-testing/caching performance work.
-- `penetration-tester` — offensive security testing.
+## Sub-agent matching
+Read all six files in `.claude/agents/`. Three are genuine matches for this task:
+- **`electron-pro`** — ".claude/agents/electron-pro.md:3": "building Electron desktop
+  applications that require native OS integration... performance optimization" — covers
+  reorganizing `electron/main/index.js` and `electron/db/index.js`'s internals and the shared
+  path-security helper.
+- **`react-specialist`** — ".claude/agents/react-specialist.md:3": "optimizing existing React
+  applications for performance, implementing advanced React 18+ features, or solving complex
+  state management and architectural challenges within React codebases" — the explicit
+  "complex state management... architectural challenges" phrase is a direct match for splitting
+  `useLumen.ts`'s internals and the large UI components.
+- **`nextjs-developer`** — ".claude/agents/nextjs-developer.md:3": "architect or implement
+  complete Next.js applications" — covers the app's data-layer files (`data.ts`,
+  `lib/repository/indexeddb.ts`), which are Next.js app architecture, not electron- or
+  React-component-specific.
 
-None is a genuine match for "shorten comments across the codebase" — this is generic mechanical
-editing, not domain expertise in any of the above. Per the orchestration rule ("don't force-fit an
-agent with no clear responsibility"), no roster sub-agent is used for this task.
+`typescript-pro`, `performance-engineer`, `penetration-tester` have no stated purpose matching
+file-organization work — not used.
 
-**Scope is large enough that it still needs an execution plan**: 62 of 64 source files contain a
-3+ line comment block (verified via grep across `*.ts`/`*.tsx`/`*.js`). Doing this file-by-file
-inline in the orchestrator would be slow and context-heavy for a purely mechanical task, so it will
-be fanned out to **general-purpose agents** (the generic catch-all type, not a specialized roster
-agent — its stated purpose, "executing multi-step tasks" over "searching for code", is a genuine
-fit for this specific job). This is a deliberate deviation from using only the named roster, made
-because none of the six fit and the task is too large for one inline pass.
+## Five independent tracks — all safe to run fully in parallel
+No track's file set overlaps another's, and the one shared boundary (`useLumen.ts`'s public
+return shape) is a hard constraint that keeps the others decoupled from it — Sidebar/Header/etc.
+can assume `useLumen()`'s external shape is unchanged regardless of how Track B reorganizes its
+insides; `data.ts`'s split (Track E) re-exports everything under its current names so its ~40
+consumers need zero edits. Nothing here needs sequencing.
 
-## Scope / exclusions
-- **In scope**: all files under `components/lumen/`, `lib/repository/`, `electron/`, `app/`
-  containing long comment blocks.
-- **Excluded**: `.claude/workflows/*.js` and `.claude/agents/*.md` (Claude Code tooling
-  config, not shipped app code), `next-env.d.ts` (auto-generated, never hand-edited).
-- **Test files** (`*.test.ts`/`*.test.js`): included, since the task says "all."
+| Track | Agent | Scope |
+|---|---|---|
+| A | electron-pro | `electron/main/index.js` split by concern (static server, output-window/display manager, IPC handlers, updater bridge, media protocol handler); `electron/db/index.js` split (schema/migration, row mappers); extract the duplicated `resolveWithinDir` (+ `sanitizeFileNameSegment`) into one shared `electron/fsSecurity.js` required by both. |
+| B | react-specialist | `useLumen.ts` (1530 lines) — extract cohesive internal pieces into sub-hooks/helper modules it composes. Same public `UseLumen` return shape, zero consumer changes. |
+| C | react-specialist | `Sidebar.tsx` (734 lines) — extract natural sub-components (song list / Bible browser / lineup list, etc.) into sibling files. Same exported `Sidebar` name/props. |
+| D | react-specialist | `Header.tsx`, `PreviewPanel.tsx`, `MainPanel.tsx`, `TourOverlay.tsx`, `SongEditorModal.tsx` — same treatment, one agent working through all five. |
+| E | nextjs-developer | `data.ts` — split sample data (`SONGS`, `LOOKS`) and grouped helpers (highlight-range, book-name) out of the core types/constants file, re-exporting from `data.ts` so consumers don't change. `lib/repository/indexeddb.ts` — extract the generic IndexedDB primitives (`openDb`/`reqToPromise`/`getAll`/`getOne`/`put`/`del`) into a small helper module, leaving the `AppRepository` implementation itself in place. |
 
-## Batches (parallel, independent — no cross-file dependency for a comment-style pass)
-| Batch | Files |
-|---|---|
-| A — Electron shell | `electron/db.js`, `electron/main.js`, `electron/preload.js`, `electron/preload-output.js`, `electron/bibleXml.js`, `electron/bibleXml.test.js` |
-| B — Repository layer | `lib/repository/types.ts`, `lib/repository/indexeddb.ts` |
-| C — Core hooks/utils (pt 1) | `components/lumen/useLumen.ts`, `useBibleTranslation.ts`, `data.ts`, `stage.ts`, `navigation.ts`, `transpose.ts`, `songImport.ts` |
-| D — Core hooks/utils (pt 2) | `components/lumen/globalSearch.ts`, `bibleSearch.ts`, `tourPlacement.ts`, `tourSteps.ts`, `useSlideTransition.ts`, `useDebouncedColor.ts`, `useBackdropClose.ts`, `useViewportBreakpoint.ts`, `electronCompat.ts`, `electronDisplay.ts`, `electronShell.ts`, `electronUpdater.ts` |
-| E — UI components (pt 1) | `Header.tsx`, `MainPanel.tsx`, `Sidebar.tsx`, `ResizeHandle.tsx`, `HotkeysModal.tsx`, `SongEditorModal.tsx`, `DisplaysModal.tsx`, `ConfirmDialog.tsx`, `BibleTranslationsPanel.tsx`, `PreviewPanel.tsx`, `TourOverlay.tsx` |
-| F — UI components (pt 2) | `BibleComparePanel.tsx`, `SlidesPanel.tsx`, `BackgroundsPanel.tsx`, `LumenApp.tsx`, `TransitionRow.tsx`, `PresentationOverlay.tsx`, `OutputWindowApp.tsx`, `SlideStage.tsx`, `SlideCaption.tsx`, `LookBackground.tsx`, `HighlightedLine.tsx`, `MobileTabBar.tsx` |
-| G — Tests + entry point | `bibleSearch.test.ts`, `bookMatching.test.ts`, `compareTranslation.test.ts`, `bookNames.test.ts`, `navigation.test.ts`, `tourPlacement.test.ts`, `tourSteps.test.ts`, `slideTransition.test.ts`, `app/page.tsx` |
-
-All 7 batches are independent (pure comment rewrite, no shared state) — run in parallel.
-
-## What each agent delivers
-Each batch agent: rewrites every multi-line "why" comment in its file list down to a single short
-line describing what the code does (or deletes the comment if the code is already self-evident),
-leaves all logic/behavior untouched, and reports which files it touched and how many comment
-blocks it shortened/removed.
+## What each track delivers
+Every track: a before/after file list, confirmation that the public contract at its file's
+boundary (function/component signatures, hook return shape, exported names) is byte-for-byte
+unchanged, and its own sanity check (`node --check` for Track A's `.js` files; a description of
+what it verified for the TS/TSX tracks — full `tsc`/lint/build verification is done centrally by
+the orchestrator afterward, same as the last two `/orchestrate` passes in this session, to avoid
+five agents racing on the same verification commands).
 
 ## Confirmation
-This modifies ~50+ files across the whole codebase. Per orchestration rules, execution pauses here
-for user confirmation before the 7 batch agents are spawned.
+The user already gave explicit, scoped confirmation via the two scoping questions above
+("Everything, including useLumen.ts", "Split its internals, keep one public hook") — proceeding
+straight to execution without an additional gate, consistent with the precedent set earlier this
+session.
 
 ---
 ## Outcome (filled in after execution)
 
-**Executed as planned, no deviation.** All 7 batches (A–G) completed and were run as
-`general-purpose` agents in the background, in parallel, as planned. 59 files changed total
-(58 source files + `CLAUDE.md`), net **2001 comment lines removed, 456 lines of short
-one-line replacements added** (`git diff --stat`).
+**All five tracks executed as planned, no scope deviation.** Combined effect: 6 large files
+(1531+734+533+441+398+341+270+258+253+211+208 lines of the originally-surveyed files) turned into
+one composition file each plus ~50 new single-concern files, with every public contract at each
+boundary (hook return shape, component props, module exports) verified unchanged.
 
-Per-batch results (shortened / deleted, self-reported and spot-checked):
-- **A — Electron shell** (6 files): 70 blocks shortened, 0 deleted — even well-named helpers had
-  non-obvious behavior worth a short line; rationale/history text (WAL-mode reasoning, sandbox
-  crash history, security threat-model walkthroughs) deleted outright.
-- **B — Repository layer** (2 files): 13 blocks shortened, 0 deleted.
-- **C — Core hooks/utils pt1** (7 files, incl. `useLumen.ts` — the app's single biggest file):
-  ~95+ blocks shortened/deleted in `useLumen.ts` alone; ~140 more across the other 6 files.
-- **D — Core hooks/utils pt2** (12 files): 45 blocks shortened, 0 deleted.
-- **E — UI components pt1** (11 files): ~71 shortened, 5 deleted entirely as redundant with
-  self-evident code.
-- **F — UI components pt2** (12 files): ~30 shortened, several JSX comments deleted entirely.
-- **G — Tests + `app/page.tsx`** (9 files): several test-file header/regression comments deleted
-  outright (redundant with `it`/`describe` titles); 2 rationale blocks in `app/page.tsx` shortened.
+- **Track A (electron-pro)**: `electron/main/index.js` 398→~78 lines, split into
+  `staticServer.js`/`outputWindow.js`/`updater.js`/`mediaProtocol.js`/`ipcHandlers.js`.
+  `electron/db/index.js` 253→smaller, split into `schema.js`/`mappers.js`. `resolveWithinDir`
+  de-duplicated into one shared `electron/fsSecurity.js` — caught and fixed a real behavioral
+  difference between the two original copies (one returned `null` on violation, one threw) rather
+  than silently picking one.
+- **Track B (react-specialist)**: `useLumen.ts` 1531→387 lines, 19 new hook/helper files under
+  `hooks/`, `lumenState.ts`, `styles/`, `media/`. `UseLumen`'s inferred return shape confirmed
+  unchanged (all ~50 consumers still fully type-check). One process note: this agent ran
+  `git stash`/`git stash pop` mid-task while three other agents held concurrent uncommitted
+  changes in the same working tree — verified independently afterward (empty `git stash list`,
+  every file every track reported present via `git status`) that nothing was lost.
+- **Track C (react-specialist)**: `Sidebar.tsx` 734→92 lines, 6 new files under
+  `layout/sidebar/`. `Sidebar`'s exported signature unchanged.
+- **Track D (react-specialist)**: `Header.tsx` 441→145, `PreviewPanel.tsx` 341→138,
+  `MainPanel.tsx` 270→19, `TourOverlay.tsx` 258→42, `SongEditorModal.tsx` 211→89 — ~25 new files
+  total. Caught and avoided a Windows/git case-only filename collision
+  (`mainPanelToolbar.ts` vs `MainPanelToolbar.tsx`) before it became a real bug.
+- **Track E (nextjs-developer)**: `data.ts` 533→232 lines (`sampleSongs.ts`/`sampleLooks.ts`/
+  `highlightUtils.ts`/`bookNames.ts` extracted, re-exported so ~40 consumers needed zero changes —
+  verified via a programmatic diff of the module's export symbol table, not just a visual check).
+  `lib/repository/indexeddb.ts` 208→149 lines, generic IDB primitives extracted to
+  `idbHelpers.ts`.
 
-**Verification (done independently, not just taking agents' word for it):**
-- `git status`/`git diff --stat` confirms exactly the 58 planned files changed, nothing extra.
-- `npx tsc --noEmit` — clean, zero errors.
-- `npm run lint` — 22 errors / 6 warnings, identical to the pre-existing baseline established
-  before this pass (all pre-existing `@typescript-eslint/no-require-imports` in Electron CJS
-  files + one pre-existing unused-var warning) — no new lint issues introduced.
-- Manually diffed `useLumen.ts` (the largest, highest-risk change at 629 changed lines): every
-  added line is a comment line; no logic was altered.
-- Each batch agent additionally self-verified via its own `git diff` filtered to non-comment
-  lines, `tsc --noEmit`, and/or `eslint` runs — all reported clean.
-
-**Deviation from plan**: none. The one adjustment made mid-flight was in Batch A's agent
-recognizing that a few non-comment lines flagged by its own grep check in `db.js`
-(`parseBibleXml`/`bytesToStore`/`previousRow`) were pre-existing uncommitted changes from an
-earlier, unrelated task in this session (the Electron Bible-translation caching fix) — correctly
-left untouched rather than misattributed to this pass.
+**Verification (done independently by the orchestrator, not just taking the agents' word for
+it):**
+- Confirmed the `git stash`/`pop` from Track B left no stash behind and every file every track
+  reported was actually present on disk (`git status` spot-checks per track).
+- `npx tsc --noEmit` on the fully combined result: clean, zero errors.
+- `npm run lint`: 46 problems (41 errors / 5 warnings), up from the 28-problem baseline (22/6) —
+  fully explained, not a regression: the `no-require-imports` count rose only because
+  `main/index.js`'s `require()` calls are now spread across 6 files (each needs its own), same
+  pre-existing rule; the 5 non-require-import errors are the exact same 5 pre-existing
+  React-hooks-rule issues from before this task (in `app/page.tsx`, `Sidebar.tsx`'s new home,
+  `LineupModal.tsx`, `ResizeHandle.tsx`, and `useLumen.ts`'s new home), just now living in whatever
+  file the affected code moved into — traced one (`ResizeHandle.tsx`, untouched by every track) to
+  confirm it predates this task entirely. Warnings actually dropped 6→5.
+- `npm run build` (full static export): succeeds, all pages generate.
 
 All changes are uncommitted in the working tree, pending the user's review/commit decision.

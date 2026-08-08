@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 // Dynamically imported so only the active window's app is bundled.
 const LumenApp = dynamic(() => import("@/components/lumen/LumenApp").then((mod) => mod.LumenApp), { ssr: false });
 const OutputWindowApp = dynamic(
-  () => import("@/components/lumen/OutputWindowApp").then((mod) => mod.OutputWindowApp),
+  () => import("@/components/lumen/presentation/OutputWindowApp").then((mod) => mod.OutputWindowApp),
   { ssr: false }
 );
 

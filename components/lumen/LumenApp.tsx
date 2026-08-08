@@ -2,26 +2,26 @@
 
 import dynamic from "next/dynamic";
 import { CSSProperties } from "react";
-import { Header } from "./Header";
-import { MainPanel } from "./MainPanel";
-import { MobileTabBar } from "./MobileTabBar";
-import { PreviewPanel } from "./PreviewPanel";
-import { ResizeHandle } from "./ResizeHandle";
-import { Sidebar } from "./Sidebar";
+import { Header } from "./layout/Header";
+import { MainPanel } from "./layout/MainPanel";
+import { MobileTabBar } from "./layout/MobileTabBar";
+import { PreviewPanel } from "./presentation/PreviewPanel";
+import { ResizeHandle } from "./layout/ResizeHandle";
+import { Sidebar } from "./layout/Sidebar";
 import { useLumen, type LumenProps } from "./useLumen";
-import { useViewportBreakpoint } from "./useViewportBreakpoint";
+import { useViewportBreakpoint } from "./hooks/useViewportBreakpoint";
 
 // Lazily loads each modal/overlay so its code splits into its own chunk.
-const SettingsModal = dynamic(() => import("./SettingsModal").then((mod) => mod.SettingsModal), { ssr: false });
-const SongEditorModal = dynamic(() => import("./SongEditorModal").then((mod) => mod.SongEditorModal), { ssr: false });
-const LineupModal = dynamic(() => import("./LineupModal").then((mod) => mod.LineupModal), { ssr: false });
-const PresentationOverlay = dynamic(() => import("./PresentationOverlay").then((mod) => mod.PresentationOverlay), { ssr: false });
-const TourOverlay = dynamic(() => import("./TourOverlay").then((mod) => mod.TourOverlay), { ssr: false });
-const ConfirmDialog = dynamic(() => import("./ConfirmDialog").then((mod) => mod.ConfirmDialog), { ssr: false });
-const HotkeysModal = dynamic(() => import("./HotkeysModal").then((mod) => mod.HotkeysModal), { ssr: false });
-const DisplaysModal = dynamic(() => import("./DisplaysModal").then((mod) => mod.DisplaysModal), { ssr: false });
-const BibleTranslationsPanel = dynamic(() => import("./BibleTranslationsPanel").then((mod) => mod.BibleTranslationsPanel), { ssr: false });
-const GlobalSearchModal = dynamic(() => import("./GlobalSearchModal").then((mod) => mod.GlobalSearchModal), { ssr: false });
+const SettingsModal = dynamic(() => import("./modals/SettingsModal").then((mod) => mod.SettingsModal), { ssr: false });
+const SongEditorModal = dynamic(() => import("./modals/SongEditorModal").then((mod) => mod.SongEditorModal), { ssr: false });
+const LineupModal = dynamic(() => import("./modals/LineupModal").then((mod) => mod.LineupModal), { ssr: false });
+const PresentationOverlay = dynamic(() => import("./presentation/PresentationOverlay").then((mod) => mod.PresentationOverlay), { ssr: false });
+const TourOverlay = dynamic(() => import("./tour/TourOverlay").then((mod) => mod.TourOverlay), { ssr: false });
+const ConfirmDialog = dynamic(() => import("./modals/ConfirmDialog").then((mod) => mod.ConfirmDialog), { ssr: false });
+const HotkeysModal = dynamic(() => import("./modals/HotkeysModal").then((mod) => mod.HotkeysModal), { ssr: false });
+const DisplaysModal = dynamic(() => import("./modals/DisplaysModal").then((mod) => mod.DisplaysModal), { ssr: false });
+const BibleTranslationsPanel = dynamic(() => import("./bible/BibleTranslationsPanel").then((mod) => mod.BibleTranslationsPanel), { ssr: false });
+const GlobalSearchModal = dynamic(() => import("./modals/GlobalSearchModal").then((mod) => mod.GlobalSearchModal), { ssr: false });
 
 export function LumenApp(props: LumenProps) {
   const lumen = useLumen(props);

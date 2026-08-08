@@ -4,7 +4,7 @@
   "private": true,
   "description": "Lumen worship presentation app",
   "author": "Lumen",
-  "main": "electron/main.js",
+  "main": "electron/main/index.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
