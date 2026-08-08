@@ -39,7 +39,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
   const { clock, dateLabel } = useHeaderClock();
 
   return (
-    <header className="h-14 flex-none flex items-center gap-5 p-[0_16px_0_18px] border-b border-border bg-panel overflow-x-auto">
+    <header className="h-14 flex-none flex items-center gap-5 p-[0_16px_0_18px] border-b border-border bg-panel">
       {isTablet && (
         <InteractiveButton
           onClick={() => patch((previousState) => ({ sidebarDrawerOpen: !previousState.sidebarDrawerOpen }))}
@@ -50,9 +50,12 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
         </InteractiveButton>
       )}
 
-      <HeaderBrand isDesktop={isDesktop} />
+      {/* Scoped here (not on <header>) so overflow-x doesn't force overflow-y auto and clip popovers in the control bar below. */}
+      <div className="flex items-center gap-5 min-w-0 overflow-x-auto">
+        <HeaderBrand isDesktop={isDesktop} />
 
-      <HeaderSetSwitcher lumen={lumen} isDesktop={isDesktop} dateLabel={dateLabel} />
+        <HeaderSetSwitcher lumen={lumen} isDesktop={isDesktop} dateLabel={dateLabel} />
+      </div>
 
       <div className="flex-1" />
 

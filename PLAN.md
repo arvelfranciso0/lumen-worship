@@ -1,146 +1,134 @@
-# PLAN.md
+# PLAN.md — Updates panel doesn't open on click
 
 ## Task
-"For every code/file with many lines, separate them into a different file — proper code structure,
-like a senior developer. Example: `electron/main/index.js` shouldn't have the whole thing in one
-file. Move all repeated/same-functionality functions into helpers/utils."
 
-Two things: (1) split large files by internal concern, (2) de-duplicate repeated functions into
-shared helper modules.
+User report: clicking the "Updates" button in the app header no longer opens the
+update popover (release notes / "you're up to date" / install prompt). Screenshot
+shows the Electron desktop build's header with the "Updates" button present but
+non-functional on click.
 
-## Investigation (done directly, not delegated)
-- **Concrete duplicate found**: `resolveWithinDir` (a path-traversal guard) is defined verbatim,
-  independently, in both `electron/main/index.js:21` and `electron/db/index.js:43`. This is the
-  clearest instance of "same functionality, different files" in the codebase.
-- **Large-file survey** (line counts, excluding `.claude/workflows/*` tooling and test files):
-  `useLumen.ts` 1530, `Sidebar.tsx` 734, `data.ts` 533, `Header.tsx` 441, `electron/main/index.js`
-  398 (the user's own example), `PreviewPanel.tsx` 341, `MainPanel.tsx` 270, `TourOverlay.tsx` 258,
-  `electron/db/index.js` 253, `SongEditorModal.tsx` 211, `lib/repository/indexeddb.ts` 208.
-- `useLumen.ts` is explicitly documented in `CLAUDE.md` as a **deliberate** single-hook
-  architecture ("the single source of truth for the entire app... if you need a new piece of
-  state or action, it goes in this hook") — not a scaffold accident. Splitting it blindly would
-  contradict a decision the project already made on purpose, so the user was asked directly.
-  Answers received:
-  - **Overall scope**: "Everything, including `useLumen.ts`."
-  - **`useLumen.ts` specifically**: "Split its internals, keep one public hook" — extract
-    cohesive pieces into sub-hooks/helper modules that `useLumen.ts` still composes and exposes
-    through the exact same `UseLumen` return shape. External API is a hard constraint, not a
-    suggestion — every consumer of `useLumen()` (nearly every component in the app) must need
-    zero changes.
-- `electron/main/index.js`'s internal shape (read in full): app lifecycle bootstrap, a static
-  file server (`startStaticServer`/`ensureStaticServer`/`resolveAppUrl`/`MIME_TYPES`), the
-  fullscreen "audience output" window + display management (`serializeDisplay`/`listDisplays`/
-  `pickAutoDisplay`/`resolveOutputDisplay`/`outputStatusPayload`/`broadcastOutputStatus`/
-  `openOutputWindow`/`closeOutputWindow`/`retargetOutputWindow`/`handleDisplayRemoved`/
-  `handleDisplaysChanged`), IPC handler registration (`registerIpcHandlers`, ~75 lines), the
-  auto-updater status bridge (`checkForUpdatesIfEnabled`/`setUpdateStatus`/
-  `normalizeReleaseNotes`/the `autoUpdater.on(...)` listeners), and the `lumen-media` protocol
-  handler — five distinct concerns bolted into one file.
-- `electron/db/index.js`: schema + migration (`SCHEMA`, `migrateSchema`), row mappers
-  (`rowToSong`/`rowToLineup`/`rowToBackground`/`rowToDownloadedBibleTranslation`), the duplicated
-  `resolveWithinDir`/`sanitizeFileNameSegment` security helpers, then the `createDb` repository
-  factory itself.
-- `data.ts`: highlight-range helpers, book-name/abbreviation helpers, lyric font definitions, core
-  domain types (`Section`/`Song`/`Lineup`/layout types), a **74-line `SONGS` sample-data array**
-  and a **107-line `LOOKS` sample-data array**, Bible types/constants, UI filter constants — types
-  and runtime sample data are mixed together in one file.
-- `Sidebar.tsx`: one ~500-line `Sidebar` function plus a smaller `LineupDetail` helper — the bulk
-  is a single monolithic function body (song list / Bible browser / lineup list all inline), not
-  yet broken into sub-components at all.
+## Context already gathered (pre-orchestration investigation)
 
-## Sub-agent matching
-Read all six files in `.claude/agents/`. Three are genuine matches for this task:
-- **`electron-pro`** — ".claude/agents/electron-pro.md:3": "building Electron desktop
-  applications that require native OS integration... performance optimization" — covers
-  reorganizing `electron/main/index.js` and `electron/db/index.js`'s internals and the shared
-  path-security helper.
-- **`react-specialist`** — ".claude/agents/react-specialist.md:3": "optimizing existing React
-  applications for performance, implementing advanced React 18+ features, or solving complex
-  state management and architectural challenges within React codebases" — the explicit
-  "complex state management... architectural challenges" phrase is a direct match for splitting
-  `useLumen.ts`'s internals and the large UI components.
-- **`nextjs-developer`** — ".claude/agents/nextjs-developer.md:3": "architect or implement
-  complete Next.js applications" — covers the app's data-layer files (`data.ts`,
-  `lib/repository/indexeddb.ts`), which are Next.js app architecture, not electron- or
-  React-component-specific.
+- The Updates button + popover live in
+  [components/lumen/layout/header/HeaderUpdatePanel.tsx](components/lumen/layout/header/HeaderUpdatePanel.tsx),
+  wired into [components/lumen/layout/Header.tsx](components/lumen/layout/Header.tsx).
+- This code was extracted from a single 441-line monolithic `components/lumen/Header.tsx`
+  into `components/lumen/layout/Header.tsx` + several files under
+  `components/lumen/layout/header/` in commit `fb7d185` ("refactor the codebase"),
+  which also gutted `useLumen.ts` from ~1650 lines down to ~400 by moving logic into
+  hooks like `components/lumen/hooks/useAppUpdater.ts`.
+- Line-by-line diff of the extracted `HeaderUpdatePanel.tsx` against the pre-refactor
+  inline JSX (`git show fb7d185^:components/lumen/Header.tsx`) shows the click handler,
+  local `useState` panel-open logic, and popover JSX/CSS classes (including the
+  `z-90`/`z-100` overlay/popover stacking, which — unlike `rounded-*` — Tailwind v4
+  supports as bare integers, confirmed by the `@utility rounded-*` comment in
+  `app/globals.css` implying only radius needed a workaround) are unchanged.
+- `npx tsc --noEmit` and `npm run lint` both pass clean on this file — no type or lint
+  errors.
+- No global click/mousedown listeners, no `<form>` ancestor, only one `<Header>` render
+  in `LumenApp.tsx` — ruled out several common "click silently swallowed" causes.
+- Was mid-way through spinning up a headless Playwright session against `npm run dev`
+  to click the button and inspect the live DOM/console when the user interrupted to
+  request this be run through `/orchestrate` instead.
+- Not yet checked: the Electron-side update bridge
+  (`electron/main/updater.js`, `electron/preload/index.js`,
+  `components/lumen/electron-bridges/electronUpdater.ts`) for a regression from the
+  same refactor — the screenshot is the packaged/dev Electron shell, not the bare
+  browser, so if `getElectronUpdater()` or its IPC surface throws during
+  `useAppUpdater`'s mount effect, that's a second plausible avenue even though it
+  shouldn't, in theory, block the local `panelOpen` state used by the click.
 
-`typescript-pro`, `performance-engineer`, `penetration-tester` have no stated purpose matching
-file-organization work — not used.
+## Sub-agents
 
-## Five independent tracks — all safe to run fully in parallel
-No track's file set overlaps another's, and the one shared boundary (`useLumen.ts`'s public
-return shape) is a hard constraint that keeps the others decoupled from it — Sidebar/Header/etc.
-can assume `useLumen()`'s external shape is unchanged regardless of how Track B reorganizes its
-insides; `data.ts`'s split (Track E) re-exports everything under its current names so its ~40
-consumers need zero edits. Nothing here needs sequencing.
+### 1. `react-specialist` (primary — investigate + fix)
 
-| Track | Agent | Scope |
-|---|---|---|
-| A | electron-pro | `electron/main/index.js` split by concern (static server, output-window/display manager, IPC handlers, updater bridge, media protocol handler); `electron/db/index.js` split (schema/migration, row mappers); extract the duplicated `resolveWithinDir` (+ `sanitizeFileNameSegment`) into one shared `electron/fsSecurity.js` required by both. |
-| B | react-specialist | `useLumen.ts` (1530 lines) — extract cohesive internal pieces into sub-hooks/helper modules it composes. Same public `UseLumen` return shape, zero consumer changes. |
-| C | react-specialist | `Sidebar.tsx` (734 lines) — extract natural sub-components (song list / Bible browser / lineup list, etc.) into sibling files. Same exported `Sidebar` name/props. |
-| D | react-specialist | `Header.tsx`, `PreviewPanel.tsx`, `MainPanel.tsx`, `TourOverlay.tsx`, `SongEditorModal.tsx` — same treatment, one agent working through all five. |
-| E | nextjs-developer | `data.ts` — split sample data (`SONGS`, `LOOKS`) and grouped helpers (highlight-range, book-name) out of the core types/constants file, re-exporting from `data.ts` so consumers don't change. `lib/repository/indexeddb.ts` — extract the generic IndexedDB primitives (`openDb`/`reqToPromise`/`getAll`/`getOne`/`put`/`del`) into a small helper module, leaving the `AppRepository` implementation itself in place. |
+Matches: "solving complex state management and architectural challenges within React
+codebases" — this bug is exactly a regression introduced by a state/architecture
+refactor (monolith → child components) in a React codebase.
 
-## What each track delivers
-Every track: a before/after file list, confirmation that the public contract at its file's
-boundary (function/component signatures, hook return shape, exported names) is byte-for-byte
-unchanged, and its own sanity check (`node --check` for Track A's `.js` files; a description of
-what it verified for the TS/TSX tracks — full `tsc`/lint/build verification is done centrally by
-the orchestrator afterward, same as the last two `/orchestrate` passes in this session, to avoid
-five agents racing on the same verification commands).
+**Task**: Reproduce the bug live (start `npm run dev`, drive a headless Chromium
+against `localhost:3000` — Playwright is not yet installed in this project;
+`playwright-core` can be installed with `--no-save` and pointed at the system Chrome
+at `C:\Program Files\Google\Chrome\Application\chrome.exe` via `executablePath` to
+avoid a slow browser download), click the "Updates" button, and determine exactly why
+the popover fails to appear (DOM inspection, computed styles/z-index/clipping,
+console errors, React state via screenshots before/after click). Compare current
+behavior against the pre-refactor version (`git show fb7d185^:components/lumen/Header.tsx`)
+if useful. Fix the root cause with a minimal, targeted change — do not restructure
+unrelated code. Verify the fix with a repeat click-and-screenshot pass, plus
+`npx tsc --noEmit` and `npm run lint` on touched files.
+
+**Deliverable**: root cause explanation, the code change (diff), and confirmation
+(screenshot/console evidence) that the popover now opens and closes correctly.
+
+### 2. `electron-pro` (parallel, diagnostic only — no code changes)
+
+Matches: "Use electron-pro for complete desktop app development from architecture to
+signed, distributable installers" / security hardening and native integration,
+including the auto-updater surface explicitly listed in its checklist ("Auto-update
+system: ... Version checking ... Update notifications").
+
+**Task**: Audit whether commit `fb7d185`'s refactor broke the Electron-side update
+bridge — compare `electron/main/updater.js`, `electron/preload/index.js`, and
+`components/lumen/electron-bridges/electronUpdater.ts` against their pre-refactor
+state (`git log`/`git show` as needed) for mismatched IPC channel names, renamed/
+removed methods on `window.electronAPI`, or anything that would make
+`getElectronUpdater()` return null/throw inside `useAppUpdater`'s effect
+(`components/lumen/hooks/useAppUpdater.ts`). This is a read-only diagnostic pass to
+rule the Electron layer in or out — do not modify any files.
+
+**Deliverable**: a short verdict — "Electron update bridge is intact / here is the
+specific mismatch found" — with file:line references.
+
+## Order / dependencies
+
+Both agents start in parallel — they read disjoint file sets and neither depends on
+the other's findings to begin. If `electron-pro` finds a real bridge break, its
+findings get handed to `react-specialist` (or applied directly) as a follow-up fix;
+otherwise its "all clear" just narrows the root cause to the React/CSS layer, where
+`react-specialist` is already looking.
 
 ## Confirmation
-The user already gave explicit, scoped confirmation via the two scoping questions above
-("Everything, including useLumen.ts", "Split its internals, keep one public hook") — proceeding
-straight to execution without an additional gate, consistent with the precedent set earlier this
-session.
 
----
+`react-specialist`'s task modifies code (applies the fix). Per orchestration rules,
+confirming with the user before executing is required unless they've already asked
+for an end-to-end fix. The user's message was diagnostic framing ("why is that..."),
+so confirmation will be requested before dispatching the fix-applying agent.
+
 ## Outcome (filled in after execution)
 
-**All five tracks executed as planned, no scope deviation.** Combined effect: 6 large files
-(1531+734+533+441+398+341+270+258+253+211+208 lines of the originally-surveyed files) turned into
-one composition file each plus ~50 new single-concern files, with every public contract at each
-boundary (hook return shape, component props, module exports) verified unchanged.
+**electron-pro (diagnostic)**: clean bill of health. IPC channel names, preload
+method surface, and `UpdateStatus` payload shapes all match end-to-end across
+`electron/main/updater.js` → `electron/main/ipcHandlers.js` → `electron/preload/index.js`
+→ `components/lumen/electron-bridges/electronUpdater.ts` → `useAppUpdater.ts`.
+`getElectronUpdater()` can only return `null`, never throw synchronously — ruled out
+as a contributing cause.
 
-- **Track A (electron-pro)**: `electron/main/index.js` 398→~78 lines, split into
-  `staticServer.js`/`outputWindow.js`/`updater.js`/`mediaProtocol.js`/`ipcHandlers.js`.
-  `electron/db/index.js` 253→smaller, split into `schema.js`/`mappers.js`. `resolveWithinDir`
-  de-duplicated into one shared `electron/fsSecurity.js` — caught and fixed a real behavioral
-  difference between the two original copies (one returned `null` on violation, one threw) rather
-  than silently picking one.
-- **Track B (react-specialist)**: `useLumen.ts` 1531→387 lines, 19 new hook/helper files under
-  `hooks/`, `lumenState.ts`, `styles/`, `media/`. `UseLumen`'s inferred return shape confirmed
-  unchanged (all ~50 consumers still fully type-check). One process note: this agent ran
-  `git stash`/`git stash pop` mid-task while three other agents held concurrent uncommitted
-  changes in the same working tree — verified independently afterward (empty `git stash list`,
-  every file every track reported present via `git status`) that nothing was lost.
-- **Track C (react-specialist)**: `Sidebar.tsx` 734→92 lines, 6 new files under
-  `layout/sidebar/`. `Sidebar`'s exported signature unchanged.
-- **Track D (react-specialist)**: `Header.tsx` 441→145, `PreviewPanel.tsx` 341→138,
-  `MainPanel.tsx` 270→19, `TourOverlay.tsx` 258→42, `SongEditorModal.tsx` 211→89 — ~25 new files
-  total. Caught and avoided a Windows/git case-only filename collision
-  (`mainPanelToolbar.ts` vs `MainPanelToolbar.tsx`) before it became a real bug.
-- **Track E (nextjs-developer)**: `data.ts` 533→232 lines (`sampleSongs.ts`/`sampleLooks.ts`/
-  `highlightUtils.ts`/`bookNames.ts` extracted, re-exported so ~40 consumers needed zero changes —
-  verified via a programmatic diff of the module's export symbol table, not just a visual check).
-  `lib/repository/indexeddb.ts` 208→149 lines, generic IDB primitives extracted to
-  `idbHelpers.ts`.
+**react-specialist (root cause + fix)**: not a React logic bug at all — the button's
+`onClick`, local `panelOpen` state, and popover JSX were confirmed still firing and
+rendering correctly on every click (verified via live DOM inspection). The popover
+was being **CSS-clipped**: `<header>` in `components/lumen/layout/Header.tsx` had
+`overflow-x-auto`, and per the CSS overflow spec, setting `overflow-x` to anything
+but `visible` forces the browser to also compute `overflow-y` as `auto` — confirmed
+live via `getComputedStyle`. The popover (`position: absolute; top: calc(100% + 10px)`,
+~140px tall) renders entirely below the 56px-tall header's own box, so it was being
+silently clipped out of the paintable area by that implicit `overflow-y: auto`.
 
-**Verification (done independently by the orchestrator, not just taking the agents' word for
-it):**
-- Confirmed the `git stash`/`pop` from Track B left no stash behind and every file every track
-  reported was actually present on disk (`git status` spot-checks per track).
-- `npx tsc --noEmit` on the fully combined result: clean, zero errors.
-- `npm run lint`: 46 problems (41 errors / 5 warnings), up from the 28-problem baseline (22/6) —
-  fully explained, not a regression: the `no-require-imports` count rose only because
-  `main/index.js`'s `require()` calls are now spread across 6 files (each needs its own), same
-  pre-existing rule; the 5 non-require-import errors are the exact same 5 pre-existing
-  React-hooks-rule issues from before this task (in `app/page.tsx`, `Sidebar.tsx`'s new home,
-  `LineupModal.tsx`, `ResizeHandle.tsx`, and `useLumen.ts`'s new home), just now living in whatever
-  file the affected code moved into — traced one (`ResizeHandle.tsx`, untouched by every track) to
-  confirm it predates this task entirely. Warnings actually dropped 6→5.
-- `npm run build` (full static export): succeeds, all pages generate.
+This turned out to **predate** the `fb7d185` refactor hypothesized above — verified via
+a temporary worktree at `fb7d185^`, where the same bug reproduces. It actually traces
+to `d19db2d` ("fix: opmtimze ready for release"), which first added `overflow-x-auto`
+to the header (intended to let the header itself scroll horizontally on narrow
+windows) and has silently broken every header-anchored popover since.
 
-All changes are uncommitted in the working tree, pending the user's review/commit decision.
+**Fix applied** (`components/lumen/layout/Header.tsx`, only file changed): removed
+`overflow-x-auto` from `<header>`; scoped it instead to a new wrapper
+`<div className="flex items-center gap-5 min-w-0 overflow-x-auto">` around just
+`HeaderBrand` + `HeaderSetSwitcher` (the two elements that actually need to shrink/
+scroll on narrow widths). The right-hand control bar hosting the Updates/Output/
+Settings popovers is no longer inside any `overflow-x: auto` ancestor.
+
+Verified: popover opens on click, "Close" dismisses it, outside-click dismisses it
+(headless Chrome, 1440×900, before/after screenshots + DOM/console inspection).
+`npx tsc --noEmit` and `npm run lint`/`eslint` both clean. Comment left in the diff
+was tightened post-hoc to a single line to match this repo's comment convention
+(CLAUDE.md: no multi-line rationale blocks).
