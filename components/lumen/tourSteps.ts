@@ -1,40 +1,23 @@
 import type { TourMode } from "./data";
 
-// What the tour needs to know about the app to decide which steps apply. Kept
-// to plain data so the step list stays pure and testable.
+// What the tour needs to know about the app to decide which steps apply.
 export type TourContext = {
   hasBibleTranslations: boolean;
-  // At least two translations downloaded — the minimum Compare needs to show
-  // its dropdowns instead of its "needs 2 translations" prompt. Kept separate
-  // from hasBibleTranslations rather than derived from it inline, so the
-  // Compare steps' gating reads the same way as every other step's.
+  // Whether at least two translations are downloaded, for gating the Compare steps.
   hasMultipleBibleTranslations: boolean;
 };
 
-// Where a step's target element lives. A tour walks onto a surface by opening
-// it and walks off by closing it, so a sequence can lead the operator into a
-// dialog, guide them through it, and bring them back out — instead of pointing
-// at the button that opens the dialog and then going silent once it's up.
+// Where a step's target element lives; the tour opens the surface to step onto it and closes it to step off.
 export type TourSurface = "page" | "bibleTranslations" | "songEditor" | "lineupModal" | "bibleCompare";
 
-// Every step advances on a plain Next, and Skip is always available. The tour
-// describes the app; it never waits on the operator to complete a real action
-// first — an earlier version held the import step until a translation had
-// actually been imported, which made finishing a first run depend on
-// downloading a file from the website mid-tour.
+// A single step in a tour sequence.
 export type TourStep = {
   target: string;
   title: string;
   body: string;
-  // Defaults to "page". The tour opens this surface when it steps onto it and
-  // closes it when it steps off.
+  // Surface the tour opens when it steps onto this step; defaults to "page".
   surface?: TourSurface;
-  // Omitted from the sequence entirely when this returns false — for steps
-  // whose target element doesn't exist in that state. A step pointing at a
-  // missing element spotlights nothing and dumps the operator in front of a
-  // dark screen with a floating popover, which is what the Bible tour did with
-  // no translation imported: its first step targeted the book/chapter grid,
-  // which only renders once there's a translation to browse.
+  // Omits this step from the sequence when it returns false.
   when?: (context: TourContext) => boolean;
 };
 
@@ -46,10 +29,7 @@ export function stepSurface(step: TourStep): TourSurface {
   return step.surface ?? "page";
 }
 
-// `target` matches a data-tour="..." attribute somewhere in the tree (see
-// Header.tsx, Sidebar.tsx, and the dialogs themselves). Each mode gets its own
-// sequence, auto-started the first time that mode is visited
-// (state.tourSeen[mode]).
+// Tour step sequences per mode; `target` matches a data-tour attribute in the tree.
 const ALL_STEPS: Record<TourMode, TourStep[]> = {
   songs: [
     { target: "search", title: "Find a song fast", body: "Search by title, artist, or tag — or ⌘K for search across everything (songs, Bible books, lineups)." },
@@ -74,11 +54,7 @@ const ALL_STEPS: Record<TourMode, TourStep[]> = {
     },
     { target: "present", title: "Go live", body: "Present (or F5) sends the current slide to the audience — a second monitor if one's connected, otherwise fullscreen." },
   ],
-  // Two paths, chosen by whether anything is imported when the tour starts (the
-  // sequence is resolved once, at that moment — see tourStepsFor). With an empty
-  // library the only useful thing to teach is how to get Scripture in; once
-  // that's done, walking a returning operator back through the import panel
-  // teaches them nothing about presenting.
+  // Two paths depending on whether a translation is already imported when the tour starts.
   bible: [
     // --- Empty library: get a translation in. ---
     {
@@ -87,9 +63,7 @@ const ALL_STEPS: Record<TourMode, TourStep[]> = {
       body: "This app doesn't bundle any Bible text — every translation is a file you download once and import. Next opens the translations panel.",
       when: needsTranslation,
     },
-    // Inside the panel: where translations come from, then how one gets in.
-    // That order matters — the import button is useless until you know there's a
-    // download page behind the other one.
+    // Inside the panel: where translations come from, then how to import one.
     {
       target: "bible-panel-downloads",
       surface: "bibleTranslations",
@@ -155,9 +129,7 @@ const ALL_STEPS: Record<TourMode, TourStep[]> = {
   ],
 };
 
-// The steps that apply right now. Resolved once when a tour starts and then
-// held fixed for its duration (see TourOverlay) — recomputing mid-tour would
-// renumber the steps under the operator the moment an import succeeds.
+// Returns the steps that apply for this mode given the current context.
 export function tourStepsFor(mode: TourMode, context: TourContext): TourStep[] {
   return ALL_STEPS[mode].filter((step) => !step.when || step.when(context));
 }

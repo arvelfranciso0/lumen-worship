@@ -1,43 +1,21 @@
 import type { BibleBook, BibleVerse } from "./data";
 
-// Where Next/Previous land, and — just as importantly — where they refuse to
-// move. Every one of these is a pure function of the data it's given, split out
-// of useLumen so the boundary rules can be tested directly: an off-by-one here
-// is the difference between stopping at Revelation 22:21 and stepping into an
-// empty slide mid-service.
-//
-// The rules, in one place:
-//   - Scripture flows across chapter and book boundaries.
-//   - In the Lineups tab a song flows into its neighbour in the running set.
-//   - In the Songs tab a song never flows anywhere: it is self-contained, even
-//     when it also happens to be in the set.
-//
-// Where no crossing applies the caller lands on a blank overflow position
-// bracketing the deck (see PAST_START_INDEX / slideCount in useLumen) rather
-// than refusing to move — that empty output is what reports the end, and only a
-// step from there is a no-op.
+// Boundary rules for where Next/Previous land or refuse to move.
 
 export type VersePosition = { book: string; chapter: number; verseIndex: number };
 
-// The blank position immediately before the first slide; `slideCount` is the one
-// immediately after the last. Together they bracket the deck with the two
-// navigable empty states.
+// The blank position immediately before the first slide; `slideCount` is the one immediately after the last.
 export const PAST_START_INDEX = -1;
 
 export type DeckStep =
   // A real slide inside the deck.
   | { kind: "index"; idx: number }
-  // Off the end of the deck: the caller may continue into the next
-  // chapter/book/song, and lands on `overflowIndex` when it can't.
+  // Off the end of the deck; the caller may continue into the next chapter/book/song.
   | { kind: "cross"; overflowIndex: number }
-  // Already on the overflow position in this direction — nothing further exists.
+  // Already on the overflow position in this direction.
   | { kind: "hold" };
 
-// Where one step lands relative to the current deck, before any cross-item
-// continuation is considered. Split out and tested because the exact moment a
-// step stops being possible is what drives the transport buttons' disabled
-// state, and being one off there either strands the operator on the last verse
-// or lets Next run on forever.
+// Where one step lands relative to the current deck, before any cross-item continuation.
 export function resolveDeckStep(currentIndex: number, slideCount: number, direction: number): DeckStep {
   const clamped = Math.min(Math.max(currentIndex, PAST_START_INDEX), slideCount);
   const next = clamped + (direction > 0 ? 1 : -1);
@@ -46,15 +24,12 @@ export function resolveDeckStep(currentIndex: number, slideCount: number, direct
   return { kind: "cross", overflowIndex: direction > 0 ? slideCount : PAST_START_INDEX };
 }
 
-// Display label for a verse — a plain number normally, or a range ("1-3") for a
-// verse bridge (see BibleVerse.endNumber).
+// Display label for a verse: a plain number, or a range for a verse bridge.
 export function formatVerseLabel(verse: BibleVerse): string {
   return verse.endNumber && verse.endNumber !== verse.number ? verse.number + "-" + verse.endNumber : String(verse.number);
 }
 
-// Chapters are stepped by position in the list rather than by number + 1: a
-// partially-converted translation can be missing a chapter, and number
-// arithmetic would silently skip the whole rest of the book in that case.
+// Chapters are stepped by list position, not number + 1, so a missing chapter doesn't skip the rest of the book.
 export function resolveNextVerse(
   bibleBooks: BibleBook[], bookName: string, chapterNumber: number, verseIndex: number
 ): VersePosition | null {
@@ -74,10 +49,7 @@ export function resolveNextVerse(
   return null;
 }
 
-// Mirror of resolveNextVerse: stepping back before a chapter's first verse lands
-// on the previous chapter's last verse, and before a book's first chapter on the
-// previous book's last verse — down to Genesis 1:1, before which this returns
-// null.
+// Mirror of resolveNextVerse, stepping back to the previous chapter/book.
 export function resolvePreviousVerse(
   bibleBooks: BibleBook[], bookName: string, chapterNumber: number, verseIndex: number
 ): VersePosition | null {
@@ -99,11 +71,7 @@ export function resolvePreviousVerse(
   return null;
 }
 
-// Only ever called for the Lineups tab — the Songs tab has no continuation at
-// all, which is enforced by go() not calling this rather than by anything here.
-//
-// `sectionCountOf` has to be passed in because a song's slide count depends on
-// its lyric override, not just its stored sections.
+// Only ever called for the Lineups tab.
 export function resolveAdjacentSetSong(
   setIds: string[], currentSongId: string, direction: number, sectionCountOf: (songId: string) => number
 ): { songId: string; idx: number } | null {
@@ -114,7 +82,6 @@ export function resolveAdjacentSetSong(
   if (neighbourId === undefined) return null;
   const sectionCount = sectionCountOf(neighbourId);
   if (sectionCount <= 0) return null;
-  // Forward lands on the neighbour's first slide, backward on its last, so
-  // stepping across a boundary and immediately back returns you where you were.
+  // Forward lands on the neighbour's first slide, backward on its last.
   return { songId: neighbourId, idx: direction > 0 ? 0 : sectionCount - 1 };
 }

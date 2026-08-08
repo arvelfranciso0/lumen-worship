@@ -1,9 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { bookAbbreviation, canonicalBookNumber } from "./data.ts";
-// The name tables live with the parser (see electron/bibleXml.js's header for
-// why it isn't a shared module); this suite is what keeps them and data.ts's
-// label maps from drifting apart.
+// Book name tables come from the Bible XML parser.
 import bibleXml from "../../electron/bibleXml.js";
 
 const { BOOKS, BOOK_NAMES_BY_LANGUAGE } = bibleXml as unknown as {
@@ -31,8 +29,7 @@ describe("English book labels", () => {
   });
 });
 
-// Cebuano captions use the book's own full name — "PSA" abbreviates an English
-// word and means nothing to a Cebuano-speaking congregation.
+// Cebuano labels use the book's full name instead of an English abbreviation.
 describe("Cebuano book labels", () => {
   const CEBUANO = BOOK_NAMES_BY_LANGUAGE.Cebuano;
 
@@ -52,7 +49,6 @@ describe("Cebuano book labels", () => {
     assert.equal(bookAbbreviation("Awit ni Solomon", "Cebuano"), "Awit ni Solomon");
   });
 
-  // The reason the two languages need separate maps rather than one merged one.
   test("names spelled the same in both languages still resolve per language", () => {
     for (const shared of ["Genesis", "Ruth", "Ezra", "Job", "Daniel", "Joel", "Amos", "Nahum", "1 Samuel", "2 Samuel"]) {
       assert.equal(bookAbbreviation(shared, "Cebuano"), shared, shared + " in Cebuano");
@@ -63,16 +59,11 @@ describe("Cebuano book labels", () => {
   });
 });
 
-// A silent drift here breaks every Cebuano caption: the parser would name a book
-// one way and the label map would be keyed another, so lookups would fall
-// through to the generic first-three-letters rule.
 describe("parser names and label maps stay in step", () => {
   test("Cebuano: the parser's name order matches the label map's key order", () => {
     const CEBUANO = BOOK_NAMES_BY_LANGUAGE.Cebuano;
     assert.equal(CEBUANO.length, 66);
     CEBUANO.forEach((name, index) => {
-      // canonicalBookNumber reads a Cebuano book's number straight from the
-      // label map's key order, so this equality proves the two orders agree.
       assert.equal(canonicalBookNumber(name), index + 1, name + " should be book " + (index + 1));
     });
   });
@@ -83,7 +74,6 @@ describe("parser names and label maps stay in step", () => {
     });
   });
 
-  // What lets the app follow a book across a translation switch.
   test("the same book has the same number in both languages", () => {
     const CEBUANO = BOOK_NAMES_BY_LANGUAGE.Cebuano;
     BOOKS.forEach((english, index) => {

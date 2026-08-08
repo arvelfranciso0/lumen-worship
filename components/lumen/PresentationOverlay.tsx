@@ -18,17 +18,9 @@ export function PresentationOverlay({ lumen }: { lumen: UseLumen }) {
 
   const effectiveLook = (cur.lookId && allLooks.find((l) => l.id === cur.lookId)) || look;
   const stageLines = hidden ? [] : cur.lines;
-  // Same proportions as every preview box (see stage.ts) — only the unit differs,
-  // vw against the real screen instead of cqw against a preview's own box.
   const fit = fitForLines(cur.lines);
   const lineStyle = stageLineStyle(state.lyricStyle, state.scale, fit, "vw");
-  // The slide's own caption — in Bible Compare it already names both
-  // translations, since the comparison is part of the slide rather than an
-  // overlay on top of it. Pinned to the bottom of the screen rather than sitting
-  // in the text column, so adding it never shifts the verse off centre.
-  // Suppressed when the slide has no actual text (see PreviewPanel for why an
-  // undownloaded translation gets here) — a reference with no verse under it is
-  // worse than showing nothing.
+  // The slide's caption, suppressed when the slide has no visible text.
   const stageCaption = hidden || !cur.lines.some((line) => line.trim().length > 0) ? "" : cur.caption;
   return (
     <div className="fixed inset-0 z-[200] bg-black overflow-hidden">
@@ -37,8 +29,7 @@ export function PresentationOverlay({ lumen }: { lumen: UseLumen }) {
         <div key={idx} style={slideTransitionStyle} className={cx("flex flex-col items-center", STAGE_LINE_GAP_SCREEN)}>
           {stageLines.map((line, lineIndex) => (
             <div key={lineIndex} style={lineStyle}>
-              {/* Bible Compare stacks both translations' wording, each prefixed
-                  with the shared verse number. */}
+              {/* Bible Compare prefixes each line with the shared verse number. */}
               {cur.compare && <span className="text-[0.55em] align-super mr-[0.25em]">{cur.compare.verseNumber}</span>}
               <HighlightedLine line={line} highlights={cur.lineHighlights?.[lineIndex]} />
             </div>

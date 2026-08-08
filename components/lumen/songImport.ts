@@ -13,7 +13,7 @@ export type ParsedSong = {
 
 const SECTION_LABEL_WORDS = [
   "Verse", "Chorus", "Pre-Chorus", "Bridge", "Intro", "Outro", "Tag", "Interlude", "Refrain", "Ending",
-  // Spanish equivalents — the existing "Noche De Paz" sample song uses "Verso 1"/"Verso 2".
+  // Spanish equivalents.
   "Verso", "Coro", "Puente",
 ];
 const SECTION_LABEL_PATTERN = new RegExp(
@@ -26,11 +26,7 @@ function normalizeSectionLabel(word: string, number?: string): string {
   return number ? canonical + " " + number : canonical;
 }
 
-// A recognized label on its own line (e.g. "Verse 1", "Chorus") starts a new section — every
-// line after it belongs to that section until the next label line. A blank line always starts
-// a new slide: within the current label if one has been declared, or auto-numbered "Verse N"
-// if no label has appeared yet (matches how multi-slide sections are already modeled in the
-// sample data — several Section entries sharing one label).
+// A recognized label starts a new section; a blank line starts a new slide within it.
 export function parseLyricsBlock(rawText: string): Section[] {
   const lines = rawText.replace(/\r\n/g, "\n").split("\n");
   const sections: Section[] = [];
@@ -68,9 +64,7 @@ export function parseLyricsBlock(rawText: string): Section[] {
   return sections.length ? sections : [{ label: "Verse 1", lines: [""] }];
 }
 
-// Reverse of parseLyricsBlock, for pre-filling the textarea from an existing Song's sections —
-// round-trip safe: consecutive slides sharing a label are re-joined under one label line,
-// separated by blank lines, so re-parsing the result reproduces the same Section[].
+// Reverse of parseLyricsBlock, for pre-filling the textarea from an existing Song's sections.
 export function sectionsToText(sections: Section[]): string {
   const blocks: string[] = [];
   let index = 0;
@@ -97,9 +91,7 @@ export type SongMetadataHeader = {
   body: string;
 };
 
-// Only used by the file-upload convenience feature — extracts leading "Key: value" lines and
-// returns the rest of the file as raw, unparsed body text for the textarea; parseLyricsBlock
-// runs on it later, at save time, the same as manually-typed text.
+// Extracts leading "Key: value" lines and returns the rest as raw body text.
 export function extractMetadataHeader(raw: string): SongMetadataHeader {
   const lines = raw.replace(/\r\n/g, "\n").split("\n");
   const meta: Record<string, string> = {};

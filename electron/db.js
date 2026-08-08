@@ -1,9 +1,9 @@
-// SQLite persistence for the Electron main process, backed by Node's
-// built-in node:sqlite module (no native module / rebuild step needed).
+// SQLite persistence for the Electron main process.
 
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const { parseBibleXml } = require("./bibleXml.js");
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS songs (
@@ -31,32 +31,15 @@ const SCHEMA = `
   );
 `;
 
-// Guards a schema change made after bible_translations may have already
-// shipped once (an earlier build) — CREATE TABLE IF NOT EXISTS is a no-op
-// against an already-created table, so a fresh column needs an explicit
-// ALTER TABLE. Each is wrapped since SQLite errors on adding a column that
-// already exists.
+// Adds columns to existing tables that predate them.
 
-// `code` reaches here straight from the imported file's own `code`/`id`
-// XML attribute (see electron/bibleXml.js) — entirely attacker-controlled.
-// Used unsanitized, a value like "../../../../some/path" would let
-// path.join(bibleTranslationsDir, code + "." + format) write (and later,
-// via getBibleTranslationData/deleteBibleTranslation reading the same
-// value back out of the DB, read or delete) a file outside
-// bibleTranslationsDir entirely. Strip it down to safe filename characters
-// before it ever reaches the filesystem — the same class of bug
-// addBackground avoids by keying its file names off an app-generated id
-// instead of anything file-supplied.
+// Strips a value down to safe filename characters.
 function sanitizeFileNameSegment(value) {
   const sanitized = String(value).replace(/[^a-zA-Z0-9_-]/g, "_");
   return sanitized || "translation";
 }
 
-// Defense-in-depth on top of sanitizeFileNameSegment: verifies the resolved
-// path actually stays under dir, rather than trusting that every fileName
-// built elsewhere was correctly sanitized/allowlisted piece by piece — e.g.
-// this would still catch it if a future field got concatenated into a
-// fileName without remembering to sanitize that specific piece.
+// Throws if the resolved path escapes dir.
 function resolveWithinDir(dir, fileName) {
   const resolvedDir = path.resolve(dir);
   const resolved = path.resolve(dir, fileName);
@@ -71,10 +54,7 @@ function migrateSchema(db) {
     "ALTER TABLE bible_translations ADD COLUMN language TEXT DEFAULT ''",
     "ALTER TABLE bible_translations ADD COLUMN license TEXT DEFAULT ''",
     "ALTER TABLE bible_translations ADD COLUMN link TEXT",
-    // Existing rows all predate XML support and are backfilled to 'json' by
-    // SQLite itself (a DEFAULT-bearing ADD COLUMN populates existing rows,
-    // not just new ones) — so getBibleTranslationData never needs a
-    // NULL-means-json fallback anywhere in the read path.
+    // Backfills existing rows to the 'json' format default.
     "ALTER TABLE bible_translations ADD COLUMN format TEXT DEFAULT 'json'",
     "ALTER TABLE songs ADD COLUMN ccli TEXT DEFAULT ''",
   ]) {
@@ -95,11 +75,7 @@ function rowToLineup(row) {
 }
 
 function rowToBackground(row) {
-  // The filename goes in the URL's path, not its host — "lumen-media" is a
-  // standard: true scheme, so a host-position filename gets reshaped by
-  // Chromium's URL parser (host normalization, a mandatory trailing "/"
-  // when there's no path), and the protocol handler's request.url no
-  // longer matches what was built here, silently failing to resolve.
+  // Builds the lumen-media URL with the filename in the path, not the host.
   return { id: row.id, name: row.name, mediaType: row.media_type, url: "lumen-media://local/" + encodeURIComponent(row.file_name) };
 }
 
@@ -112,11 +88,7 @@ function rowToDownloadedBibleTranslation(row) {
 
 function createDb(dbPath) {
   const db = new DatabaseSync(dbPath);
-  // WAL mode replaces per-statement fsync-backed rollback-journal commits
-  // with a much cheaper append-to-log commit (fsync only on checkpoint), so
-  // the many individual auto-committed writes below (one per prefs key,
-  // one per song/lineup/etc. upsert) no longer each block the main process
-  // — and therefore output-window IPC — for a full disk fsync.
+  // Enables WAL mode for cheaper commits on frequent writes.
   db.exec("PRAGMA journal_mode = WAL");
   db.exec(SCHEMA);
   migrateSchema(db);
@@ -185,9 +157,7 @@ function createDb(dbPath) {
         `INSERT INTO prefs (key, value) VALUES (?, ?)
          ON CONFLICT(key) DO UPDATE SET value=excluded.value`
       );
-      // One commit/fsync for the whole debounced flush instead of one per
-      // key — setPrefs writes ~20 keys at a time, and without an explicit
-      // transaction each stmt.run() is its own implicit commit.
+      // Wraps all key writes in a single transaction.
       db.exec("BEGIN");
       try {
         for (const [key, value] of Object.entries(patch)) {
@@ -200,10 +170,7 @@ function createDb(dbPath) {
       }
     },
 
-    // async: writes the uploaded media with fs.promises rather than
-    // writeFileSync, so a large background file doesn't block the main
-    // process's event loop (and with it every IPC channel, including the
-    // output window) for the duration of the write.
+    // Writes the uploaded media file asynchronously.
     async addBackground({ id, name, mediaType, mimeType, data }) {
       const extension = mimeType.split("/")[1] || "bin";
       const fileName = id + "." + extension;
@@ -223,20 +190,23 @@ function createDb(dbPath) {
       db.prepare("DELETE FROM backgrounds WHERE id = ?").run(id);
     },
 
-    // async: same reasoning as addBackground — a downloaded translation can
-    // be several MB, and writeFileSync would stall the main process for the
-    // whole write.
+    // Writes the translation file asynchronously.
     async addBibleTranslation({ code, language, name, license, link, data, format }) {
-      // Allowlist, not sanitizeFileNameSegment — format is concatenated
-      // directly onto the (separately sanitized) code segment, so a
-      // stripped-but-still-attacker-chosen value here could still reopen a
-      // path escape (e.g. via repeated separator characters); every real
-      // caller only ever passes "xml" or "json" (see useLumen.ts's
-      // importBibleTranslation), so anything else just becomes "json".
+      // Restricts format to "xml" or "json", defaulting to "json".
       const safeFormat = format === "xml" ? "xml" : "json";
-      const fileName = sanitizeFileNameSegment(code) + "." + safeFormat;
+      // Parses XML once at import time and stores it as JSON.
+      const bytesToStore = safeFormat === "xml"
+        ? Buffer.from(JSON.stringify(parseBibleXml(Buffer.from(data).toString("utf-8"))))
+        : Buffer.from(data);
+      const storedFormat = safeFormat === "xml" ? "json" : safeFormat;
+      const fileName = sanitizeFileNameSegment(code) + "." + storedFormat;
       const filePath = resolveWithinDir(bibleTranslationsDir, fileName);
-      await fs.promises.writeFile(filePath, Buffer.from(data));
+      // Removes the old file if re-importing changes its extension.
+      const previousRow = db.prepare("SELECT file_name FROM bible_translations WHERE code = ?").get(code);
+      await fs.promises.writeFile(filePath, bytesToStore);
+      if (previousRow && previousRow.file_name !== fileName) {
+        try { fs.unlinkSync(path.join(bibleTranslationsDir, previousRow.file_name)); } catch { /* already gone */ }
+      }
       db.prepare(
         `INSERT INTO bible_translations (code, language, name, license, link, file_name, downloaded_at, size_bytes, format)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -244,7 +214,7 @@ function createDb(dbPath) {
            language=excluded.language, name=excluded.name, license=excluded.license, link=excluded.link,
            file_name=excluded.file_name, downloaded_at=excluded.downloaded_at, size_bytes=excluded.size_bytes,
            format=excluded.format`
-      ).run(code, language, name, license, link, fileName, Date.now(), data.byteLength, safeFormat);
+      ).run(code, language, name, license, link, fileName, Date.now(), data.byteLength, storedFormat);
     },
 
     deleteBibleTranslation(code) {
@@ -255,12 +225,7 @@ function createDb(dbPath) {
       db.prepare("DELETE FROM bible_translations WHERE code = ?").run(code);
     },
 
-    // Returns the raw file text + its format, unparsed — parsing a
-    // multi-MB translation is real CPU work, and doing it here (the main
-    // process) would block IPC for every window, including the
-    // second-monitor audience output. preload.js's getBibleTranslationData
-    // does the actual JSON.parse/parseBibleXml instead, in the renderer's
-    // own isolated context.
+    // Returns the raw translation file text and format, unparsed.
     async getBibleTranslationData(code) {
       const row = db.prepare("SELECT file_name, format FROM bible_translations WHERE code = ?").get(code);
       if (!row) return null;

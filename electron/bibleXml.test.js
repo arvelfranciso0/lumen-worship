@@ -6,11 +6,7 @@ const {
   parseBibleXml, deriveCodeFromFileName, normalizeBibleLanguage, bookNamesForLanguage, BOOKS,
 } = require("./bibleXml.js");
 
-// Every excerpt below is copied verbatim (not fabricated) from
-// public/bible/CebuanoRCPVBible.xml, the real Cebuano RCPV sample bundled
-// with this project — line numbers noted per case are as of the file's
-// content at the time this test was written, for re-verifying against the
-// source if it's ever edited.
+// Excerpts below are copied verbatim from public/bible/CebuanoRCPVBible.xml.
 
 describe("parseBibleXml — verse bridges (empty-verse merging)", () => {
   test("normal chapter with no merges: Genesis 1:1-5 (lines 6-10)", () => {
@@ -79,10 +75,7 @@ describe("parseBibleXml — verse bridges (empty-verse merging)", () => {
   });
 
   test("an empty verse with nothing preceding it in the chapter is dropped, not merged: 1 Samuel 13:1-3 (lines 7915-7918)", () => {
-    // 1 Samuel 13:1 is the well-known case where the source text itself is
-    // defective/uncertain — this translation leaves it blank rather than
-    // merging it into anything (there's nothing earlier in the chapter to
-    // merge into). Distinct from a verse bridge: dropped, not merged.
+    // A leading empty verse is dropped, not merged.
     const xml = `<bible>
   <book number="9">
     <chapter number="13">
@@ -100,12 +93,7 @@ describe("parseBibleXml — verse bridges (empty-verse merging)", () => {
 });
 
 describe("parseBibleXml — self-closing empty verse tags", () => {
-  // No self-closing <verse .../> tags exist anywhere in the real Cebuano
-  // RCPV sample (confirmed by searching the whole file) — every empty verse
-  // there uses <verse number="N"></verse>. These two cases are synthetic,
-  // not pulled from real data, since no real example of this style exists
-  // yet — covering it anyway because another translation file might use it,
-  // possibly even mixed with the open/close style within itself.
+  // Synthetic cases covering the self-closing verse tag form.
   test("self-closing empty verse merges the same way as an open/close empty verse", () => {
     const xml = `<bible><book number="1"><chapter number="1"><verse number="1">first</verse><verse number="2"/><verse number="3">third</verse></chapter></book></bible>`;
     const verses = parseBibleXml(xml).books[0].chapters[0].verses;
@@ -161,10 +149,7 @@ describe("language fallback", () => {
   });
 });
 
-// Regression: a real import showed "Cebuano 1999 (Maayong Balita Biblia)" in the
-// sidebar's Language list, sitting next to the genuine "Cebuano" from another
-// file, because the exporter had written the whole translation title into the
-// language attribute.
+// Regression test for title-shaped language attributes.
 describe("normalizeBibleLanguage — title-shaped language attributes", () => {
   test("a language attribute containing a year and brackets is rejected in favour of the title's leading word", () => {
     assert.equal(
@@ -196,9 +181,7 @@ describe("normalizeBibleLanguage — title-shaped language attributes", () => {
   });
 });
 
-// The XML numbers books 1-66 and never names them, so the name table is the only
-// source of truth — and it has to follow the translation's language or a Cebuano
-// Bible reads with English book names throughout.
+// Tests book names resolve per translation language.
 describe("book names per language", () => {
   test("every language table covers the full 66-book canon", () => {
     assert.equal(BOOKS.length, 66);
@@ -226,8 +209,7 @@ describe("book names per language", () => {
   });
 
   test("parseBibleXml names books in the translation's own language", () => {
-    // Root tag copied from public/bible/CebuanoRCPVBible.xml — the language
-    // resolves to "Cebuano" via the translation-title fallback.
+    // Resolves language via the translation-title fallback.
     const xml = `<bible translation="Cebuano RCPV 1999 (Ang Bag-ong Maayong Balita Biblia)">
       <book number="19"><chapter number="23"><verse number="1">x</verse></chapter></book>
       <book number="66"><chapter number="22"><verse number="21">y</verse></chapter></book>

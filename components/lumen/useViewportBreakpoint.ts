@@ -13,10 +13,7 @@ function resolveBreakpoint(width: number): Breakpoint {
   return "desktop";
 }
 
-// SSR-safe (starts at "desktop", the app's original only-supported size, and
-// resolves for real after mount) — same pattern as Header.tsx's clock/date,
-// which starts empty to avoid a hydration mismatch against the static
-// export's server-rendered markup.
+// Resolves the current viewport breakpoint, starting at "desktop" until mounted.
 export function useViewportBreakpoint(): Breakpoint {
   const [breakpoint, setBreakpoint] = useState<Breakpoint>("desktop");
 

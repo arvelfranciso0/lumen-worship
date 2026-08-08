@@ -9,9 +9,7 @@ import type { UseLumen } from "./useLumen";
 
 const fieldClass = "h-9 px-2.5 rounded-2 border border-border bg-panel2 text-text text-[13px] outline-none";
 
-// A ready-to-edit example matching extractMetadataHeader's format — download,
-// tweak the header lines and lyrics, then upload it right back in via
-// "Choose .txt file to prefill…".
+// Sample song text for the "Download sample .txt" button.
 const SAMPLE_SONG_TEXT = `Title: Amazing Grace
 Artist: John Newton
 Key: G
@@ -43,11 +41,7 @@ function downloadSampleSongFile() {
   URL.revokeObjectURL(url);
 }
 
-// Replaces the old separate LyricsEditorModal (edit) / SongUploadModal
-// (create) — one shared form, since both flows need the same fields and the
-// same lyrics-block parsing. Editing now works on ANY song (not just
-// custom-*) via setSongMetaOverride, which supersedes the old custom-*-only
-// updateSongMetadata gate.
+// Shared create/edit form for song metadata and lyrics.
 export function SongEditorModal({ lumen }: { lumen: UseLumen }) {
   const { state, patch, song, saveLyrics, setSongMetaOverride, addSong } = lumen;
   const isEdit = state.songEditorMode === "edit";
@@ -70,10 +64,7 @@ export function SongEditorModal({ lumen }: { lumen: UseLumen }) {
 
   useEffect(() => {
     if (!state.songEditorOpen) return;
-    /* eslint-disable react-hooks/set-state-in-effect -- populating the form
-       when the modal opens for a specific song/mode is a one-time sync of
-       local UI state to a changed prop, the same shape as this codebase's
-       other modals' pre-existing populate-on-open effects. */
+    /* eslint-disable react-hooks/set-state-in-effect -- syncs form fields to the opened song/mode. */
     if (isEdit) {
       setTitle(song.title); setArtist(song.artist); setKey(song.key); setBpm(song.bpm); setCat(song.cat);
       setTagsText(song.tags.join(", ")); setCcli(song.ccli || ""); setLyricsText(sectionsToText(song.sections));

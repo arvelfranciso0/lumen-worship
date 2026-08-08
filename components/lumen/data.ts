@@ -1,17 +1,11 @@
 import type { CSSProperties } from "react";
 
-// A single global style applied to every lyric line on screen — set once in
-// Settings, not per line/song. Font size stays governed by the existing
-// "Lyric size" slider (state.scale), so it isn't duplicated here. Highlight
-// is deliberately NOT part of this — it's applied to specific selected text
-// instead (see HighlightRange below), not the whole screen.
+// Global lyric style applied to every line on screen, set once in Settings.
 export type LyricStyle = {
   bold: boolean;
   italic: boolean;
   color?: string;
-  // outlineWidth of 0 (or undefined) means no outline — replaces the old
-  // boolean `outline` field so width/color can both be tuned instead of a
-  // fixed 1.5px black stroke.
+  // outlineWidth of 0 (or undefined) means no outline.
   outlineColor?: string;
   outlineWidth?: number;
 };
@@ -20,10 +14,7 @@ export const DEFAULT_LYRIC_STYLE: LyricStyle = {
   bold: false, italic: false, outlineWidth: 0,
 };
 
-// Converts the global lyric style into real CSS, applied at every render
-// surface (PreviewPanel, PresentationOverlay, SlidesPanel). Properties are left
-// undefined when off, so each surface's own default (className-driven)
-// weight/color keeps applying instead of being clobbered.
+// Converts the global lyric style into CSS properties.
 export function lyricStyleCss(style: LyricStyle): CSSProperties {
   return {
     fontWeight: style.bold ? 700 : undefined,
@@ -33,23 +24,15 @@ export function lyricStyleCss(style: LyricStyle): CSSProperties {
   };
 }
 
-// A highlight applied to one specific slice of one specific line — set by
-// selecting text in the lyrics editor and picking a color, not a global
-// toggle. `start`/`end` are character offsets into that line's string.
+// A highlighted range within one line, set by selecting text and picking a color.
 export type HighlightRange = { start: number; end: number; color: string };
 
-// A text selection made directly on the Live output box, expressed as
-// line-index + character-offset pairs. Lives here rather than next to the
-// code that produces it (PreviewPanel) because the selection is now shared
-// state: PreviewPanel captures it, MainPanel's text toolbar consumes it.
+// A text selection made on the Live output box, as line-index + character-offset pairs.
 export type LiveHighlightSelection = {
   startLineIndex: number; startOffset: number; endLineIndex: number; endOffset: number;
 };
 
-// Splits a line into plain/highlighted segments for rendering. Ranges are
-// clamped to the line's bounds and sorted so out-of-order or slightly
-// stale ranges (e.g. after the line text was edited) still render sanely
-// instead of throwing or producing overlapping spans.
+// Splits a line into plain/highlighted segments for rendering.
 export function splitLineIntoSegments(line: string, ranges?: HighlightRange[]): { text: string; color?: string }[] {
   if (!ranges || ranges.length === 0) return [{ text: line }];
   const sortedRanges = [...ranges].sort((a, b) => a.start - b.start);
@@ -66,9 +49,7 @@ export function splitLineIntoSegments(line: string, ranges?: HighlightRange[]): 
   return segments.length ? segments : [{ text: line }];
 }
 
-// Removes (or clips) any existing ranges that overlap [start, end) — used
-// both before inserting a new highlight (so colors never overlap) and to
-// implement "remove highlight" over a selection.
+// Removes or clips existing ranges that overlap [start, end).
 export function subtractHighlightRange(ranges: HighlightRange[], start: number, end: number): HighlightRange[] {
   const result: HighlightRange[] = [];
   for (const range of ranges) {
@@ -83,17 +64,14 @@ export function addHighlightRange(ranges: HighlightRange[], newRange: HighlightR
   return [...subtractHighlightRange(ranges, newRange.start, newRange.end), newRange].sort((a, b) => a.start - b.start);
 }
 
-// Bible verses aren't part of a Song's sections, so their highlights are
-// stored separately — keyed by translation + reference, since ranges are
-// character offsets into that translation's specific wording.
+// Bible verse highlights, keyed by translation + reference.
 export type BibleHighlights = Record<string, HighlightRange[]>;
 
 export function bibleHighlightKey(translation: string, book: string, chapter: number, verseNumber: number): string {
   return translation + "|" + book + "|" + chapter + "|" + verseNumber;
 }
 
-// Canonical 1-66 order, used to recover a book's number from its name in any
-// supported language (see canonicalBookNumber).
+// Canonical 1-66 book order, used to recover a book's number from its name.
 const CANONICAL_BOOK_CODES = [
   "GEN", "EXO", "LEV", "NUM", "DEU", "JOS", "JDG", "RUT", "1SA", "2SA", "1KI", "2KI", "1CH", "2CH",
   "EZR", "NEH", "EST", "JOB", "PSA", "PRO", "ECC", "SNG", "ISA", "JER", "LAM", "EZK", "DAN", "HOS",
@@ -103,18 +81,6 @@ const CANONICAL_BOOK_CODES = [
 ];
 
 // Reference labels for the on-screen caption, one map per language.
-//
-// English uses three-letter codes ("PSA 23:2") — short enough not to compete
-// with the verse text, and universally recognised. Other languages map each book
-// to its own full name instead: "PSA" is an abbreviation *of the English word*
-// and carries no meaning for a Cebuano-speaking congregation, so "Mga Salmo
-// 23:2" is the correct caption there even though it's longer.
-//
-// The maps are kept separate rather than merged because a handful of names are
-// spelled identically across languages ("Genesis", "Ruth", "Ezra", "Job",
-// "Daniel", "Joel", "Amos", "Nahum", "1 Samuel", "2 Samuel") but must render
-// differently — "GEN" in an English translation, "Genesis" in a Cebuano one. So
-// bookAbbreviation resolves against the translation's language first.
 const BOOK_ABBREVIATIONS: Record<string, string> = {
   Genesis: "GEN", Exodus: "EXO", Leviticus: "LEV", Numbers: "NUM", Deuteronomy: "DEU",
   Joshua: "JOS", Judges: "JDG", Ruth: "RUT", "1 Samuel": "1SA", "2 Samuel": "2SA",
@@ -132,10 +98,7 @@ const BOOK_ABBREVIATIONS: Record<string, string> = {
   "3 John": "3JN", Jude: "JUD", Revelation: "REV",
 };
 
-// Cebuano (RCPV / Maayong Balita Biblia) — each book labelled with its own full
-// name. MUST stay in canonical 1-66 order: canonicalBookNumber reads a book's
-// number from its position here, and the key order is asserted against the
-// parser's own Cebuano name table in bookNames.test.ts.
+// Cebuano book names for the reference caption; order must stay canonical 1-66.
 const BOOK_ABBREVIATIONS_CEBUANO: Record<string, string> = {
   Genesis: "Genesis", Exodo: "Exodo", Levitico: "Levitico", Numeros: "Numeros", Deuteronomio: "Deuteronomio",
   Josue: "Josue", Maghuhukom: "Maghuhukom", Ruth: "Ruth", "1 Samuel": "1 Samuel", "2 Samuel": "2 Samuel",
@@ -153,34 +116,22 @@ const BOOK_ABBREVIATIONS_CEBUANO: Record<string, string> = {
   "3 Juan": "3 Juan", Judas: "Judas", Pinadayag: "Pinadayag",
 };
 
-// Keyed by the language normalizeBibleLanguage resolves for a translation, which
-// is the same key electron/bibleXml.js's BOOK_NAMES_BY_LANGUAGE uses to name the
-// books in the first place.
+// Keyed by the language normalizeBibleLanguage resolves for a translation.
 const BOOK_LABELS_BY_LANGUAGE: Record<string, Record<string, string>> = {
   Cebuano: BOOK_ABBREVIATIONS_CEBUANO,
 };
 
-// Canonical 1-66 order for each non-English language, derived from its label
-// map's key order (string keys preserve insertion order in JS; none of these are
-// integer-like, so "1 Samuel" and friends are safe).
+// Canonical 1-66 order for Cebuano, derived from its label map's key order.
 const CEBUANO_BOOK_NAMES = Object.keys(BOOK_ABBREVIATIONS_CEBUANO);
 
-// The label shown in the on-screen reference caption. `language` is the
-// translation's own language — required to disambiguate the names spelled the
-// same in two languages (see the note on BOOK_ABBREVIATIONS above). Falls back
-// to the English code, then to a generic first-three-letters rule.
+// Reference-caption label for a book, localized by translation language.
 export function bookAbbreviation(bookName: string, language?: string): string {
   const localized = language ? BOOK_LABELS_BY_LANGUAGE[language]?.[bookName] : undefined;
   if (localized) return localized;
   return BOOK_ABBREVIATIONS[bookName] || bookName.replace(/[^\p{L}\p{N}]/gu, "").slice(0, 3).toUpperCase();
 }
 
-// A book's canonical 1-66 number, resolved from its name in any supported
-// language. Deliberately language-agnostic: its whole job is to follow a book
-// across a translation switch, where the incoming name belongs to the *previous*
-// translation's language. Selecting "Mga Salmo" and then switching to an English
-// translation lands on Psalms rather than dead-ending on a name that translation
-// has never heard of. null for an unrecognized name.
+// A book's canonical 1-66 number, resolved from its name in any supported language.
 export function canonicalBookNumber(bookName: string): number | null {
   const code = BOOK_ABBREVIATIONS[bookName];
   if (code) {
@@ -191,10 +142,7 @@ export function canonicalBookNumber(bookName: string): number | null {
   return cebuanoIndex === -1 ? null : cebuanoIndex + 1;
 }
 
-// The canonical number of a book named in some *other* translation's language.
-// Prefers the book's own number as that translation recorded it (every parsed
-// translation numbers its books 1-66), falling back to the name tables only when
-// the name isn't in the given list at all.
+// The canonical number of a book named in some other translation's language.
 export function bookNumberOf<BookType extends { number: number; name: string }>(
   books: BookType[], bookName: string
 ): number | null {
@@ -202,17 +150,7 @@ export function bookNumberOf<BookType extends { number: number; name: string }>(
   return known ? known.number : canonicalBookNumber(bookName);
 }
 
-// The same book in a different translation.
-//
-// Book names are localized — "Proverbs" is "Mga Panultihon" in Cebuano — so
-// matching translations on the name string fails for every book whose name is
-// actually translated, which is nearly all of them. Bible Compare did exactly
-// that and reported "This verse isn't in one of the two translations" for a
-// verse that was present in both. The canonical 1-66 number is the only
-// identifier that survives crossing a language boundary.
-//
-// The name is still tried as a fallback, for a translation whose numbering is
-// unusual but whose names happen to line up.
+// The same book matched across translations, by canonical number then by name.
 export function findBookAcrossTranslations<BookType extends { number: number; name: string }>(
   books: BookType[], bookNumber: number | null, bookName: string
 ): BookType | undefined {
@@ -243,9 +181,7 @@ export const LYRIC_FONTS: LyricFontOption[] = [
   { id: "playfair", name: "Playfair Display", className: "font-playfair", group: "Theme fonts" },
   { id: "merriweather", name: "Merriweather", className: "font-merriweather", group: "Theme fonts" },
   { id: "bebas", name: "Bebas Neue", className: "font-bebas", group: "Theme fonts" },
-  // Standard OS-installed fonts — no download needed, rendered using
-  // whatever the presenting machine already has (same convention as any
-  // Word/PowerPoint font list).
+  // Standard OS-installed fonts, rendered using whatever the presenting machine has.
   { id: "arial", name: "Arial", className: "font-arial", group: "System fonts" },
   { id: "helvetica", name: "Helvetica", className: "font-helvetica", group: "System fonts" },
   { id: "times", name: "Times New Roman", className: "font-times", group: "System fonts" },
@@ -267,12 +203,9 @@ export const DEFAULT_LYRIC_FONT: LyricFontId = "sans";
 export type Section = {
   label: string;
   lines: string[];
-  // Parallel to `lines` — lineHighlights[i] is the set of highlighted
-  // ranges within lines[i]. Omitted/empty entries mean no highlights.
+  // Parallel to `lines`: lineHighlights[i] is the highlighted ranges within lines[i].
   lineHighlights?: HighlightRange[][];
-  // Operator-only note for this slide (e.g. "wait for cue"), and an optional
-  // per-slide background override (a Look/CustomBackground id) — both ride
-  // the existing songOverrides persistence, no separate storage needed.
+  // Operator-only note and optional per-slide background override for this slide.
   note?: string;
   lookId?: string;
 };
@@ -287,8 +220,7 @@ export type Song = {
   tags: string[];
   fav: boolean;
   when: string;
-  // CCLI licence number, shown alongside title/artist/key. Editable for every
-  // song (built-in ones included) via songMetaOverrides, not just custom-*.
+  // CCLI licence number, editable on any song via songMetaOverrides.
   ccli?: string;
   sections: Section[];
 };
@@ -299,21 +231,11 @@ export type Lineup = {
   songIds: string[];
 };
 
-// Which sidebar tab a product tour belongs to; each is shown at most once, then
-// remembered (see TourSeenFlags / Settings' "Replay").
-//
-// One tour per tab, deliberately — there is no separate tour for the Create
-// lineup dialog. That walkthrough is part of the lineups tour, which opens the
-// dialog itself when it reaches those steps. A second tour covering the same
-// dialog meant two sequences with two step counts, and skipping one of them
-// simply started the other.
+// Which sidebar tab a product tour belongs to; shown once, then remembered.
 export type TourMode = "songs" | "bible" | "lineups";
 export type TourSeenFlags = Record<TourMode, boolean>;
 
-// "slidesStrip" is retained only so previously-persisted layoutVisibility
-// objects still type-check on load — it is no longer user-toggleable (see
-// LAYOUT_PANELS). Since the handoff redesign the slides grid and Backgrounds
-// panel are the main column's whole body; hiding them would leave it empty.
+// "slidesStrip" is kept only so previously-persisted layoutVisibility still type-checks; no longer user-toggleable.
 export type LayoutPanelId = "sidebar" | "preview" | "slidesStrip";
 
 export type LayoutSizes = {
@@ -356,30 +278,17 @@ export type Look = {
   note?: "image" | "video";
 };
 
-// An uploaded image/video background, layered alongside the builtin gradient
-// Looks. `url` is resolved by the repository layer at load time (an object
-// URL for the IndexedDB backend, a custom-protocol URL for Electron) — never
-// persisted as-is, since object URLs don't survive a reload.
+// An uploaded image/video background, layered alongside the builtin gradient Looks.
 export type CustomBackground = {
   id: string;
   name: string;
   mediaType: "image" | "video";
   url: string;
-  // A single captured frame (data URL), generated client-side once per
-  // session — not persisted. Lets every preview spot except the actual live
-  // output skip decoding the real video.
+  // A captured preview frame (data URL), generated client-side; not persisted.
   posterUrl?: string;
 };
 
-// Which translation a Bible-compare request can actually be honoured against,
-// or null if it can't be honoured at all.
-//
-// state.compareMode is only a *request*, and the conditions that make comparison
-// possible can disappear under it: the second translation gets deleted, or the
-// primary is switched to the very translation being compared against. Both put
-// the same verse on the audience screen twice, captioned as though it were two
-// different translations — so the request is re-validated on every render rather
-// than trusted once.
+// Which translation a Bible-compare request can actually be honoured against, or null.
 export function resolveCompareTranslation(
   requestedCode: string | null | undefined,
   primaryCode: string,
@@ -590,24 +499,13 @@ export type BibleMeta = {
   path: string;
 };
 
-// `endNumber` marks a verse bridge — where a translation merges consecutive
-// verses into one block of text (the XML represents this as a numbered verse
-// followed by empty ones). Display uses the range ("1-3"); `number` stays the
-// raw start number, since it's also the stable highlight-cache key.
+// endNumber marks a verse bridge, where consecutive verses are merged into one block.
 export type BibleVerse = { number: number; text: string; endNumber?: number };
 export type BibleChapter = { number: number; verses: BibleVerse[] };
 export type BibleBook = { number: number; name: string; testament: "Old" | "New"; chapters: BibleChapter[] };
 export type BibleTranslation = { meta: BibleMeta; books: BibleBook[] };
 
-// A translation the user has manually imported (see BIBLE_DOWNLOADS_URL
-// below) — carries the same descriptive fields as BibleMeta (minus `path`,
-// which only made sense for a bundled static file) plus import bookkeeping.
-// The actual verse data lives in the repository and is fetched lazily via
-// getBibleTranslationData(), never eagerly loaded here, since each
-// translation's JSON can be several megabytes. This app has no bundled
-// Bible data at all (public/bible/ was removed — translations live in a
-// separate landing-page project) — this list is the sole source of truth
-// for which translations/languages are available to view.
+// A translation the user has manually imported; verse data is fetched lazily via getBibleTranslationData().
 export type DownloadedBibleTranslation = {
   code: string;
   language: string;
@@ -622,23 +520,14 @@ export const DEFAULT_TRANSLATION = "EnglishKJ";
 
 export const LOADING_PASSAGE = ["Loading translation…"];
 export const MISSING_PASSAGE = ["This chapter isn't available in this translation."];
-// A single blank line, not a message — a translation that hasn't been
-// downloaded yet must never show explanatory text on the actual live/preview
-// output (Sidebar has its own "Import" placeholder for that). Kept as a
-// single-item array (like LOADING_PASSAGE/MISSING_PASSAGE) rather than `[]`
-// so `slides`/`cur` downstream always has a real, defined current slide.
+// A single blank line (not a message) shown for a translation that hasn't been downloaded.
 export const NOT_DOWNLOADED_PASSAGE = [""];
 
-// Where the public Bible-translation download page (a separate project,
-// deployed independently) is hosted — update this once that site is live.
-// Used to open the page from Settings > Bible Translations, since this app
-// bundles no translation data at all; every translation comes from a
-// manual download-then-import there.
+// Where the public Bible-translation download page is hosted.
 export const BIBLE_DOWNLOADS_URL = "https://lumen-worship.netlify.app/";
 
 export const CHIPS = ["All", "Favorites", "Hymn", "Contemporary", "Español"];
 export const SORTS = ["Recent", "A–Z", "Key"];
 
-// Filter chips for the Backgrounds panel, matching Look.kind. Uploaded
-// backgrounds are bucketed into Image/Video by their mediaType.
+// Filter chips for the Backgrounds panel, matching Look.kind.
 export const LOOK_CATEGORIES = ["Solid", "Gradient", "Image", "Video"] as const;

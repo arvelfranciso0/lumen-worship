@@ -11,13 +11,7 @@ import { Sidebar } from "./Sidebar";
 import { useLumen, type LumenProps } from "./useLumen";
 import { useViewportBreakpoint } from "./useViewportBreakpoint";
 
-// Each of these is a modal/overlay that is closed far more often than it is
-// open (some — Settings, the Song editor, Lineups, Hotkeys, Displays, Bible
-// translations, global search — are never even mounted until the operator
-// explicitly opens them; see the `xOpen &&` guards below). Loading them via
-// next/dynamic instead of a static import keeps their code out of the bundle
-// that's parsed/compiled on every launch, splitting it into its own chunk
-// fetched only the first time it's actually rendered.
+// Lazily loads each modal/overlay so its code splits into its own chunk.
 const SettingsModal = dynamic(() => import("./SettingsModal").then((mod) => mod.SettingsModal), { ssr: false });
 const SongEditorModal = dynamic(() => import("./SongEditorModal").then((mod) => mod.SongEditorModal), { ssr: false });
 const LineupModal = dynamic(() => import("./LineupModal").then((mod) => mod.LineupModal), { ssr: false });
@@ -41,16 +35,11 @@ export function LumenApp(props: LumenProps) {
     ["--accent-soft" as string]: lumen.accent + "26",
   };
 
-  // Hiding a panel from Settings doesn't make it disappear on desktop — it
-  // collapses to a one-click vertical strip on the edge it used to occupy, so
-  // getting it back never means opening Settings again.
+  // Hiding a panel collapses it to a one-click vertical strip rather than removing it.
   const sidebarShown = lumen.state.layoutVisibility.sidebar;
   const previewShown = lumen.state.layoutVisibility.preview;
 
-  // Desktop: sidebar is an inline flex sibling. Tablet: it becomes a fixed
-  // overlay drawer, toggled from Header's hamburger. Mobile: it fills the
-  // whole body, switched to via MobileTabBar (no backdrop needed — it's the
-  // only pane showing).
+  // Sidebar display mode by breakpoint: inline sibling, overlay drawer, or full body.
   const showInlineSidebar = isDesktop && sidebarShown;
   const showDrawerSidebar = isTablet && lumen.state.sidebarDrawerOpen;
   const showMobileSidebar = isMobile && lumen.state.mobileView === "library";
@@ -121,10 +110,7 @@ export function LumenApp(props: LumenProps) {
       {lumen.state.songEditorOpen && <SongEditorModal lumen={lumen} />}
       {lumen.state.lineupModalOpen && <LineupModal lumen={lumen} />}
       {lumen.state.presenting && <PresentationOverlay lumen={lumen} />}
-      {/* Not gated on a single boolean like the others — it decides on its own,
-          from useLumen's prefsLoaded/tourSeen state, whether to auto-start the
-          very first time a mode is visited, so it must stay mounted to make
-          that call. Still dynamically imported above for its own chunk. */}
+      {/* Stays mounted so it can decide on its own when to auto-start. */}
       <TourOverlay lumen={lumen} />
       {lumen.state.confirmDialog && <ConfirmDialog lumen={lumen} />}
       {lumen.state.hotkeysOpen && <HotkeysModal lumen={lumen} />}

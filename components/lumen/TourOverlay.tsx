@@ -13,14 +13,10 @@ import type { UseLumen } from "./useLumen";
 
 const SPOTLIGHT_PADDING = 6;
 
-// Size to fall back on for the one frame before the popover has been measured.
-// Close to the real thing, so the first paint doesn't visibly jump.
+// Fallback popover size before the first measurement.
 const POPOVER_ESTIMATE: Size = { width: 300, height: 190 };
 
-// The arrow is a rotated square, so only the two borders on its outer corner
-// belong to it — the other two would draw a line across the popover's inside.
-// Rotating 45° clockwise puts the original top-left corner at the point, which
-// is why every side names the two borders meeting there.
+// Border pairs forming the arrow's outer corner for each popover side.
 const ARROW_BORDERS: Record<TourSide, string> = {
   bottom: "border-t border-l",  // popover below the target: arrow points up
   top: "border-b border-r",     // popover above: points down
@@ -42,24 +38,13 @@ function sameLayout(previous: TourLayout | null, next: TourLayout): boolean {
     && previous.viewport.height === next.viewport.height;
 }
 
-// Contextual, spotlight-based product tour — replaces the old generic
-// WelcomeModal carousel. Auto-starts the first time each mode (Songs/Bible/
-// Lineups) is visited (state.tourSeen[mode]), highlighting real elements
-// tagged data-tour="..." across the app (see tourSteps.ts for the mapping).
-//
-// Every step advances on a plain "Next" and Skip stays live throughout, so the
-// tour can always be walked to the end (or left) without the operator having to
-// perform any real action first.
+// Spotlight-based product tour, auto-started per mode via state.tourSeen.
 export function TourOverlay({ lumen }: { lumen: UseLumen }) {
   const { state, patch, prefsLoaded } = lumen;
   const startedModesRef = useRef<Set<string>>(new Set());
-  // The target's rect and the window's size, read together: the popover's
-  // position is a function of both, so measuring them in one pass means they can
-  // never disagree by a frame mid-resize.
+  // Target rect and viewport size, measured together for popover placement.
   const [layout, setLayout] = useState<TourLayout | null>(null);
-  // The popover's own measured size — the third input to placement. Measured
-  // rather than assumed, because a step's body decides its height, and guessing
-  // it is what pinned the popover to the bottom of the window before.
+  // Measured popover size, the third input to placement.
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const [popoverSize, setPopoverSize] = useState<Size>(POPOVER_ESTIMATE);
 
@@ -68,26 +53,17 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
     hasMultipleBibleTranslations: state.downloadedTranslations.length >= 2,
   };
 
-  // Resolved once per tour rather than on every render. Recomputing live would
-  // renumber the sequence the instant a translation imports — the Bible tour
-  // gains its "Browse Scripture" step at that point, which would shift every
-  // later step's index and bounce the operator back onto a step they'd just
-  // completed.
+  // Tour steps resolved once when the tour starts, not on every render.
   const [activeSteps, setActiveSteps] = useState<TourStep[] | null>(null);
   useEffect(() => {
-    // Resolving an external condition into state at the moment a tour begins,
-    // not state derived from render — eslint's stricter check doesn't
-    // distinguish the two.
+    // Sets tour steps when a tour begins.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveSteps(state.tourMode ? tourStepsFor(state.tourMode, tourContext) : null);
-    // tourContext is deliberately not a dependency: the sequence is fixed when
-    // the tour starts, and `blockedUntil` reads the live context at render.
+    // tourContext intentionally excluded — steps are fixed once the tour starts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.tourMode]);
 
-  // Auto-start: the first time a mode is entered (post prefs-load, so a
-  // returning user's tourSeen has actually loaded first) with no tour
-  // already showing and that mode not yet marked seen.
+  // Auto-starts the tour the first time a mode is entered.
   useEffect(() => {
     if (!prefsLoaded || state.tourMode) return;
     if (state.tourSeen[state.mode] || startedModesRef.current.has(state.mode)) return;
@@ -95,9 +71,7 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
     patch({ tourMode: state.mode, tourStep: 0 });
   }, [prefsLoaded, state.mode, state.tourSeen, state.tourMode, patch]);
 
-  // Which surface is actually on screen. Only one dialog is ever up at a time,
-  // so this is a single value rather than a set. The lineup dialog counts only
-  // in create mode — someone editing an existing lineup already knows it.
+  // Which dialog/surface is currently on screen.
   const currentSurface: TourSurface =
     state.lineupModalOpen && !state.editingLineupId ? "lineupModal"
       : state.bibleTranslationsPanelOpen ? "bibleTranslations"
@@ -108,29 +82,19 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
   const steps = activeSteps;
   const step = steps ? steps[state.tourStep] : null;
 
-  // Keeps the tour and the surfaces in step when something other than Next
-  // changes what's on screen — the operator closing a dialog, or a dialog
-  // closing itself once its job is done (saving a song, say). Jumps to the next
-  // step that lives on whatever surface is now showing, so the tour continues
-  // where the operator actually is instead of spotlighting a dialog that has
-  // gone, or going quiet behind one that has appeared.
+  // Jumps to the next step matching the currently visible surface.
   useEffect(() => {
     if (!steps || !step || stepSurface(step) === currentSurface) return;
     const nextHere = steps.findIndex(
       (candidate, index) => index > state.tourStep && stepSurface(candidate) === currentSurface
     );
-    // No later step belongs here: stay put and stay hidden (see the render
-    // guard) rather than ending the tour — the surface may well close again,
-    // and this recovers when it does.
+    // No matching later step: stay on the current step, hidden.
     if (nextHere === -1) return;
     patch({ tourStep: nextHere });
   }, [steps, step, currentSurface, state.tourStep, patch]);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- this effect
-       subscribes to an external system (the target element's real DOM
-       layout, which has no React binding), polling + listening for
-       resize/scroll the same way a ResizeObserver-backed effect would. */
+    /* eslint-disable react-hooks/set-state-in-effect -- tracks the target element's DOM layout. */
     if (!step) { setLayout(null); return; }
     const updateLayout = () => {
       const element = document.querySelector('[data-tour="' + step.target + '"]');
@@ -139,8 +103,7 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
         target: rect ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height } : null,
         viewport: { width: window.innerWidth, height: window.innerHeight },
       };
-      // The 300ms poll would otherwise re-render on every tick forever, since a
-      // fresh rect object is never === the last one.
+      // Only updates layout state when it actually changed.
       setLayout((previous) => (sameLayout(previous, next) ? previous : next));
     };
     updateLayout();
@@ -155,10 +118,7 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [step]);
 
-  // Re-placement whenever the popover's own box changes — a step with a longer
-  // body, or a reflow at a narrower width, can be the thing that stops it
-  // fitting where it currently is. Re-attached when the popover mounts, which
-  // is the render after the first measurement lands (see the layout guard).
+  // Re-measures the popover size whenever it resizes.
   const popoverMounted = layout !== null;
   useEffect(() => {
     const element = popoverRef.current;
@@ -177,14 +137,10 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
 
   if (!step || !steps || !state.tourMode) return null;
 
-  // Only a step belonging to the surface that's actually up may render — the
-  // tour overlay sits above every dialog (z-130), so a page step showing while
-  // a dialog is open would spotlight something buried underneath it.
+  // Renders only when the current step matches the visible surface.
   if (stepSurface(step) !== currentSurface) return null;
 
-  // Skip and Done both land here: end the tour outright and mark it seen, from
-  // whatever step it was on. tourStep is reset too, so a later Replay can't
-  // start partway through.
+  // Ends the tour and marks the current mode as seen.
   const finish = () => {
     const finishedMode = state.tourMode;
     if (!finishedMode) return;
@@ -195,9 +151,7 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
   };
   const isLastStep = state.tourStep === steps.length - 1;
 
-  // Opening and closing dialogs as the sequence walks onto and off them. Derived
-  // from where the steps sit rather than flags on individual steps, so the two
-  // halves can't disagree and reordering can't leave one behind.
+  // Open/close patches for each surface, keyed by tour surface.
   const SURFACE_PATCH: Record<TourSurface, { open: Partial<typeof state>; close: Partial<typeof state> }> = {
     page: { open: {}, close: {} },
     lineupModal: {
@@ -228,8 +182,7 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
     }));
   };
 
-  // Nothing to place against until the first measurement lands (one frame), and
-  // reading window.* during render would break the static export's prerender.
+  // Waits for the first layout measurement before placing the popover.
   if (!layout) return null;
   const targetRect = layout.target;
   const placement = placePopover({ target: targetRect, viewport: layout.viewport, popover: popoverSize });
@@ -245,14 +198,7 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
           }}
         />
       )}
-      {/* Transparent shield over the spotlighted element, swallowing clicks
-          before they reach it. Deliberately not `disabled` or a dimming style on
-          the element itself: the point is that it still looks exactly as active
-          as it is, so the tour reads as a description of a real control rather
-          than a greyed-out one. Anything the operator actually needs that
-          control to do is offered by the popover instead (see runStepAction).
-          Sized to the element's own rect, not the spotlight's padded ring, so it
-          never swallows clicks meant for a neighbour. */}
+      {/* Transparent shield over the spotlighted element, blocking clicks. */}
       {targetRect && (
         <div
           onClickCapture={(clickEvent) => { clickEvent.preventDefault(); clickEvent.stopPropagation(); }}
@@ -265,10 +211,7 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
         />
       )}
       {!targetRect && <div className="absolute inset-0 bg-[rgba(6,6,8,.72)]" />}
-      {/* Placed against the spotlighted element rather than the window: see
-          tourPlacement.ts for the flip/shift/arrow rules. Overflow stays visible
-          here so the arrow, which sits outside this box, isn't clipped — the
-          height cap belongs to the scrolling content wrapper inside. */}
+      {/* Popover placed relative to the spotlighted element. */}
       <div
         ref={popoverRef}
         className="absolute w-75 max-w-[calc(100vw-32px)] rounded-2xl border border-border2 bg-panel shadow-app pointer-events-auto animate-[fadeUp_.18s_ease_both]"
@@ -283,8 +226,7 @@ export function TourOverlay({ lumen }: { lumen: UseLumen }) {
             )}
             style={{
               top: placement.arrow.top, left: placement.arrow.left,
-              // Centres the square on the popover's edge, so it reads as a point
-              // growing out of the border rather than a lozenge beside it.
+              // Centers the arrow square on the popover's edge.
               marginTop: -ARROW_SIZE / 2, marginLeft: -ARROW_SIZE / 2,
             }}
           />

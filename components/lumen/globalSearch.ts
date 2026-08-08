@@ -16,10 +16,7 @@ export type SearchIndex = {
 
 const MAX_RESULTS_PER_KIND = 5;
 
-// Pure search over already-loaded, in-memory data — no async/network, so
-// results update on every keystroke with no debounce needed. Songs also
-// match on tags/CCLI/first lyric line; slide notes are searched as part of
-// each song's sections (see the "slide-note" kind).
+// Searches songs, Bible books, lineups, and looks for a matching query.
 export function searchAll(query: string, index: SearchIndex): SearchResult[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];

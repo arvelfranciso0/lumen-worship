@@ -21,9 +21,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
     allSongs, deleteLineup, activateLineup, toggleFavorite, deleteSong,
     duplicateSongAsReprise, askConfirm,
   } = lumen;
-  // Driven entirely by what's been imported (Settings > Bible Translations)
-  // — this app bundles no Bible data at all, so there's no fixed language
-  // list to fall back to.
+  // Languages derived from imported Bible translations.
   const bibleLanguages = useMemo(
     () => Array.from(new Set(state.downloadedTranslations.map((entry) => entry.language))),
     [state.downloadedTranslations]
@@ -34,13 +32,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
       setTransLang(bibleLanguages[0]);
     }
   }, [bibleLanguages, transLang]);
-  // Book names come from whichever translation is actually loaded, so picking a
-  // language has to move state.trans as well — otherwise the list keeps the old
-  // language's names until a Version is picked too, which is not what "changed
-  // the language" should mean. Landing on the first version of that language is
-  // enough; useLumen's book-remap effect then carries the current book across by
-  // canonical number once the new translation finishes loading, so "Psalms"
-  // becomes "Mga Salmo" rather than dead-ending on an unknown name.
+  // Switches to the first translation of the selected language.
   const selectLanguage = (language: string) => {
     setTransLang(language);
     const current = state.downloadedTranslations.find((entry) => entry.code === state.trans);
@@ -49,10 +41,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
     if (firstOfLanguage) patch({ trans: firstOfLanguage.code, idx: 0 });
   };
 
-  // Keeps the live verse in view. Jumping to "Genesis 1:1" selects the verse
-  // but the Browse list holds its own scroll position, so a verse far down a
-  // long chapter would be selected off-screen and the jump would read as having
-  // done nothing. "nearest" so an already-visible verse doesn't shift the list.
+  // Scrolls the active verse into view.
   const activeVerseRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     activeVerseRef.current?.scrollIntoView({ block: "nearest" });
@@ -61,9 +50,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
   const [draggedSongIndex, setDraggedSongIndex] = useState<number | null>(null);
   const lineupsMode = state.mode === "lineups";
 
-  // Lives in shared state (not local to Sidebar) — BackgroundsPanel reads it
-  // to scope background edits to whichever lineup is currently open here
-  // (see lineupScopeId in useLumen.ts).
+  // Clears the viewed lineup id when leaving lineups mode.
   useEffect(() => {
     if (!lineupsMode) patch({ viewingLineupId: null });
   }, [lineupsMode, patch]);
@@ -75,11 +62,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
 
   const hasBibleTranslations = state.downloadedTranslations.length > 0;
 
-  // CHIPS' curated categories (Hymn/Contemporary/Español) stay first, in
-  // their existing order — anything else present in the actual song list
-  // (the category field is free text, see SongEditorModal) is appended after
-  // them, alphabetically. Without this, a song saved with a new category
-  // (e.g. "Youth") had no way to ever show up as a filter chip at all.
+  // Filter chips: curated categories first, then other song categories alphabetically.
   const songFilterChips = useMemo(() => {
     const curated = CHIPS.slice(2);
     const discovered = Array.from(new Set(allSongs.map((songEntry) => songEntry.cat).filter(Boolean)))
@@ -88,10 +71,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
     return [...CHIPS.slice(0, 2), ...curated, ...discovered];
   }, [allSongs]);
 
-  // Bible search. The box wrote state.query all along, but only the song list
-  // ever read it — in Bible mode every book rendered regardless, so typing a
-  // reference did nothing. The book list is now filtered as you type, and Enter
-  // jumps to the full reference.
+  // Parses the search query as a Bible reference for filtering/navigation.
   const bibleQuery = useMemo(() => parseBibleQuery(state.query), [state.query]);
   const visibleBibleBooks = useMemo(
     () => matchBibleBooks(bibleBooks, bibleQuery.bookQuery),
@@ -105,8 +85,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
     if (!bibleTarget) return;
     patch({
       book: bibleTarget.book, chapter: bibleTarget.chapter, idx: bibleTarget.verseIndex,
-      // Back to Browse: a reference jump that landed the operator on the Compare
-      // tab would look like it had done nothing.
+      // Switches back to the Browse tab.
       bibleSubTab: "browse",
     });
   };
@@ -118,15 +97,12 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
     : list.length + " songs";
 
   return (
-    // Desktop is the only breakpoint where the operator drags this width;
-    // tablet renders it as a fixed-width drawer (positioned by LumenApp) and
-    // mobile gives it the whole body as one of MobileTabBar's panes.
+    // Sidebar width is only draggable on desktop.
     <aside
       className={cx(
         "bg-panel flex flex-col min-h-0 overflow-hidden",
         breakpoint === "mobile" ? "flex-1 w-full" : "flex-none",
-        // On desktop the resize handle next to it is the divider; adding a
-        // border here too would read as one thicker, uneven rule.
+        // Desktop gets its divider from the resize handle, not a border.
         breakpoint !== "desktop" && "border-r border-border"
       )}
       style={breakpoint === "desktop" ? { width: state.layoutSizes.sidebarWidth } : breakpoint === "tablet" ? { width: 320, maxWidth: "85vw" } : undefined}
@@ -152,10 +128,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
           <span className="absolute right-2.5 font-mono text-[10px] text-faint border border-border rounded-[5px] p-[2px_5px]">⌘K</span>
         </div>
 
-        {/* A reference the query resolves to is offered as a real row rather than
-            left to a bare Enter press. Navigation was already wired to Enter, but
-            nothing on screen said so — so typing "Genesis 1:1" looked like it
-            only ever filtered the book list. */}
+        {/* Shows the resolved Bible reference as a clickable row. */}
         {bible && bibleTarget && (
           <InteractiveButton
             onClick={goToBibleQuery}
@@ -166,9 +139,6 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
           </InteractiveButton>
         )}
 
-        {/* Language/version pickers are no longer up here — in Bible mode they
-            live in their own labelled block below the book/chapter grid (see
-            further down), which is where the operator-screen design puts them. */}
         {!bible && (
           <div className="flex flex-wrap gap-1.5">
             {songFilterChips.map((chip) => (
@@ -192,9 +162,6 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
               Sort: {state.sort} <span className="text-faint">⇅</span>
             </InteractiveButton>
           )}
-          {/* Translation management hangs off the Version block's "Get more
-              translations →" button further down, not from here. "Queue whole
-              chapter" used to sit here too and was removed on request. */}
         </div>
         )}
         </>
@@ -244,11 +211,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
             </div>
           </div>
 
-          {/* Language, then version within that language — two labelled rows
-              rather than one flat chip list, so it's obvious that picking a
-              language re-scopes which version codes are on offer. Both lists
-              are built purely from what's been imported: this app bundles no
-              Bible data, so there is no fixed catalogue to grey out against. */}
+          {/* Language, then version-within-language, filter rows. */}
           <div className="flex-none flex flex-col gap-2 p-[10px_14px] border-b border-border">
             <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Language</div>
             <div className="flex flex-wrap gap-1.5">
@@ -556,10 +519,7 @@ export function Sidebar({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Br
   );
 }
 
-// Membership editing is drag-and-drop (from the collapsible "All songs"
-// library below, or a click-to-add "+") plus an explicit remove ✕ per row —
-// LineupModal is only used for *creating* a lineup now (name + checkbox
-// picker), not for editing an existing one's membership.
+// Editable view of a lineup's song membership (drag-and-drop, remove, add).
 function LineupDetail({
   lumen, lineup, lineupSongs, allSongs, draggedSongIndex, setDraggedSongIndex, onBack,
 }: {
@@ -593,10 +553,7 @@ function LineupDetail({
   };
 
   return (
-    // Three independent regions rather than one big scroller: the header
-    // (title/rename/Active/Delete) always stays put, the active song list
-    // and the "All songs" library each get their own flex-1/bounded scroll
-    // area, so scrolling one never carries the others along with it.
+    // Header, song list, and library each scroll independently.
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex-none flex items-center gap-2 p-[14px_10px_12px]">
         <button onClick={onBack} className="border-none cursor-pointer text-[16px] text-muted p-0.5 leading-none" title="Back to lineups">
@@ -728,9 +685,7 @@ function LineupDetail({
             <span className={cx("transition-transform", libraryOpen && "rotate-90")}>▸</span>
             All songs — drag to add
           </button>
-          {/* Opens the same song-creation flow as Library's "+ Upload song" —
-              this list only ever supported adding an *existing* song to the
-              lineup, with no way to create a brand new one from here. */}
+          {/* Creates a new song directly from the lineup library. */}
           <InteractiveButton
             onClick={() => patch({ songEditorOpen: true, songEditorMode: "create" })}
             title="Create a new song"

@@ -10,23 +10,14 @@ let db;
 let staticServer;
 let operatorWindow;
 let outputWindow = null;
-// The most recent payload the operator pushed via output:state, kept here
-// (not just relayed) so it can be replayed once the output window actually
-// finishes loading — see the output:ready handler below for why the very
-// first push otherwise never reaches it.
+// The most recent payload pushed via output:state, replayed once the output window loads.
 let lastOutputStatePayload = null;
 let updateStatus = { status: "idle" };
-// Defaults to off (opt-in) until the DB's persisted prefs say otherwise —
-// read directly from db.loadAll() in app.whenReady, since the main process
-// already owns the SQLite connection and doesn't need to round-trip through
-// the renderer just to know this before deciding whether to check on launch.
+// Whether auto-update checks are enabled; defaults to off until prefs load.
 let autoUpdateEnabled = false;
 let hasCheckedForUpdate = false;
 
-// Defense-in-depth containment check, mirroring db.js's resolveWithinDir:
-// path.join already normalizes literal ".."/"." segments, but this catches
-// anything that reaches it pre-resolved to escape dir anyway (belt-and-
-// suspenders against the next handler added here forgetting to normalize).
+// Returns null if the resolved path escapes dir.
 function resolveWithinDir(dir, fileName) {
   const resolvedDir = path.resolve(dir);
   const resolved = path.resolve(dir, fileName);
@@ -40,9 +31,7 @@ function checkForUpdatesIfEnabled() {
   autoUpdater.checkForUpdatesAndNotify();
 }
 
-// Tracked here (not just fired as one-off IPC events) so a freshly opened/
-// reloaded operator window can ask for the current status instead of only
-// ever seeing whichever event happened to fire while nothing was listening.
+// Updates the current update status and notifies the operator window.
 function setUpdateStatus(next) {
   updateStatus = next;
   if (operatorWindow && !operatorWindow.isDestroyed()) {
@@ -50,10 +39,7 @@ function setUpdateStatus(next) {
   }
 }
 
-// electron-updater's releaseNotes can be a plain string or (only when
-// fullChangelog is enabled, which it isn't here) an array of per-version
-// {version, note} entries — normalized to a single string either way so the
-// renderer only ever deals with one shape.
+// Normalizes releaseNotes to a single string.
 function normalizeReleaseNotes(releaseNotes) {
   if (typeof releaseNotes === "string") return releaseNotes;
   if (Array.isArray(releaseNotes) && releaseNotes.length > 0) return releaseNotes[0].note;
@@ -66,38 +52,19 @@ autoUpdater.on("update-available", (info) => setUpdateStatus({ status: "availabl
 autoUpdater.on("download-progress", (progress) => setUpdateStatus({ status: "downloading", percent: progress.percent }));
 autoUpdater.on("update-downloaded", (info) => setUpdateStatus({ status: "downloaded", version: info.version, releaseNotes: normalizeReleaseNotes(info.releaseNotes) }));
 autoUpdater.on("error", (error) => setUpdateStatus({ status: "error", error: error.message }));
-// "auto" picks the first non-primary display; a number pins to that specific
-// display's id. Persisted through the same generic prefs mechanism as any
-// other setting (see repo:setPrefs), keyed as outputDisplayId.
+// Which display the output window uses; "auto" picks the first non-primary display.
 let selectedOutputDisplayId = "auto";
 
-// Some machines (VMs, remote-desktop sessions, flaky GPU drivers) can't run
-// Chromium's GPU process reliably — it crash-loops, the compositor can never
-// paint a frame, and the window shows blank even though the page underneath
-// loaded fine. Disabling hardware acceleration avoids that, but forces
-// software rendering for every window, which is dramatically slower on
-// low-spec hardware (most visibly as lag between clicking a slide and it
-// appearing on the audience screen). So this is opt-in — off by default,
-// toggled from Settings as "Compatibility mode" for the rare machine that
-// actually needs it — rather than punishing everyone else's paint
-// performance for a workaround most people don't need. Must be read/called
-// before app.ready, so this can't wait for the SQLite db (only opened in
-// app.whenReady below) — a plain marker file is checked instead.
+// Reads the GPU-acceleration compatibility flag from a marker file before app.ready.
 const gpuCompatFlagPath = path.join(app.getPath("userData"), "disable-gpu-acceleration");
 const gpuAccelerationDisabled = fs.existsSync(gpuCompatFlagPath);
 if (gpuAccelerationDisabled) app.disableHardwareAcceleration();
 
-// Serves uploaded background images/video from userData/backgrounds/ back to
-// the renderer. Registered before app.ready, as Electron requires. A raw
-// file:// path is avoided here since it's unreliable under contextIsolation.
+// Registers the lumen-media scheme for serving uploaded background files.
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "lumen-media",
-    // corsEnabled is required for crossOrigin="anonymous" (see
-    // generateVideoPoster in useLumen.ts) to work at all — without it,
-    // Chromium refuses the cross-origin video load outright (an "error"
-    // event, load never even reaches the handler's response) regardless of
-    // the Access-Control-Allow-Origin header the handler below sends back.
+    // Required for crossOrigin="anonymous" video loads to succeed.
     privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
   },
 ]);
@@ -109,17 +76,13 @@ const MIME_TYPES = {
   ".woff": "font/woff", ".txt": "text/plain", ".xml": "application/xml",
 };
 
-// Next's static export uses absolute asset paths (/_next/...), which break
-// under a raw file:// load. Serving the exported build over a local HTTP
-// server (same-origin, absolute paths resolve correctly) avoids that.
+// Serves the static export over a local HTTP server.
 function startStaticServer(rootDir) {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       const urlPath = decodeURIComponent((req.url || "/").split("?")[0]);
       const filePath = path.join(rootDir, urlPath === "/" ? "index.html" : urlPath);
-      // A trailing separator is required in the prefix check — otherwise a
-      // sibling directory whose name merely starts with rootDir's characters
-      // (e.g. "out-evil" next to "out") would incorrectly pass.
+      // Rejects paths outside rootDir.
       if (filePath !== rootDir && !filePath.startsWith(rootDir + path.sep)) {
         res.writeHead(403);
         res.end();
@@ -161,40 +124,20 @@ async function createWindow() {
     width: 1440,
     height: 900,
     icon: path.join(__dirname, "..", "public", "lumen.ico"),
-    // Hides the default File/Edit/View/Window/Help menu bar strip (this app
-    // has an entirely custom UI and never uses it) without actually removing
-    // the underlying Menu — setApplicationMenu(null) would also silently
-    // kill the OS-provided Ctrl+C/V/X/A accelerators in text inputs on
-    // Windows/Linux, since those are normally supplied by the default Edit
-    // menu's roles, not by Chromium itself. Alt still reveals it if ever
-    // needed.
+    // Hides the menu bar without removing it, so text-input accelerators still work.
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      // Electron sandboxes preload scripts by default (since v20) — under
-      // that sandbox, preload's require() only resolves a small built-in
-      // allowlist ('electron', 'events', ...), not arbitrary project files.
-      // preload.js requires ./bibleXml.js directly (see that file's own
-      // header comment on why), which silently crashed the entire preload
-      // script under the sandbox default — meaning NONE of its
-      // contextBridge.exposeInMainWorld calls ever ran, not just the Bible
-      // one: electronAPI, electronDisplay (the second-monitor bridge),
-      // electronShell, electronCompat, electronUpdater were all missing from
-      // the renderer. contextIsolation/nodeIntegration above already keep
-      // the page itself sandboxed from Node; this only restores the
-      // preload's own ability to require its sibling file.
+      // Disabled so preload.js can require its sibling bibleXml.js module.
       sandbox: false,
     },
   });
   operatorWindow.loadURL(await resolveAppUrl());
   operatorWindow.on("closed", () => {
     operatorWindow = null;
-    // Without this, closing just the operator window leaves outputWindow
-    // open on the second monitor — window-all-closed only fires once every
-    // BrowserWindow is gone, so the app would never actually quit and the
-    // audience screen would keep showing the last slide indefinitely.
+    // Closes the output window when the operator window closes.
     closeOutputWindow();
   });
 }
@@ -270,19 +213,11 @@ async function openOutputWindow() {
     x: display.bounds.x, y: display.bounds.y, width: display.bounds.width, height: display.bounds.height,
     frame: false, show: false, autoHideMenuBar: true, backgroundColor: "#000000", skipTaskbar: true,
     webPreferences: {
-      // Deliberately its own minimal preload, NOT the operator's preload.js —
-      // see preload-output.js's header comment. Exposing the full
-      // electronAPI/electronShell/electronCompat/electronUpdater surface here
-      // would hand this window (untrusted relative to the operator window: it
-      // only ever renders pushed state, never runs operator input) the same
-      // DB read/write/delete and update-install capability as the operator.
+      // Uses its own minimal preload rather than the operator's, so this window gets no privileged APIs.
       preload: path.join(__dirname, "preload-output.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      // See the same option on operatorWindow's webPreferences above for why
-      // this is required — sandboxed preload can't require() bibleXml.js.
-      // preload-output.js doesn't need that file, but sandbox is kept
-      // consistent with the operator window either way.
+      // Kept consistent with the operator window's sandbox setting.
       sandbox: false,
     },
   });
@@ -301,14 +236,10 @@ async function openOutputWindow() {
     if (outputWindow === win) outputWindow = null;
     broadcastOutputStatus();
   });
-  // Broadcast right away so the operator UI reflects "active" as soon as the
-  // window exists, rather than only after the page inside it finishes
-  // loading (loadURL below can take a moment on a cold dev server).
+  // Broadcasts status immediately, before the page finishes loading.
   broadcastOutputStatus();
   win.loadURL(await resolveAppUrl("output=1"));
-  // Held hidden until the output-only page confirms (via output:ready) that
-  // it has actually rendered live content — otherwise the operator's full
-  // UI would flash on the audience screen for an instant before it swaps in.
+  // Stays hidden until output:ready confirms the page has rendered.
   return { ok: true };
 }
 
@@ -318,11 +249,7 @@ function closeOutputWindow() {
   broadcastOutputStatus();
 }
 
-// Re-bounds the output window to wherever it should currently be, but only
-// if that's actually different from where it already is — Windows fires
-// display-metrics-changed when a fullscreen window hides the taskbar, so
-// unconditionally calling setFullScreen/setBounds here on every event would
-// re-trigger the very same event, feeding back into itself.
+// Re-bounds the output window only if its target bounds changed.
 function retargetOutputWindow() {
   if (!outputWindow || outputWindow.isDestroyed()) return;
   const display = resolveOutputDisplay();
@@ -335,10 +262,7 @@ function retargetOutputWindow() {
   outputWindow.setFullScreen(true);
 }
 
-// Only a genuine display-removed means the output window's monitor might be
-// gone — display-metrics-changed also fires from our own setFullScreen()
-// calls (see retargetOutputWindow above) and must never be treated as a
-// disconnect, or the output window would close itself moments after opening.
+// Closes the output window only when its display was actually removed.
 function handleDisplayRemoved() {
   if (outputWindow && !outputWindow.isDestroyed() && !resolveOutputDisplay()) {
     closeOutputWindow();
@@ -360,26 +284,13 @@ app.whenReady().then(() => {
 
   const backgroundsDir = path.join(app.getPath("userData"), "backgrounds");
   protocol.handle("lumen-media", async (request) => {
-    // Parse with the real URL class rather than a string replace — the
-    // filename lives in the pathname (see db.js's rowToBackground), which
-    // is exempt from the host-normalization Chromium applies to standard
-    // schemes' authority component.
+    // Extracts the filename from the request URL's pathname.
     const fileName = decodeURIComponent(new URL(request.url).pathname.replace(/^\//, ""));
-    // Percent-encoding both the dots and slashes in fileName (e.g.
-    // "%2e%2e%2F...") survives the URL parser's dot-segment collapsing as an
-    // opaque path segment, and the decodeURIComponent above then reconstitutes
-    // a literal "../" sequence — resolveWithinDir catches that before the
-    // file is ever read, rather than trusting path.join alone.
+    // Rejects a resolved path that escapes backgroundsDir.
     const resolvedPath = resolveWithinDir(backgroundsDir, fileName);
     if (!resolvedPath) return new Response(null, { status: 403 });
     const response = await net.fetch(pathToFileURL(resolvedPath).toString());
-    // A plain file:// fetch carries no CORS headers, so a <video> loaded
-    // from this (cross-origin, relative to the http:// page) protocol
-    // taints any canvas it's drawn to — which breaks poster-frame capture
-    // (canvas.toDataURL throws SecurityError). Explicitly allowing it here
-    // is safe: it only affects code that opts into CORS via
-    // crossOrigin="anonymous" (see generateVideoPoster in useLumen.ts),
-    // normal <img>/<video> playback is unaffected either way.
+    // Adds a permissive CORS header to the response.
     const headers = new Headers(response.headers);
     headers.set("Access-Control-Allow-Origin", "*");
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
@@ -387,8 +298,7 @@ app.whenReady().then(() => {
 
   registerIpcHandlers();
   createWindow();
-  // Only meaningful in a packaged build published to GitHub releases — a
-  // dev run has no update feed to check against.
+  // Checks for updates only in packaged builds.
   checkForUpdatesIfEnabled();
 
   screen.on("display-added", handleDisplaysChanged);
@@ -415,10 +325,7 @@ function registerIpcHandlers() {
   ipcMain.handle("repo:getBibleTranslationData", (_event, code) => db.getBibleTranslationData(code));
   ipcMain.handle("repo:setSongMetaOverride", (_event, songId, patch) => db.setSongMetaOverride(songId, patch));
 
-  // Only http(s) URLs are ever passed here — the caller always uses the
-  // hardcoded BIBLE_DOWNLOADS_URL constant, never user-supplied input — but
-  // the check costs nothing and keeps this handler from ever being a general
-  // arbitrary-protocol-launcher if that assumption changes later.
+  // Only allows http(s) URLs to be opened.
   ipcMain.handle("shell:openExternal", (_event, url) => {
     if (!/^https?:\/\//i.test(url)) return;
     return shell.openExternal(url);
@@ -427,18 +334,12 @@ function registerIpcHandlers() {
   ipcMain.handle("display:list", () => listDisplays());
   ipcMain.handle("display:status", () => outputStatusPayload());
 
-  // Real OS-level fullscreen for the operator window — used only for the
-  // single-monitor "Present" fallback (see useLumen.ts's startPresenting);
-  // when a second display handles the audience view instead, this is never
-  // called and the operator's own window stays a normal window.
+  // Toggles OS-level fullscreen for the operator window.
   ipcMain.handle("window:setFullScreen", (_event, fullScreen) => {
     if (operatorWindow && !operatorWindow.isDestroyed()) operatorWindow.setFullScreen(fullScreen);
   });
 
-  // Compatibility mode (disables GPU acceleration) — see the comment above
-  // gpuCompatFlagPath. Always reflects the flag file already read at launch;
-  // toggling only takes effect after a restart, since acceleration can only
-  // be disabled before app.ready.
+  // Reads/writes the GPU-acceleration compatibility flag; takes effect after restart.
   ipcMain.handle("compat:getGpuAccelerationDisabled", () => gpuAccelerationDisabled);
   ipcMain.handle("compat:setGpuAccelerationDisabled", (_event, disabled) => {
     if (disabled) fs.writeFileSync(gpuCompatFlagPath, "");
@@ -446,13 +347,11 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("update:status", () => updateStatus);
-  // Only meaningful once updateStatus.status is "downloaded" — quitAndInstall
-  // is a no-op (electron-updater just resolves/ignores it) otherwise.
+  // Installs the downloaded update and restarts the app.
   ipcMain.handle("update:install", () => autoUpdater.quitAndInstall());
   ipcMain.handle("update:setAutoUpdateEnabled", (_event, enabled) => {
     autoUpdateEnabled = enabled;
-    // Flipped on mid-session (rather than at next launch) — run the check
-    // now instead of making the user restart the app to benefit from it.
+    // Checks for updates immediately after enabling auto-update.
     checkForUpdatesIfEnabled();
   });
 
@@ -465,35 +364,20 @@ function registerIpcHandlers() {
     return { ok: true };
   });
 
-  // One-way, high-frequency: the operator window pushes the current live
-  // slide/style/background on every change; relayed straight through to
-  // whichever window is the audience output, if one is open.
+  // Relays the operator's live state to the output window.
   ipcMain.on("output:state", (event, payload) => {
-    // Only the operator window ever legitimately pushes state — matters more
-    // now that a payload is cached and replayed on every future output:ready
-    // (e.g. an output-window reload), not just relayed once.
+    // Ignores state pushes from any window other than the operator.
     if (BrowserWindow.fromWebContents(event.sender) !== operatorWindow) return;
     lastOutputStatePayload = payload;
     if (outputWindow && !outputWindow.isDestroyed()) outputWindow.webContents.send("output:state", payload);
   });
 
-  // The output-only page pings this once it has actually painted real
-  // content, only then is it revealed — avoids a flash of the operator UI
-  // on the audience screen while the page loads and reads ?output=1.
+  // Reveals the output window once it signals it has rendered.
   ipcMain.on("output:ready", (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     console.log("[output] output:ready received; is the tracked output window?", win === outputWindow);
     if (win !== outputWindow || win.isDestroyed()) return;
-    // Replay the last state the operator pushed, if any — output:state events
-    // sent by useLumen while this window was still loading (the operator's
-    // push effect fires as soon as outputStatus.active flips true, which
-    // openOutputWindow() broadcasts immediately on window creation, well
-    // before loadURL resolves and OutputWindowApp's listener exists) were
-    // dispatched to a webContents with nobody listening yet and are gone for
-    // good. Without this, the window sits on OutputWindowApp's black default
-    // state until the next unrelated live-slide change happens to fire the
-    // push effect again. Sent before setFullScreen/show so the window is
-    // already showing the real background the instant it becomes visible.
+    // Replays the last pushed state before showing the window.
     if (lastOutputStatePayload) win.webContents.send("output:state", lastOutputStatePayload);
     const display = resolveOutputDisplay();
     if (display) win.setBounds(display.bounds);

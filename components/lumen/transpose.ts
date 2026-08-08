@@ -1,7 +1,4 @@
-// Transposes a key name by a number of semitones — operator-only display math,
-// not persisted and never sent to the audience output. Always normalizes to
-// sharps (matching how MIDI and chart tools typically transpose) except when
-// the original key itself used a flat, in which case the result stays flat too.
+// Transposes a key name by a number of semitones, normalizing to sharps unless the original key used a flat.
 const SHARP_SCALE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const FLAT_SCALE = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 

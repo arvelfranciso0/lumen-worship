@@ -102,3 +102,14 @@ in `state.layoutSizes` and persist through the same `prefs` mechanism described 
 - No single-letter variable/parameter names (`i`, `s`, `v`, etc.) — use descriptive names
   (`songIndex`, `previousState`, `lumen`). This was an explicit, deliberate change from the
   original scaffold; keep new code consistent with it.
+
+### Comments
+
+Keep comments short — one line, stating what the function or block does. Do not write multi-line
+comments explaining history, rationale, edge cases, or bugs avoided; if that context matters, put
+it in the commit message or PR description instead. If a function's name and signature already
+make its purpose obvious, skip the comment entirely.
+
+- Good: `// Evicts the oldest cache entry once the limit is exceeded.`
+- Avoid: paragraph-length comments walking through why a piece of code exists or what it once
+  looked like.

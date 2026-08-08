@@ -1,8 +1,4 @@
-// releaseNotes is the GitHub release's description (rendered to HTML by
-// electron-updater from the release's Atom feed entry) — shown verbatim in
-// the header bell's popover. Trusted content: it always comes from this
-// app's own GitHub releases, authored by whoever cuts the release, not from
-// any third party or end-user input.
+// releaseNotes is the GitHub release's description, rendered to HTML, shown in the header bell's popover.
 export type UpdateStatus =
   | { status: "idle" | "checking" }
   | { status: "available"; version: string; releaseNotes: string | null }

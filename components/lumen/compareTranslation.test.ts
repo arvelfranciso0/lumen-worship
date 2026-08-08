@@ -2,11 +2,6 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { resolveCompareTranslation } from "./data.ts";
 
-// Regression: with only one translation imported, the sidebar correctly said
-// "Compare needs at least 2 downloaded translations" while the Live output was
-// simultaneously showing a comparison — the same verse rendered twice, captioned
-// "1999 - RCPV" as though the two halves came from different translations.
-// state.compareMode had outlived the conditions that made it valid.
 describe("resolveCompareTranslation", () => {
   const DOWNLOADED = ["kjv", "rcpv", "niv"];
 

@@ -2,10 +2,6 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { matchBibleBooks, parseBibleQuery, resolveBibleQueryTarget } from "./bibleSearch.ts";
 
-// Regression: the Bible sidebar's search box wrote state.query but nothing in
-// Bible mode ever read it, so typing a reference filtered nothing and navigated
-// nowhere — the box looked functional and was inert.
-
 const BOOKS = [
   { name: "Genesis", chapters: [{ number: 1, verses: [{ number: 1 }, { number: 2 }, { number: 3 }] }] },
   { name: "Job", chapters: [{ number: 1, verses: [{ number: 1 }] }] },
@@ -43,9 +39,6 @@ describe("parseBibleQuery", () => {
     assert.deepEqual(parseBibleQuery("   "), { bookQuery: "", chapter: null, verse: null, verseEnd: null });
   });
 
-  // Regression: the trailing "-7" used to be parsed as the chapter, leaving
-  // "1 Corinthians 13:4-" as the book name — which matched no book, so a
-  // perfectly valid reference filtered the list to nothing.
   test("parses a verse range without corrupting the book name", () => {
     assert.deepEqual(
       parseBibleQuery("1 Corinthians 13:4-7"),

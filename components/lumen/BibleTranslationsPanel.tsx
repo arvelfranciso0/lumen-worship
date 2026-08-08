@@ -5,9 +5,7 @@ import { InteractiveButton } from "./Interactive";
 import { useBackdropClose } from "./useBackdropClose";
 import type { UseLumen } from "./useLumen";
 
-// Relocated out of SettingsModal, opened from the Bible sidebar tab instead
-// — this app bundles no Bible data at all, every translation comes from a
-// manual download-then-import here (see BIBLE_DOWNLOADS_URL in data.ts).
+// Panel for importing and managing downloaded Bible translations.
 export function BibleTranslationsPanel({ lumen }: { lumen: UseLumen }) {
   const {
     state, patch, importBibleTranslation, removeBibleTranslation, openBibleDownloadsPage, bibleImportError,

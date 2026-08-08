@@ -7,19 +7,13 @@ const WITH_TRANSLATION: TourContext = { hasBibleTranslations: true, hasMultipleB
 const WITH_TWO_TRANSLATIONS: TourContext = { hasBibleTranslations: true, hasMultipleBibleTranslations: true };
 const ALL_MODES = ["songs", "bible", "lineups"] as const;
 
-// A tour walks onto a surface by opening it and off by closing it. For that to
-// work, the steps on any one surface have to form a single contiguous run: the
-// tour opens it once at the start of the run and closes it once at the end.
-// Interleaving would mean reopening a dialog it had just closed.
+// Collapses consecutive steps on the same surface into the sequence of surface transitions.
 function surfaceRuns(steps: TourStep[]): string[] {
   return steps.map(stepSurface).filter((surface, index, all) => surface !== all[index - 1]);
 }
 
 describe("surface sequencing", () => {
   for (const mode of ALL_MODES) {
-    // "page" is re-entered on the way back out of every dialog, which is
-    // expected. What must not happen is a dialog being opened, closed and
-    // opened again — that would mean its steps are interleaved with others.
     test(mode + ": no dialog is entered more than once", () => {
       const runs = surfaceRuns(tourStepsFor(mode, EMPTY_LIBRARY));
       const dialogRuns = runs.filter((surface) => surface !== "page");
@@ -49,18 +43,11 @@ describe("bible tour — empty library", () => {
     );
   });
 
-  // Where the files come from has to be explained before the button that reads
-  // one: on its own, "Import translation" points at a file the operator hasn't
-  // been told how to get.
   test("the downloads page comes before the import button", () => {
     const panelTargets = STEPS.filter((step) => stepSurface(step) === "bibleTranslations").map((step) => step.target);
     assert.deepEqual(panelTargets, ["bible-panel-downloads", "bible-panel-import"]);
   });
 
-  // Regression: the import step waited for a translation to actually arrive
-  // before Next would advance, so finishing a first run meant downloading a file
-  // from the website mid-tour. Nothing describes an action the operator has to
-  // perform to continue any more.
   test("no step tells the operator to pick or download a file", () => {
     for (const step of STEPS) {
       const copy = (step.title + " " + step.body).toLowerCase();
@@ -73,8 +60,6 @@ describe("bible tour — empty library", () => {
 describe("bible tour — translation already installed", () => {
   const STEPS = tourStepsFor("bible", WITH_TRANSLATION);
 
-  // Regression: the import steps ran regardless, so a returning operator was
-  // walked through downloading and importing a translation they already had.
   test("teaches presenting: version, book/chapter, verse, live", () => {
     assert.deepEqual(
       STEPS.map((step) => [step.target, stepSurface(step)]),

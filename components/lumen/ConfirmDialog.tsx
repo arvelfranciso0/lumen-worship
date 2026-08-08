@@ -5,10 +5,7 @@ import { InteractiveButton } from "./Interactive";
 import { useBackdropClose } from "./useBackdropClose";
 import type { UseLumen } from "./useLumen";
 
-// Generic "are you sure?" dialog driven entirely by lumen.state.confirmDialog
-// (set via lumen.askConfirm) — used anywhere a destructive action (delete
-// song/lineup/background/translation/built-in look) previously fired
-// immediately with no confirmation step.
+// Generic confirmation dialog driven by lumen.state.confirmDialog.
 export function ConfirmDialog({ lumen }: { lumen: UseLumen }) {
   const { state, closeConfirm } = lumen;
   const dialog = state.confirmDialog;

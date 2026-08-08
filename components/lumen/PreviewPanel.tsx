@@ -9,17 +9,11 @@ import type { UseLumen } from "./useLumen";
 import { useSlideTransition } from "./useSlideTransition";
 import type { Breakpoint } from "./useViewportBreakpoint";
 
-// Every box here sizes its text as a fraction of itself (see stage.ts), so a
-// caption on a narrow panel — or on the half-width Previous/Next boxes — can
-// come out honestly proportional but too small to read. These floors only lift
-// the caption, which is positioned out of the text flow and so can never affect
-// where the lyrics wrap.
+// Minimum caption font sizes for the live and preview boxes.
 const LIVE_CAPTION_MIN_SIZE = "7px";
 const PREVIEW_CAPTION_MIN_SIZE = "6px";
 
-// Walks up from `node` to find the nearest ancestor line <div> (tagged with
-// data-line-index), stopping at `container` so a selection outside the
-// Live output box is never mistaken for one inside it.
+// Finds the nearest ancestor line element tagged with data-line-index.
 function findLineElement(node: Node | null, container: HTMLElement): HTMLElement | null {
   let current: Node | null = node;
   while (current && current !== container) {
@@ -29,9 +23,7 @@ function findLineElement(node: Node | null, container: HTMLElement): HTMLElement
   return null;
 }
 
-// Measures how many characters into `lineElement`'s flattened text content
-// (node, offset) falls at — works across however many <span> segments
-// HighlightedLine rendered, not just within one text node.
+// Measures the character offset of (node, offset) within lineElement's text.
 function measureTextOffset(lineElement: HTMLElement, node: Node, offset: number): number {
   const measuringRange = document.createRange();
   measuringRange.selectNodeContents(lineElement);
@@ -39,10 +31,7 @@ function measureTextOffset(lineElement: HTMLElement, node: Node, offset: number)
   return measuringRange.toString().length;
 }
 
-// The operator screen's right-hand column: everything about what is on the
-// audience screen *right now* and how to move it. Split out of MainPanel,
-// which now owns the authoring half (song info, text style, slides,
-// backgrounds) — that division is the core of the handoff redesign.
+// Operator screen's right-hand column: live output and navigation.
 export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Breakpoint }) {
   const {
     state, patch, go, cur, nxt, prv, idx, hidden, look, allLooks, lyricFamily,
@@ -51,22 +40,16 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
   } = lumen;
 
   const isMobile = breakpoint === "mobile";
-  // Tablet pins the column so the main content keeps a usable width; only
-  // desktop lets the operator drag it.
+  // Panel width: fixed on tablet, draggable on desktop.
   const panelWidth = isMobile ? undefined : breakpoint === "tablet" ? 320 : state.layoutSizes.previewWidth;
 
-  // Per-slide background override (song mode, set from the Backgrounds panel)
-  // — falls back to the global look whenever a slide doesn't have its own.
+  // Per-slide background look, falling back to the global look.
   const curLook = useMemo(() => (cur.lookId && allLooks.find((l) => l.id === cur.lookId)) || look, [cur, allLooks, look]);
   const nxtLook = useMemo(() => (nxt?.lookId && allLooks.find((l) => l.id === nxt.lookId)) || look, [nxt, allLooks, look]);
   const prvLook = useMemo(() => (prv?.lookId && allLooks.find((l) => l.id === prv.lookId)) || look, [prv, allLooks, look]);
   const slideTransitionStyle = useSlideTransition(state.transitionType, state.transitionDurationMs, state.performanceMode);
 
-  // Lets the operator highlight text by selecting it directly on the Live
-  // output box (with the mouse/cursor), instead of through a separate
-  // editor — works the same way for song lyrics and Bible verses, since
-  // both render through this one box. The captured selection goes into
-  // shared state because the Apply/Clear controls live in MainPanel.
+  // Ref to the Live output box, used for capturing text selection.
   const liveOutputRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -77,9 +60,7 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
         patch({ liveSelection: null });
         return;
       }
-      // Use the Range's start/end (always in document order), not
-      // anchor/focus (which flip depending on which direction the user
-      // dragged) — that way a bottom-to-top drag still resolves the same.
+      // Uses the Range's start/end, not anchor/focus, for consistent ordering.
       const range = selection.getRangeAt(0);
       if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) {
         patch({ liveSelection: null });
@@ -105,21 +86,15 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
   // Old selection offsets don't mean anything once the live slide changes.
   useEffect(() => { patch({ liveSelection: null }); }, [idx, patch]);
 
-  // Clamped into the deck: on the blank overflow positions `idx` sits one step
-  // outside it, and "22 of 21" would be nonsense.
+  // Clamps the slide position into the valid deck range.
   const position = Math.min(Math.max(idx + 1, 1), Math.max(slideCount, 1));
   const progressPct = slideCount ? Math.round((position / slideCount) * 100) : 0;
   const progressLabel = slideCount ? position + " of " + slideCount : "";
-  // "End" only once the operator has actually stepped onto the blank position
-  // past the last slide — not while the final verse is still on screen. At that
-  // point the box below is empty and Next is disabled, which together are the
-  // signal that there is nothing further.
+  // "End" label only once past the last slide, otherwise "Next up".
   const nextUpLabel = atEndOverflow ? "End" : "Next up";
   const prevLabel = atStartOverflow ? "Start" : "Previous";
 
-  // The one real output the app drives (a second-monitor audience window).
-  // Rendered as a list because the design shows one row per connected
-  // display — see DisplaysModal.tsx for why N-simultaneous is deferred.
+  // List of connected output displays (currently at most one).
   const connectedOutputs = outputStatus.active && outputStatus.display
     ? [{
       id: outputStatus.display.id,
@@ -139,10 +114,7 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
       )}
       style={panelWidth === undefined ? undefined : { width: panelWidth }}
     >
-      {/* FIXED TOP: Live output / Previous / Next up / progress / transport
-          are the operator's always-on situational awareness — kept out of
-          the scroll container below so expanding Operator notes can never
-          push them out of view. */}
+      {/* Fixed top section: live output, previous/next, progress, transport. */}
       <div className="flex-none flex flex-col gap-3.5">
         {/* LIVE OUTPUT */}
         <div className="flex flex-col gap-2.5 flex-none">
@@ -150,28 +122,12 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
             <span className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Live output</span>
             <span className="text-[12.5px] text-muted truncate">{cur.label}</span>
           </div>
-          {/* containerType "size" is what makes this box a scale model of the
-              audience screen: everything SlideStage draws inside it is sized in
-              cqw/cqh against this element (see stage.ts), so dragging the panel
-              rescales the whole slide instead of re-wrapping its text. Safe here
-              because the box's own size never depends on its contents — width
-              comes from the panel, height from the output's aspect ratio. The
-              same two style properties are what put Previous, Next up and the
-              slides grid on the identical footing. */}
+          {/* containerType "size" scales SlideStage's contents to this box's dimensions. */}
           <div
             className="relative w-full rounded-2xl overflow-hidden border border-border2 bg-black shadow-app flex-none"
             style={{ aspectRatio: outputAspectRatio, containerType: "size" }}
           >
-            {/* preview only while PresentationOverlay is covering this entire
-                window (state.presenting, single-monitor fallback) — the Live
-                output box sits behind it then, so its own decode would just be
-                wasted CPU. NOT set for outputStatus.active: the second-monitor
-                OutputWindowApp runs in its own BrowserWindow/renderer process,
-                so this box is the operator's only way to see the audience
-                background actually playing — freezing it on a still poster
-                the moment a second display connects would defeat the point of
-                a live preview. Has no visual effect for image/gradient looks,
-                which render identically either way. */}
+            {/* Preview mode only while the single-monitor fullscreen overlay is active. */}
             <LookBackground look={curLook} black={state.black} preview={state.presenting} />
             <SlideStage
               stageRef={liveOutputRef}
@@ -272,10 +228,7 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
         </div>
 
         {/* TRANSPORT */}
-        {/* Disabled exactly where go() refuses to move (canGoNext/canGoPrev are
-            derived from the same nxt/prv the previews use), so the end of a
-            song, set or the Bible reads as an end instead of a live button that
-            silently does nothing. */}
+        {/* Prev/Next disabled exactly where go() would no-op. */}
         <div className="flex gap-2.5 justify-between flex-none mt-3.5" data-tour="navbuttons">
           <InteractiveButton
             onClick={() => go(-1)}
@@ -307,10 +260,7 @@ export function PreviewPanel({ lumen, breakpoint }: { lumen: UseLumen; breakpoin
 
       </div>
 
-      {/* SCROLLABLE BOTTOM: everything below the transport row is secondary
-          to the live preview, so this region gets its own scroll boundary
-          — expanding Operator notes only grows this container, never the
-          fixed top region above. */}
+      {/* Scrollable bottom section: blank/black/fullscreen, outputs, notes. */}
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3.5">
         <div className="flex gap-2 flex-none mt-3 pt-3 border-t border-border" data-tour="transport">
           <button

@@ -3,10 +3,7 @@
 import { cx } from "./cx";
 import type { UseLumen } from "./useLumen";
 
-// Mobile-only (<768px) bottom tab bar — single-pane view switcher across the
-// three columns the desktop layout shows side by side: the library (Sidebar),
-// the authoring column (MainPanel: song info, slides, backgrounds), and the
-// live column (PreviewPanel: output, previews, transport).
+// Mobile-only bottom tab bar for switching between the library, slides, and live panes.
 export function MobileTabBar({ lumen }: { lumen: UseLumen }) {
   const { state, patch } = lumen;
 

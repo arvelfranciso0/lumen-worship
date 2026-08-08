@@ -2,12 +2,6 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { bookNumberOf, canonicalBookNumber, findBookAcrossTranslations } from "./data.ts";
 
-// Regression: Bible Compare matched the two translations' books by NAME, so
-// comparing "Mga Panultihon 1:1" (Cebuano) against "Proverbs 1:1" (English)
-// reported "This verse isn't in one of the two translations" for a verse
-// present in both. Proverbs is book 20 in either language; the name string is
-// the only thing that differs.
-
 // Book 20 in both translations, named in each one's own language.
 const ENGLISH_BOOKS = [
   { number: 1, name: "Genesis" },
@@ -47,8 +41,6 @@ describe("findBookAcrossTranslations", () => {
   });
 
   test("falls back to the name when the number isn't in the target translation", () => {
-    // A partial translation carrying only the New Testament still resolves by
-    // name rather than returning nothing.
     assert.equal(findBookAcrossTranslations(ENGLISH_BOOKS, 66, "Proverbs")?.name, "Proverbs");
   });
 
@@ -63,8 +55,6 @@ describe("bookNumberOf", () => {
   });
 
   test("falls back to the canonical name tables for a name not in the list", () => {
-    // The name belongs to a translation that isn't loaded — this is the case
-    // that arises the moment the operator switches translations.
     assert.equal(bookNumberOf([], "Proverbs"), canonicalBookNumber("Proverbs"));
     assert.equal(bookNumberOf([], "Proverbs"), 20);
   });

@@ -10,14 +10,10 @@ import type { UseLumen } from "./useLumen";
 
 type Slide = UseLumen["slides"][number];
 
-// A thumbnail is the smallest surface a slide is drawn on, so its caption needs
-// the lowest floor of any of them before the honest proportion becomes unreadable
-// (see stage.ts for why nothing here is sized in fixed pixels).
+// Minimum caption font size for the thumbnail-sized slide preview.
 const THUMBNAIL_CAPTION_MIN_SIZE = "5px";
 
-// Groups consecutive slides that share a label into one section block, so a
-// two-slide "Verse 1" reads as one unit. Bible mode has no section concept —
-// callers pass grouping off there and every slide lands in one flat block.
+// Groups consecutive slides that share a label into one section block.
 function groupSlides(slides: Slide[], grouped: boolean): { label: string; items: { slide: Slide; index: number }[] }[] {
   if (!grouped) return [{ label: "", items: slides.map((slide, index) => ({ slide, index })) }];
   const groups: { label: string; items: { slide: Slide; index: number }[] }[] = [];
@@ -29,9 +25,7 @@ function groupSlides(slides: Slide[], grouped: boolean): { label: string; items:
   return groups;
 }
 
-// The slides grid, which since the handoff redesign lives inside the main
-// column (it used to be a full-width strip pinned under it) with the
-// Backgrounds panel filling whatever vertical space is left below it.
+// The slides grid, with the Backgrounds panel filling the space left below it.
 export function SlidesPanel({ lumen }: { lumen: UseLumen }) {
   const {
     state, slides, idx: currentSlideIndex, patch, look, allLooks, adjustLayoutSize, bible, lyricFamily,
@@ -44,15 +38,11 @@ export function SlidesPanel({ lumen }: { lumen: UseLumen }) {
   const showGroupLabels = !bible && grouped;
   const groups = useMemo(() => groupSlides(slides, showGroupLabels), [slides, showGroupLabels]);
 
-  // Looked up once per allLooks change instead of a linear allLooks.find() per
-  // slide per render — grouped slides can otherwise re-scan the whole looks
-  // list on every unrelated keystroke.
+  // Maps look id to look, built once per allLooks change.
   const looksById = useMemo(() => new Map(allLooks.map((lookOption) => [lookOption.id, lookOption])), [allLooks]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      {/* pt-2.5 so the label isn't flush against the panel's top edge — the row
-          above is a divider, not spacing. */}
       <div className="flex items-center gap-2.5 px-2 pt-2.5 flex-none">
         <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Slides</div>
         {!bible && (
@@ -106,11 +96,7 @@ export function SlidesPanel({ lumen }: { lumen: UseLumen }) {
                       draggedIndex === index && "opacity-40"
                     )}
                   >
-                    {/* Carries the output's aspect ratio and container-type so a
-                        thumbnail is the same scale model of the audience screen
-                        the Live output box is — it used to be a fixed h-24 with
-                        hardcoded 8px text, which is why A−/A+ and panel resizing
-                        never reached it. */}
+                    {/* Scales the thumbnail to match the output's aspect ratio. */}
                     <div
                       className="relative rounded-t-[9px] overflow-hidden"
                       style={{ aspectRatio: outputAspectRatio, containerType: "size" }}

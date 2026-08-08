@@ -1,8 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-// Extensions are required here (not in app code): npm test runs this through
-// Node's own test runner, which resolves as ESM. `import type` is erased
-// entirely, so ./data is never actually resolved at runtime.
+// Type-only import; erased at runtime, so its missing extension is fine.
 import type { BibleBook } from "./data";
 import {
   formatVerseLabel, PAST_START_INDEX, resolveAdjacentSetSong, resolveDeckStep, resolveNextVerse,
@@ -16,9 +14,7 @@ function chapter(number: number, verseCount: number) {
   };
 }
 
-// A miniature canon: two books, so crossing a book boundary in both directions
-// is reachable, and the last verse of the last book is a real "end of the
-// Bible" the way Revelation 22:21 is in a full translation.
+// A miniature two-book canon for exercising boundary crossings.
 const BOOKS: BibleBook[] = [
   { number: 1, name: "Genesis", testament: "Old", chapters: [chapter(1, 3), chapter(2, 2)] },
   { number: 66, name: "Revelation", testament: "New", chapters: [chapter(21, 2), chapter(22, 21)] },
@@ -37,7 +33,6 @@ describe("resolveNextVerse", () => {
     assert.deepEqual(resolveNextVerse(BOOKS, "Genesis", 2, 1), { book: "Revelation", chapter: 21, verseIndex: 0 });
   });
 
-  // The reported bug: Next kept going past the end into an empty display.
   test("returns null at the last verse of the last book (Revelation 22:21)", () => {
     assert.equal(resolveNextVerse(BOOKS, "Revelation", 22, 20), null);
   });
@@ -104,10 +99,7 @@ describe("resolveAdjacentSetSong", () => {
     assert.equal(resolveAdjacentSetSong(setIds, "a", -1, sectionCountOf), null);
   });
 
-  // Note this is only ever consulted in the Lineups tab. The Songs tab having no
-  // continuation at all is enforced by go() not calling this, so a song that
-  // happens to be in the set still ends at its own last slide when browsed from
-  // the library.
+  // Only consulted from the Lineups tab.
   test("a song that isn't in the set never continues in either direction", () => {
     assert.equal(resolveAdjacentSetSong(setIds, "not-in-set", 1, sectionCountOf), null);
     assert.equal(resolveAdjacentSetSong(setIds, "not-in-set", -1, sectionCountOf), null);
@@ -126,9 +118,7 @@ describe("resolveAdjacentSetSong", () => {
   });
 });
 
-// The operator can step onto one blank position past each end of the deck. That
-// empty output — not a greyed-out button while a verse is still showing — is
-// what reports the end, so the exact step at which movement stops matters.
+// Stepping past either end of the deck lands on one blank overflow position.
 describe("resolveDeckStep", () => {
   const COUNT = 3; // real slides at 0,1,2; overflow at -1 and 3
 

@@ -8,10 +8,7 @@ import { InteractiveButton } from "./Interactive";
 import type { UseLumen } from "./useLumen";
 import type { Breakpoint } from "./useViewportBreakpoint";
 
-// react-markdown pulls in the whole micromark/mdast/unified stack (remark-gfm
-// included) just to render the release notes inside the rarely-opened
-// "Updates" popover — loaded as its own chunk, fetched only the first time
-// that popover is actually opened, instead of parsed on every launch.
+// Lazy-loads react-markdown only when the release-notes popover opens.
 const ReleaseNotesMarkdown = dynamic(
   () =>
     Promise.all([import("react-markdown"), import("remark-gfm")]).then(
@@ -75,11 +72,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
     : hidden
       ? "bg-warn"
       : "bg-border2";
-  // Reflects display *detection*, independent of whether output is actually
-  // presenting (state.outputEnabled) — a second display being plugged in
-  // should read as "ready", never as if it were already live, and "no
-  // display" must resolve immediately rather than sitting on a generic
-  // "Waiting…" that never distinguishes the two.
+  // Label for detected output state, independent of whether presenting is active.
   const outputLabel =
     outputStatus.active && outputStatus.display
       ? "Output · " + outputStatus.display.label
@@ -87,10 +80,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
         ? "Output · Ready"
         : "Output · No display";
 
-  // "available"/"downloading"/"downloaded" all mean "there's a pending update
-  // worth flagging" via the badge dot and shake; only "downloaded" is
-  // actually installable (quitAndInstall needs the download to have
-  // finished) — the other states are informational, shown in the popover.
+  // True when there's a pending update to flag; only "downloaded" is installable.
   const updatePending =
     updateStatus.status === "available" ||
     updateStatus.status === "downloading" ||
@@ -112,8 +102,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
     updateStatus.status === "available" || updateStatus.status === "downloaded"
       ? updateStatus.releaseNotes
       : null;
-  // The card leads with a headline rather than a status strip, so each state
-  // needs a sentence that stands on its own as a title.
+  // Headline title for the update card, one per update status.
   const updateCardTitle =
     updateStatus.status === "downloaded"
       ? "Lumen " + updateStatus.version + " ready to install"
@@ -129,10 +118,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
 
   const [updatePanelOpen, setUpdatePanelOpen] = useState(false);
 
-  // Shakes the bell once, the moment an update newly becomes
-  // available/downloaded — not on every render while it stays pending
-  // (that would just be a permanently-vibrating icon during a live
-  // service), and not for "checking"/"downloading" churn in between.
+  // Shakes the bell icon once when an update newly becomes pending.
   const [isShaking, setIsShaking] = useState(false);
   const previousUpdatePendingRef = useRef(updatePending);
   useEffect(() => {
@@ -145,9 +131,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
     return () => clearTimeout(timeout);
   }, [updatePending]);
 
-  // Starts empty and fills in after mount so the server-prerendered markup
-  // (static export, built at a fixed time) and the first client render match
-  // — avoiding a hydration mismatch — then ticks for real from there on.
+  // Clock/date start empty, fill in after mount, then tick every 15s.
   const [clock, setClock] = useState("");
   const [dateLabel, setDateLabel] = useState("");
   useEffect(() => {
@@ -176,10 +160,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
         <div className="w-6.5 h-6.5 rounded-2">
           <Image src={"/lumen.png"} width={200} height={200} alt="Lume" />
         </div>
-        {/* Name + version badge dropped below desktop width — they're the
-            most reclaimable space in the header, and the icon alone still
-            identifies the app; see the right-hand group's isDesktop gating
-            below for the same reasoning applied to secondary controls. */}
+        {/* Name + version badge hidden below desktop width. */}
         {isDesktop && (
           <>
             <div className="text-[15px] font-semibold tracking-[-0.01em]">
@@ -294,12 +275,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
             >
               ↷
             </InteractiveButton>
-            {/* Always rendered, faded rather than unmounted. Conditionally
-                mounting it changed the width of this whole right-hand group, so
-                every control in it — Undo/Redo included — slid sideways each
-                time a save started and finished. Reserving the space costs a few
-                idle pixels and keeps the toolbar still. aria-hidden while empty
-                so a screen reader doesn't announce a blank status. */}
+            {/* Save status label: always mounted (faded when empty) to avoid layout shift. */}
             <span
               aria-hidden={saveStatusLabel === "" ? true : undefined}
               className={cx(
@@ -326,19 +302,9 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
           </>
         )}
 
-        {/* Updates and Output-status are secondary/informational controls —
-            dropped below desktop width (alongside Search/Undo/Redo/Hotkeys
-            above) so the header's minimum required width stays under the
-            tablet/mobile breakpoints, keeping Theme/Settings/Present (the
-            controls actually needed to run a service) always reachable. Both
-            remain reachable another way at those widths: an update still
-            auto-installs/prompts via updateStatus regardless, and output
-            routing is also available from Settings. */}
+        {/* Updates and output-status controls hidden below desktop width. */}
         {isDesktop && (
           <>
-            {/* A labelled "Updates" control with a badge dot, matching the design
-                reference — the bell emoji it replaces read as a notification tray
-                rather than as this app's updater. */}
             <InteractiveButton
               onClick={() => setUpdatePanelOpen((open) => !open)}
               title={updateLabel}
@@ -364,8 +330,6 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
                   onClick={() => setUpdatePanelOpen(false)}
                   className="fixed inset-0 z-90"
                 />
-                {/* One padded card — headline, description, actions — rather than
-                    the header strip / scroll body / footer bar it replaces. */}
                 <div
                   onClick={(e) => e.stopPropagation()}
                   className="absolute top-[calc(100%+10px)] left-0 z-100 w-75 rounded-2xl border border-border2 bg-panel shadow-app p-4.5"
@@ -375,9 +339,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
                   </div>
                   <div className="mt-2 max-h-52 overflow-y-auto">
                     {updateReleaseNotes ? (
-                      // Rendering the GitHub release body's own markdown — always
-                      // this app's own release notes (see the type comment in
-                      // electronUpdater.ts), not third-party or user content.
+                      // Renders the release notes markdown.
                       <div className="text-[13px] text-muted leading-[1.55] [&_h1]:text-text [&_h2]:text-text [&_h3]:text-text [&_h1]:text-[13.5px] [&_h2]:text-[13px] [&_h3]:text-[13px] [&_h1]:font-semibold [&_h2]:font-semibold [&_h3]:font-semibold [&_h1]:mb-1.5 [&_h2]:mb-1.5 [&_h3]:mb-1.5 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_ul]:list-disc [&_ul]:pl-4.5 [&_ul]:mb-2 [&_li]:mb-1 [&_a]:text-accent [&_a]:underline [&_strong]:text-text [&_code]:font-mono [&_code]:text-[12px] [&_code]:bg-panel2 [&_code]:px-1 [&_code]:py-px [&_code]:rounded-1">
                         <ReleaseNotesMarkdown>
                           {updateReleaseNotes}
@@ -447,10 +409,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
 
         <InteractiveButton
           data-tour="present"
-          // A click while the countdown is running now cancels it — previously
-          // this branch stayed on startPresenting, which no-ops while a count
-          // is already in flight (see its own guard in useLumen.ts), so the
-          // button visibly did nothing until the countdown finished on its own.
+          // Cancels the countdown if presenting/counting, otherwise starts presenting.
           onClick={isPresenting || isPresentCounting ? stopPresenting : startPresenting}
           className={cx(
             "h-8.5 px-4 rounded-2.25 text-[13px] cursor-pointer flex items-center gap-2",

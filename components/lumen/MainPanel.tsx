@@ -16,17 +16,14 @@ const OUTLINE_WIDTH_MAX = 8;
 const OUTLINE_WIDTH_STEP = 0.5;
 const OUTLINE_WIDTH_DEFAULT = 2;
 
-// The authoring half of the operator screen: what is loaded, how its text is
-// styled, how slides move, and which slides/backgrounds exist. Everything
-// about what is *currently on the audience screen* lives in PreviewPanel.
+// Authoring half of the operator screen: song/text style/slides/backgrounds.
 export function MainPanel({ lumen }: { lumen: UseLumen }) {
   const {
     state, patch, bible, song, idx, ref,
     vlabel, currentTransMeta, shortTransLabel, applyLiveHighlight, removeLiveHighlight,
     atStartOverflow, atEndOverflow, slideCount,
   } = lumen;
-  // On the blank positions bracketing the deck there is no current slide, so
-  // neither a verse number nor an "n / total" counter means anything.
+  // True when on an actual slide, not a blank boundary position.
   const onDeck = !atStartOverflow && !atEndOverflow;
 
   const [textColorDraft, onTextColorChange] = useDebouncedColor(
@@ -38,9 +35,7 @@ export function MainPanel({ lumen }: { lumen: UseLumen }) {
     (value) => patch((previousState) => ({ lyricStyle: { ...previousState.lyricStyle, outlineColor: value } }))
   );
 
-  // Key transpose is session-only — resets whenever the live song changes,
-  // never persisted, never sent to the audience output. It's an operator aid
-  // for reading the key off the header, not something the congregation sees.
+  // Resets the session-only key transpose whenever the live song changes.
   useEffect(() => { patch({ transposeSemitones: 0 }); }, [song.id, patch]);
 
   const outlineWidth = state.lyricStyle.outlineWidth || 0;

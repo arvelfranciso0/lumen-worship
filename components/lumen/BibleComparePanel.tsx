@@ -4,21 +4,12 @@ import { bookNumberOf, findBookAcrossTranslations } from "./data";
 import { useBibleTranslation } from "./useBibleTranslation";
 import type { UseLumen } from "./useLumen";
 
-// Side-by-side reading of one verse in two DOWNLOADED translations (never
-// hardcoded — version pickers are populated only from
-// state.downloadedTranslations). Needs at least 2 real translations imported to
-// be useful at all; shows a prompt otherwise rather than faking comparison text.
-//
-// Both wordings render as plain text. They used to be word-diffed, with
-// deletions and additions given colored backgrounds — but a diff between two
-// translations marks up most of the verse, which read as highlighting rather
-// than as a comparison, and matched nothing else in the app.
+// Side-by-side reading of one verse in two downloaded translations.
 export function BibleComparePanel({ lumen }: { lumen: UseLumen }) {
   const { state, patch, bibleBooks, currentBook, shortTransLabel, compareTranslationBCode } = lumen;
 
   const translationOptions = state.downloadedTranslations;
-  // The validated code from useLumen, not state.compareMode's raw request — the
-  // panel must show exactly the comparison the Live output is showing.
+  // The validated comparison translation code, matching what Live output shows.
   const translationBCode = compareTranslationBCode;
   const translationBData = useBibleTranslation(translationBCode);
 
@@ -32,10 +23,7 @@ export function BibleComparePanel({ lumen }: { lumen: UseLumen }) {
 
   const currentChapter = currentBook?.chapters.find((chapter) => chapter.number === state.chapter);
   const verseA = currentChapter?.verses[lumen.idx];
-  // Matched by canonical book number rather than name — the two translations
-  // are often in different languages, which name the same book differently
-  // ("Proverbs" / "Mga Panultihon"). Matching on the name reported the verse as
-  // missing from a translation that had it all along.
+  // Matches the book by canonical number rather than name.
   const bookB = translationBData
     ? findBookAcrossTranslations(translationBData.books, bookNumberOf(bibleBooks, state.book), state.book)
     : undefined;

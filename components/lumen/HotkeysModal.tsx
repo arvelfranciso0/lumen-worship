@@ -24,8 +24,7 @@ const HOTKEY_GROUPS: { title: string; rows: { label: string; keys: string }[] }[
   },
 ];
 
-// Static reference table for the "?" button in the header — driven by
-// lumen.state.hotkeysOpen, no other state.
+// Keyboard shortcuts reference modal, shown when state.hotkeysOpen.
 export function HotkeysModal({ lumen }: { lumen: UseLumen }) {
   const { state, patch } = lumen;
   const close = () => patch({ hotkeysOpen: false });

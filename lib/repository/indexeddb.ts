@@ -1,7 +1,6 @@
 import type { BibleTranslation, Lineup, Section, Song } from "@/components/lumen/data";
 import type { AppRepository, NewBackgroundInput, NewBibleTranslationInput, PersistedData, PersistedPrefs } from "./types";
-// Plain CJS module shared verbatim with electron/preload.js (see its header
-// comment) — allowJs + the bundler's CJS interop make this a normal import.
+// Plain CJS module shared verbatim with electron/preload.js.
 import { parseBibleXml } from "../../electron/bibleXml.js";
 
 const DB_NAME = "lumen";
@@ -27,16 +26,9 @@ type StoredBibleTranslation = {
   link: string | null;
   downloadedAt: number;
   sizeBytes: number;
-  // Parsed once, at import time (see addBibleTranslation below), and
-  // persisted directly — so getBibleTranslationData can hand it back as-is
-  // instead of re-running JSON.parse/parseBibleXml over the raw file on
-  // every read.
+  // Parsed once at import time and persisted directly.
   parsedData?: BibleTranslation;
-  // Raw file bytes + format flag, only present on rows written before
-  // parsedData existed — undefined `format` on one of these is treated as
-  // "json" below, so old records keep parsing exactly as before. New imports
-  // never write these; kept only so existing installs don't need
-  // re-importing.
+  // Raw file bytes, only present on rows written before parsedData existed.
   data?: ArrayBuffer;
   format?: "json" | "xml";
 };
@@ -183,10 +175,7 @@ export function createIndexedDbRepository(): AppRepository {
 
     async addBibleTranslation(input: NewBibleTranslationInput) {
       const db = await dbPromise;
-      // Parsed once, here at import, rather than storing the raw bytes
-      // verbatim — otherwise every later getBibleTranslationData call (every
-      // translation switch, every Compare lookup) would re-run
-      // JSON.parse/parseBibleXml over a multi-MB file from scratch.
+      // Parse once at import time rather than storing raw bytes.
       const text = new TextDecoder().decode(input.data);
       const parsedData = input.format === "xml" ? (parseBibleXml(text) as BibleTranslation) : (JSON.parse(text) as BibleTranslation);
       const record: StoredBibleTranslation = {
@@ -206,9 +195,7 @@ export function createIndexedDbRepository(): AppRepository {
       const row = await getOne<StoredBibleTranslation>(db, "bibleTranslations", code);
       if (!row) return null;
       if (row.parsedData) return row.parsedData;
-      // Legacy row, written before addBibleTranslation parsed at import time
-      // — still has to be parsed here, same as before, so an existing import
-      // doesn't need re-importing after this change.
+      // Legacy row: parse the raw bytes since parsedData wasn't stored yet.
       const text = new TextDecoder().decode(row.data as ArrayBuffer);
       return row.format === "xml" ? (parseBibleXml(text) as BibleTranslation) : (JSON.parse(text) as BibleTranslation);
     },

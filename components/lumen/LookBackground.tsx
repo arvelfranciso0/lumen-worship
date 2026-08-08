@@ -6,18 +6,13 @@ import { isCustomBackground, type LookOption } from "./data";
 type LookBackgroundProps = {
   look: LookOption;
   black?: boolean;
-  // True for every spot that isn't the actual audience-facing output (the
-  // Backgrounds panel, slide thumbnails, the "Next up" box) — a video
-  // look then renders its captured poster frame instead of an independent
-  // live decode, since a dozen simultaneous full-res video decodes is what
-  // actually causes the lag, not the source file's resolution.
+  // True for any non-audience-facing surface; renders a video look's poster
+  // frame instead of a live decode there.
   preview?: boolean;
   className?: string;
 };
 
-// Renders whatever a "Look" actually is: a builtin CSS gradient, an uploaded
-// image, or an uploaded video (which — unlike a gradient — can't be done as a
-// CSS `background` and needs a real <video> element).
+// Renders a Look: a builtin CSS gradient, an uploaded image, or an uploaded video.
 export function LookBackground({ look, black, preview, className }: LookBackgroundProps) {
   const baseClassName = cx("absolute inset-0", className);
 
@@ -25,12 +20,7 @@ export function LookBackground({ look, black, preview, className }: LookBackgrou
 
   if (isCustomBackground(look)) {
     if (look.mediaType === "video") {
-      // Preview spots never get a live <video>: falling back to an independent
-      // decode is exactly the simultaneous-decode lag this preview mode exists
-      // to avoid. While the poster is still being captured (or if capture
-      // failed outright) they show a striped "video" placeholder instead —
-      // distinguishable at a glance from a background that really is black,
-      // which a plain black panel here was not.
+      // Preview spots show the captured poster, or a placeholder while it's not ready.
       if (preview) {
         return look.posterUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- runtime data URL, not a static asset next/image can optimize

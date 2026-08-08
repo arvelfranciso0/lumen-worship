@@ -7,8 +7,8 @@ import {
   clampTransitionDurationMs, MAX_TRANSITION_MS, MIN_TRANSITION_MS, type TransitionType,
 } from "./useSlideTransition";
 
-// Each card can animate a miniature of what its transition actually does — see
-// the lumenPreview* keyframes in app/globals.css.
+// Each card animates a miniature of what its transition does; see the
+// lumenPreview* keyframes in app/globals.css.
 const TRANSITIONS: { id: TransitionType; label: string; animation: string }[] = [
   { id: "cut", label: "Cut", animation: "lumenPreviewCut" },
   { id: "fade", label: "Fade", animation: "lumenPreviewFade" },
@@ -17,27 +17,20 @@ const TRANSITIONS: { id: TransitionType; label: string; animation: string }[] = 
   { id: "push", label: "Push", animation: "lumenPreviewPush" },
 ];
 
-// Gap between preview loops, so a card reads as repeating the transition rather
-// than as a continuously moving element.
+// Gap between preview animation loops.
 const PREVIEW_PAUSE_MS = 900;
 
-// Inline collapsible row in the main column (was a modal before the handoff
-// redesign) — sits between the text-style toolbar and the slides grid.
+// Inline collapsible row between the text-style toolbar and the slides grid.
 export function TransitionRow({ lumen }: { lumen: UseLumen }) {
   const { state, patch } = lumen;
   const open = state.transitionRowOpen;
   const active = TRANSITIONS.find((transition) => transition.id === state.transitionType) ?? TRANSITIONS[0];
   const summary = active.label + " · " + state.transitionDurationMs + "ms";
 
-  // Which card the pointer/keyboard focus is on. Previews used to run on all
-  // five cards at once, unconditionally — five looping animations competing for
-  // attention, none of them telling the operator which one was selected. Only
-  // the active card and the one being hovered/focused animate now.
+  // Which card the pointer/keyboard focus is on.
   const [previewingId, setPreviewingId] = useState<TransitionType | null>(null);
 
-  // Previews run at the real configured duration, so what the card shows is what
-  // the audience screen will do — with a pause appended so the loop stays
-  // legible at very short durations.
+  // Preview loop duration: the configured transition duration plus a pause.
   const previewCycleMs = state.transitionDurationMs + PREVIEW_PAUSE_MS;
 
   const setDuration = (value: number) => patch({ transitionDurationMs: clampTransitionDurationMs(value) });
@@ -62,8 +55,7 @@ export function TransitionRow({ lumen }: { lumen: UseLumen }) {
         <div className="flex gap-1.5 items-start">
           {TRANSITIONS.map((transition) => {
             const on = transition.id === state.transitionType;
-            // "cut" is an instant swap — there is nothing to animate, and a
-            // looping card would imply otherwise.
+            // "cut" never animates — it's an instant swap.
             const animating = (on || previewingId === transition.id) && transition.id !== "cut";
             return (
               <button
@@ -96,10 +88,6 @@ export function TransitionRow({ lumen }: { lumen: UseLumen }) {
           })}
         </div>
         <div className="w-px h-5.5 bg-border" />
-        {/* Duration in real milliseconds rather than an abstract 0-100 "speed".
-            Slider and number field write the same value; the number field is
-            there so an exact duration can be typed instead of hunted for. Both
-            are disabled for Cut, which has no duration to set. */}
         <label className="text-[10px] text-faint flex-none">Duration</label>
         <input
           type="range"
@@ -118,8 +106,7 @@ export function TransitionRow({ lumen }: { lumen: UseLumen }) {
           max={MAX_TRANSITION_MS}
           step={10}
           value={state.transitionDurationMs}
-          // Clamped on blur rather than on every keystroke, so typing "1200"
-          // isn't snapped to the maximum the instant "1" is entered.
+          // Clamps the value on blur, not on every keystroke.
           onChange={(changeEvent) => patch({ transitionDurationMs: Number(changeEvent.target.value) })}
           onBlur={(blurEvent) => setDuration(Number(blurEvent.target.value))}
           disabled={state.transitionType === "cut"}

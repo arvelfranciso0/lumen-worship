@@ -13,43 +13,24 @@ import {
 type SlideStageProps = {
   lines: string[];
   lineHighlights?: HighlightRange[][];
-  // Bible Compare: the shared verse number both translations' lines carry as a
-  // superscript (see the Slide type's `compare` field).
+  // Bible Compare: the shared verse number, rendered as a superscript.
   compareVerseNumber?: string;
   caption: string;
   lyricStyle: LyricStyle;
-  // The lyric font's utility class (lumen.lyricFamily).
   fontClassName: string;
-  // The operator's A−/A+ lyric size (state.scale). Passed in rather than read
-  // from a hook so this component stays usable from any surface.
   scale: number;
-  // Blank/Black — fades the text out without disturbing the layout, and
-  // suppresses the caption (a bare reference over an empty screen is worse than
-  // nothing).
+  // Fades the text out without disturbing layout, and suppresses the caption.
   hidden?: boolean;
   transitionStyle?: CSSProperties;
-  // Changes once per live-slide change, so the transition animation restarts.
   transitionKey?: string | number;
-  // Live output only: lets the operator select lyric text directly on the box.
-  // Tagging lines with data-line-index is what PreviewPanel's selection handler
-  // resolves offsets against.
+  // Live output only: lets the operator select lyric text on the box.
   stageRef?: Ref<HTMLDivElement>;
   selectable?: boolean;
-  // Floor for the caption size — only needed on surfaces small enough for the
-  // honest fraction to come out illegible.
+  // Floor for the caption size on small surfaces.
   captionMinFontSize?: string;
 };
 
-// The slide itself, as every surface renders it: the lyric/verse lines and the
-// reference caption, sized entirely in container-query units against whatever
-// box contains them.
-//
-// That container must declare `container-type: size` and carry the output's
-// aspect ratio — then this component is the *only* thing that decides how a
-// slide looks, and Live output, Slides, Previous and Next up cannot drift apart.
-// They previously each hardcoded their own font size (26px, 11px, 10px, 8px),
-// which is why resizing a panel or pressing A−/A+ moved one of them and left the
-// other three behind.
+// The lyric/verse lines and reference caption, sized in container-query units.
 export function SlideStage({
   lines, lineHighlights, compareVerseNumber, caption, lyricStyle, fontClassName, scale,
   hidden = false, transitionStyle, transitionKey, stageRef, selectable = false, captionMinFontSize,
@@ -71,9 +52,7 @@ export function SlideStage({
       >
         <div key={transitionKey} style={transitionStyle} className={cx("flex flex-col items-center w-full", STAGE_LINE_GAP_BOX)}>
           {lines.map((line, lineIndex) => (
-            // Compare slides are never tagged for selection: highlights are
-            // recorded against the primary translation's reference, so a
-            // selection over the compared wording has nowhere to be stored.
+            // Compare slides are never tagged for selection.
             <div
               key={lineIndex}
               data-line-index={selectable && !compareVerseNumber ? lineIndex : undefined}

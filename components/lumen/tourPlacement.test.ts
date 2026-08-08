@@ -27,8 +27,6 @@ describe("side selection", () => {
     assert.equal(placement.top, target.top + target.height + TARGET_GAP);
   });
 
-  // The bug this module exists to fix: the popover was pinned near the bottom of
-  // the viewport, so a target low on the page ended up underneath it.
   test("flips above a target near the bottom of the window", () => {
     const target = box(800, 200, 240, 40);
     const placement = placePopover({ target, viewport: DESKTOP, popover: POPOVER });
@@ -65,8 +63,7 @@ describe("side selection", () => {
 });
 
 describe("staying inside the viewport", () => {
-  // The margin has to hold for every target position, not just the tidy ones —
-  // including targets partly off screen, which scrolling produces.
+  // Viewports to check the margin holds at every target position, including partly off-screen ones.
   const VIEWPORTS: Size[] = [
     DESKTOP, { width: 1024, height: 768 }, { width: 800, height: 600 },
     { width: 480, height: 640 }, { width: 360, height: 480 },
@@ -74,8 +71,7 @@ describe("staying inside the viewport", () => {
 
   for (const viewport of VIEWPORTS) {
     test(viewport.width + "x" + viewport.height + ": never comes within the margin of an edge", () => {
-      // A popover can't be wider than the window minus both margins; the app
-      // caps its width in CSS the same way (max-w-[calc(100vw-32px)]).
+      // Cap the popover size to the window minus both margins.
       const popover: Size = {
         width: Math.min(POPOVER.width, viewport.width - VIEWPORT_MARGIN * 2),
         height: Math.min(POPOVER.height, viewport.height - VIEWPORT_MARGIN * 2),
@@ -148,9 +144,6 @@ describe("arrow alignment", () => {
     assert.equal(placement.arrow.top + placement.top, target.top + target.height / 2);
   });
 
-  // A shifted popover is exactly the case a fixed centre arrow gets wrong: the
-  // popover has moved but the target hasn't, so the arrow has to move with the
-  // target and stay off the popover's rounded corners while doing it.
   test("follows the target through a shift, without reaching a corner", () => {
     const target = box(100, 1380, 50, 40);
     const placement = placePopover({ target, viewport: DESKTOP, popover: POPOVER });
@@ -165,9 +158,7 @@ describe("arrow alignment", () => {
   });
 
   test("is dropped when the popover can't reach the target at all", () => {
-    // Target in the far corner of a window too small to place beside it: the
-    // popover ends up clamped away from the target, where an arrow would point
-    // at nothing.
+    // A tiny target in a window too small to fit the popover beside it.
     const placement = placePopover({
       target: box(0, 0, 20, 20), viewport: { width: 360, height: 200 }, popover: POPOVER,
     });

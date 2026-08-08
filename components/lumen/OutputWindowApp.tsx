@@ -19,11 +19,7 @@ const DEFAULT_OUTPUT_STATE: OutputState = {
   slideKey: "", transitionType: "cut", transitionDurationMs: DEFAULT_TRANSITION_MS, performanceMode: false,
 };
 
-// The whole content of the second, audience-facing monitor. Deliberately
-// dumb: no useLumen, no repository access, no keyboard shortcuts — it only
-// ever renders whatever the operator window last pushed over IPC (see
-// useLumen.ts's output-sync effect), so there's exactly one source of truth
-// for what the congregation sees.
+// Renders whatever state the operator window last pushed over IPC.
 export function OutputWindowApp() {
   const [outputState, setOutputState] = useState<OutputState>(DEFAULT_OUTPUT_STATE);
 
@@ -46,19 +42,11 @@ export function OutputWindowApp() {
   } = outputState;
   const stageLines = hidden ? [] : lines;
   const slideTransitionStyle = useSlideTransition(transitionType, transitionDurationMs, performanceMode);
-  // Compare mode carries its own reference caption (both translation codes);
-  // otherwise the slide's own caption is used. Pinned to the bottom of the
-  // screen either way, so showing it never shifts the verse off centre.
-  // Suppressed when the slide has no actual text, so an undownloaded
-  // translation can't put a bare reference on the audience screen with no verse
-  // under it (see PreviewPanel for the full reasoning).
+  // Caption text, suppressed when the slide has no visible text.
   const captionLines = compare ? compare.lines : lines;
   const stageCaption = hidden || !captionLines.some((line) => line.trim().length > 0)
     ? ""
     : compare ? compare.caption : caption;
-  // Identical proportions to every other surface (see stage.ts). `fit` arrives
-  // in the pushed state rather than being recomputed, since this window renders
-  // outside the operator's React tree.
   const lineStyle = stageLineStyle(lyricStyle, scale, fit, "vw");
 
   return (
