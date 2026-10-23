@@ -1,14 +1,14 @@
 "use client";
 
 import { InteractiveButton } from "../ui/Interactive";
-import { useBackdropClose } from "../hooks/useBackdropClose";
+import { ResizeHandle } from "../layout/ResizeHandle";
 import { useSongEditorForm } from "./useSongEditorForm";
 import { SongEditorFileImport } from "./SongEditorFileImport";
 import { SongEditorMetadataFields } from "./SongEditorMetadataFields";
 import { SongEditorLyricsField } from "./SongEditorLyricsField";
 import type { UseLumen } from "../useLumen";
 
-// Shared create/edit form for song metadata and lyrics.
+// Docked side panel for creating/editing a song; closes only via Cancel or ✕.
 export function SongEditorModal({ lumen }: { lumen: UseLumen }) {
   const { state } = lumen;
   const {
@@ -17,18 +17,19 @@ export function SongEditorModal({ lumen }: { lumen: UseLumen }) {
     fileRef, close, onFile, submit,
   } = useSongEditorForm(lumen);
 
-  const backdropProps = useBackdropClose(close);
-
   if (!state.songEditorOpen) return null;
 
   return (
-    <div
-      {...backdropProps}
-      className="fixed inset-0 z-120 bg-[rgba(6,6,8,.6)] backdrop-blur-[6px] flex items-center justify-center"
+    <aside
+      style={{ width: state.layoutSizes.songEditorWidth }}
+      className="fixed top-0 right-0 bottom-0 z-120 max-w-full flex"
     >
+      <ResizeHandle
+        axis="horizontal"
+        onResizeDelta={(deltaPixels) => lumen.adjustLayoutSize("songEditorWidth", -deltaPixels)}
+      />
       <div
-        onClick={(clickEvent) => clickEvent.stopPropagation()}
-        className="w-160 max-w-[92vw] max-h-[84vh] flex flex-col rounded-[18px] border border-border2 bg-panel shadow-app overflow-hidden animate-[fadeUp_.18s_ease_both]"
+        className="flex-1 min-w-0 flex flex-col bg-panel shadow-app overflow-hidden animate-[slideInRight_.18s_ease_both]"
       >
         <div className="flex items-center justify-between p-[18px_20px_14px] border-b border-border">
           <div>
@@ -84,6 +85,6 @@ export function SongEditorModal({ lumen }: { lumen: UseLumen }) {
           </button>
         </div>
       </div>
-    </div>
+    </aside>
   );
 }

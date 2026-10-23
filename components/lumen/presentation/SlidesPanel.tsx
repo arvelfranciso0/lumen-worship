@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { BackgroundsPanel } from "../modals/BackgroundsPanel";
 import { cx } from "../cx";
 import { LookBackground } from "./LookBackground";
@@ -12,6 +12,9 @@ type Slide = UseLumen["slides"][number];
 
 // Minimum caption font size for the thumbnail-sized slide preview.
 const THUMBNAIL_CAPTION_MIN_SIZE = "5px";
+
+// Matches the Backgrounds panel's min-h-45.
+const BACKGROUNDS_MIN_HEIGHT = 180;
 
 // Groups consecutive slides that share a label into one section block.
 function groupSlides(slides: Slide[], grouped: boolean): { label: string; items: { slide: Slide; index: number }[] }[] {
@@ -41,8 +44,16 @@ export function SlidesPanel({ lumen }: { lumen: UseLumen }) {
   // Maps look id to look, built once per allLooks change.
   const looksById = useMemo(() => new Map(allLooks.map((lookOption) => [lookOption.id, lookOption])), [allLooks]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Grows the strip only as far as the Backgrounds panel (last child) can shrink.
+  const resizeSlidesStrip = (deltaPixels: number) => {
+    const backgroundsPanel = containerRef.current?.lastElementChild as HTMLElement | null | undefined;
+    const backgroundsSlack = backgroundsPanel ? backgroundsPanel.offsetHeight - BACKGROUNDS_MIN_HEIGHT : Infinity;
+    adjustLayoutSize("slidesStripHeight", Math.min(deltaPixels, Math.max(backgroundsSlack, 0)));
+  };
+
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div ref={containerRef} className="flex-1 flex flex-col min-h-0 overflow-hidden">
       <div className="flex items-center gap-2.5 px-2 pt-2.5 flex-none">
         <div className="text-[11px] font-semibold tracking-[.06em] uppercase text-faint">Slides</div>
         {!bible && (
@@ -160,7 +171,7 @@ export function SlidesPanel({ lumen }: { lumen: UseLumen }) {
 
       <ResizeHandle
         axis="vertical"
-        onResizeDelta={(deltaPixels) => adjustLayoutSize("slidesStripHeight", deltaPixels)}
+        onResizeDelta={resizeSlidesStrip}
       />
 
       <BackgroundsPanel lumen={lumen} />

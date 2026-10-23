@@ -26,7 +26,7 @@ export function useKeyboardShortcuts({ go, patch, startPresenting, stopPresentin
         patch({
           settingsOpen: false, setPanelOpen: false, lyricsEditorOpen: false, uploadOpen: false,
           lineupModalOpen: false, editingLineupId: null, displaysModalOpen: false, hotkeysOpen: false,
-          globalSearchOpen: false, globalSearchQuery: "", songEditorOpen: false,
+          globalSearchOpen: false, globalSearchQuery: "",
           bibleTranslationsPanelOpen: false, sidebarDrawerOpen: false,
         });
         return;

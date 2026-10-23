@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getRepository } from "@/lib/repository";
 import { normalizeBibleLanguage } from "../../../electron/bibleXml.js";
+import { DEFAULT_LAYOUT_SIZES } from "../data";
 import { generateVideoPoster } from "../media/backgroundMedia";
 import { resolveTourSeenOnHydrate, type LumenState } from "../lumenState";
 import { speedPctToDurationMs } from "./useSlideTransition";
@@ -32,6 +33,8 @@ export function usePersistedData(state: LumenState, patch: PatchFn<LumenState>, 
         songOverrides: data.songOverrides,
         songMetaOverrides: data.songMetaOverrides,
         ...data.prefs,
+        // Fills in layout sizes added after these prefs were saved.
+        ...(data.prefs.layoutSizes ? { layoutSizes: { ...DEFAULT_LAYOUT_SIZES, ...data.prefs.layoutSizes } } : {}),
         // Forces outputEnabled off on every launch.
         outputEnabled: false,
         // Migrates the legacy hasSeenOnboarding flag into per-mode tourSeen, once.

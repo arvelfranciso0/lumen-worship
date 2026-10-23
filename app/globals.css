@@ -148,6 +148,11 @@ a:hover {
   to { opacity: 1; transform: none; }
 }
 
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+
 @keyframes bellShake {
   0%, 100% { transform: rotate(0); }
   15% { transform: rotate(14deg); }

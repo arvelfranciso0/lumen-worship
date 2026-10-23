@@ -119,6 +119,7 @@ export type LayoutSizes = {
   sidebarWidth: number;
   previewWidth: number;
   slidesStripHeight: number;
+  songEditorWidth: number;
 };
 
 export type LayoutVisibility = Record<LayoutPanelId, boolean>;
@@ -127,6 +128,7 @@ export const DEFAULT_LAYOUT_SIZES: LayoutSizes = {
   sidebarWidth: 328,
   previewWidth: 440,
   slidesStripHeight: 260,
+  songEditorWidth: 640,
 };
 
 export const DEFAULT_LAYOUT_VISIBILITY: LayoutVisibility = {
@@ -138,7 +140,8 @@ export const DEFAULT_LAYOUT_VISIBILITY: LayoutVisibility = {
 export const LAYOUT_SIZE_LIMITS: Record<keyof LayoutSizes, { min: number; max: number }> = {
   sidebarWidth: { min: 310, max: 480 },
   previewWidth: { min: 300, max: 640 },
-  slidesStripHeight: { min: 120, max: 340 },
+  slidesStripHeight: { min: 120, max: 1600 },
+  songEditorWidth: { min: 420, max: 1100 },
 };
 
 export const LAYOUT_PANELS: { id: LayoutPanelId; label: string; description: string }[] = [
