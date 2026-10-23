@@ -3,6 +3,7 @@
 // Usage:
 //   node scripts/github-release.mjs draft <notesFile> [--prerelease]
 //   node scripts/github-release.mjs publish
+//   node scripts/github-release.mjs status
 
 import fs from "node:fs";
 import path from "node:path";
@@ -58,6 +59,12 @@ async function publishDraft() {
   console.log(`Published release https://github.com/${owner}/${repo}/releases/tag/${tag}`);
 }
 
+// Prints "published", "draft" or "none" for the current version's release.
+async function printStatus() {
+  const existing = await findRelease();
+  console.log(!existing ? "none" : existing.draft ? "draft" : "published");
+}
+
 const [command, notesFile] = process.argv.slice(2);
 if (!token) {
   console.error("GH_TOKEN is not set.");
@@ -66,7 +73,8 @@ if (!token) {
 try {
   if (command === "draft" && notesFile) await createDraft(notesFile, process.argv.includes("--prerelease"));
   else if (command === "publish") await publishDraft();
-  else throw new Error("Usage: github-release.mjs draft <notesFile> [--prerelease] | publish");
+  else if (command === "status") await printStatus();
+  else throw new Error("Usage: github-release.mjs draft <notesFile> [--prerelease] | publish | status");
 } catch (error) {
   console.error(error.message);
   process.exit(1);

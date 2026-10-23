@@ -1,9 +1,16 @@
 # Builds the Windows installer and publishes it to the lumen-worship-release repo.
 # Versions with a pre-release suffix (e.g. 0.1.2-beta.1) publish to the beta channel.
+# Runs on every push to develop, but skips when the current version is already published.
 name: Release
 
 on:
+  push:
+    branches: [develop]
   workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -16,14 +23,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check whether this version is already published
+        id: status
+        run: |
+          status=$(node scripts/github-release.mjs status)
+          echo "name=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" = "published" ]; then
+            echo "v$(node -p "require('./package.json').version") is already published; bump the version in package.json to release."
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.status.outputs.name != 'published'
         with:
           node-version: 24
           cache: npm
 
-      - run: npm ci
+      - if: steps.status.outputs.name != 'published'
+        run: npm ci
 
       - name: Detect channel from version
+        if: steps.status.outputs.name != 'published'
         id: channel
         run: |
           version=$(node -p "require('./package.json').version")
@@ -32,6 +51,7 @@ jobs:
           echo "Releasing $version on the $channel channel"
 
       - name: Create draft release
+        if: steps.status.outputs.name != 'published'
         run: |
           if [ "${{ steps.channel.outputs.name }}" = "beta" ]; then
             node scripts/github-release.mjs draft release-notes-beta.md --prerelease
@@ -40,6 +60,7 @@ jobs:
           fi
 
       - name: Build and upload installer
+        if: steps.status.outputs.name != 'published'
         run: |
           if [ "${{ steps.channel.outputs.name }}" = "beta" ]; then
             npm run electron:build -- --publish always -c.publish.channel=beta
@@ -48,4 +69,5 @@ jobs:
           fi
 
       - name: Publish release
+        if: steps.status.outputs.name != 'published'
         run: node scripts/github-release.mjs publish
