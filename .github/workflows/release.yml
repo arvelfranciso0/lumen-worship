@@ -1,0 +1,51 @@
+# Builds the Windows installer and publishes it to the lumen-worship-release repo.
+# Versions with a pre-release suffix (e.g. 0.1.2-beta.1) publish to the beta channel.
+name: Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Detect channel from version
+        id: channel
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [[ "$version" == *-* ]]; then channel=beta; else channel=stable; fi
+          echo "name=$channel" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version on the $channel channel"
+
+      - name: Create draft release
+        run: |
+          if [ "${{ steps.channel.outputs.name }}" = "beta" ]; then
+            node scripts/github-release.mjs draft release-notes-beta.md --prerelease
+          else
+            node scripts/github-release.mjs draft release-notes.md
+          fi
+
+      - name: Build and upload installer
+        run: |
+          if [ "${{ steps.channel.outputs.name }}" = "beta" ]; then
+            npm run electron:build -- --publish always -c.publish.channel=beta
+          else
+            npm run electron:build -- --publish always
+          fi
+
+      - name: Publish release
+        run: node scripts/github-release.mjs publish

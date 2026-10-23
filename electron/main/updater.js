@@ -3,11 +3,34 @@
 const { app } = require("electron");
 const { autoUpdater } = require("electron-updater");
 
-// Normalizes releaseNotes to a single string.
+const HTML_ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", apos: "'", nbsp: " " };
+
+// Converts the HTML GitHub returns for release notes back into Markdown.
+function htmlToMarkdown(html) {
+  return html
+    .replace(/\r?\n/g, " ")
+    .replace(/<h([1-6])[^>]*>(.*?)<\/h\1>/gi, (match, level, text) => `\n\n${"#".repeat(Number(level))} ${text}\n\n`)
+    .replace(/<li[^>]*>(.*?)<\/li>/gi, "\n- $1")
+    .replace(/<\/?(ul|ol)[^>]*>/gi, "\n\n")
+    .replace(/<(strong|b)>(.*?)<\/\1>/gi, "**$2**")
+    .replace(/<(em|i)>(.*?)<\/\1>/gi, "*$2*")
+    .replace(/<code>(.*?)<\/code>/gi, "`$1`")
+    .replace(/<a [^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, "[$2]($1)")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&(#?\w+);/g, (match, name) => HTML_ENTITIES[name] ?? match)
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Normalizes releaseNotes to a single Markdown string.
 function normalizeReleaseNotes(releaseNotes) {
-  if (typeof releaseNotes === "string") return releaseNotes;
-  if (Array.isArray(releaseNotes) && releaseNotes.length > 0) return releaseNotes[0].note;
-  return null;
+  const notes = Array.isArray(releaseNotes) ? releaseNotes[0]?.note : releaseNotes;
+  if (typeof notes !== "string") return null;
+  return /<\/?[a-z][^>]*>/i.test(notes) ? htmlToMarkdown(notes) : notes;
 }
 
 function createUpdater({ getOperatorWindow }) {
