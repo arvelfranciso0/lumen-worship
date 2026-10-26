@@ -357,7 +357,7 @@ export function useLumen(props: LumenProps = {}) {
 
   // ---- Update-notification bell (Electron only) ----
 
-  const { updateStatus, installUpdate } = useAppUpdater(state.autoUpdateEnabled);
+  const { updateStatus, installUpdate, downloadUpdate } = useAppUpdater(state.autoUpdateEnabled, state.betaUpdatesEnabled, prefsLoaded);
 
   // ---- Compatibility mode (disables GPU acceleration; Electron only); takes effect after restart ----
 
@@ -372,7 +372,7 @@ export function useLumen(props: LumenProps = {}) {
     adjustLayoutSize, toggleLayoutPanel, resetLayout, addBackground, deleteBackground,
     bibleBooks, currentBook, currentTransMeta, shortTransLabel, outputStatus, outputAspectRatio, secondaryDisplayAvailable,
     importBibleTranslation, removeBibleTranslation, openBibleDownloadsPage, bibleImportError,
-    updateStatus, installUpdate, startPresenting, stopPresenting, isPresenting, presentCountdown: state.presentCountdown, prefsLoaded,
+    updateStatus, installUpdate, downloadUpdate, startPresenting, stopPresenting, isPresenting, presentCountdown: state.presentCountdown, prefsLoaded,
     gpuAccelerationDisabled, setGpuAccelerationDisabled,
     undo, redo, canUndo, canRedo,
     setSongMetaOverride, duplicateSongAsReprise,

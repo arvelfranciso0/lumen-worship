@@ -64,6 +64,8 @@ export type LumenState = {
   outputDisplayId: number | "auto";
   // Whether the desktop build checks GitHub Releases for updates on launch; no-op in the browser build.
   autoUpdateEnabled: boolean;
+  // Whether this install receives beta releases; opt-in, persisted.
+  betaUpdatesEnabled: boolean;
   // Whether the first-launch welcome guide has already been shown/dismissed. Superseded by tourSeen.
   hasSeenOnboarding: boolean;
 
@@ -145,7 +147,7 @@ export const INITIAL_STATE: LumenState = {
   lyricStyle: DEFAULT_LYRIC_STYLE,
   bibleHighlights: {},
   outputEnabled: false, outputDisplayId: "auto",
-  autoUpdateEnabled: false,
+  autoUpdateEnabled: false, betaUpdatesEnabled: false,
   hasSeenOnboarding: false,
 
   performanceMode: false,

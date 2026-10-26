@@ -64,4 +64,6 @@ contextBridge.exposeInMainWorld("electronUpdater", {
   },
   installUpdate: () => ipcRenderer.invoke("update:install"),
   setAutoUpdateEnabled: (enabled) => ipcRenderer.invoke("update:setAutoUpdateEnabled", enabled),
+  setBetaUpdatesEnabled: (enabled) => ipcRenderer.invoke("update:setBetaUpdatesEnabled", enabled),
+  downloadUpdate: () => ipcRenderer.invoke("update:download"),
 });

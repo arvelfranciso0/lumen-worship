@@ -5,16 +5,16 @@ import { cx } from "../../cx";
 import { InteractiveButton } from "../../ui/Interactive";
 import type { UpdateStatus } from "../../electron-bridges/electronUpdater";
 import {
-  getUpdateCardTitle, getUpdateLabel, getUpdateReleaseNotes, isUpdatePending, isUpdateReady,
+  getUpdateCardTitle, getUpdateLabel, getUpdateReleaseNotes, isBetaAwaitingDownload, isUpdatePending, isUpdateReady,
 } from "./headerUpdateInfo";
 import { useUpdateAlertShake } from "./useUpdateAlertShake";
 import { ReleaseNotesMarkdown } from "./ReleaseNotesMarkdown";
 
-// Updates bell button and its release-notes/install popover.
+// Updates bell button and its release-notes/download/install popover.
 export function HeaderUpdatePanel({
-  updateStatus, installUpdate,
+  updateStatus, installUpdate, downloadUpdate,
 }: {
-  updateStatus: UpdateStatus; installUpdate: () => void;
+  updateStatus: UpdateStatus; installUpdate: () => void; downloadUpdate: () => void;
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const updatePending = isUpdatePending(updateStatus);
@@ -22,6 +22,7 @@ export function HeaderUpdatePanel({
   const updateLabel = getUpdateLabel(updateStatus);
   const updateCardTitle = getUpdateCardTitle(updateStatus);
   const updateReleaseNotes = getUpdateReleaseNotes(updateStatus);
+  const betaAwaitingDownload = isBetaAwaitingDownload(updateStatus);
   const isShaking = useUpdateAlertShake(updatePending);
 
   return (
@@ -79,7 +80,20 @@ export function HeaderUpdatePanel({
                 </div>
               )}
             </div>
+            {betaAwaitingDownload && (
+              <div className="mt-3 text-[12px] text-faint leading-normal">
+                This is a beta release. It may have rough edges, so it only downloads when you choose to.
+              </div>
+            )}
             <div className="flex items-center gap-2.5 mt-4">
+              {betaAwaitingDownload && (
+                <button
+                  onClick={downloadUpdate}
+                  className="h-9.5 px-4 rounded-2.5 border-none bg-accent text-white text-[13px] font-semibold cursor-pointer shadow-app-sm hover:brightness-110"
+                >
+                  Download beta
+                </button>
+              )}
               {updateReady && (
                 <button
                   onClick={() => {
@@ -95,7 +109,7 @@ export function HeaderUpdatePanel({
                 onClick={() => setPanelOpen(false)}
                 className="h-9.5 px-4 rounded-2.5 border border-border2 bg-transparent text-muted text-[13px] font-medium cursor-pointer hover:bg-panel2 hover:text-text"
               >
-                {updateReady ? "Later" : "Close"}
+                {updateReady || betaAwaitingDownload ? "Later" : "Close"}
               </button>
             </div>
           </div>

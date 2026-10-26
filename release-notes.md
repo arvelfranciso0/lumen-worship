@@ -1,5 +1,3 @@
 ## What's new
 
-- **Song editor moved to a side panel** — Adding a song or editing lyrics now opens in a side panel instead of a pop-up, so clicking outside it or pressing Escape no longer closes it and discards your work.
-- **Resizable song editor** — Drag the left edge of the song editor panel to make it wider or narrower. Your preferred width is remembered.
-- **Resizable Backgrounds panel** — The Backgrounds panel below the slides can now be made much shorter by dragging the divider above it, giving more room to the slides.
+- **Beta updates are now opt-in** — A new "Receive beta updates" setting controls whether you get early versions. Betas never download on their own; you choose when to download each one from the Updates button.
