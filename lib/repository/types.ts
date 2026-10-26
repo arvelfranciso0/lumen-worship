@@ -15,6 +15,7 @@ export type PersistedPrefs = Partial<{
   // outputEnabled is not persisted; it's session-only runtime state in useLumen's LumenState.
   outputDisplayId: number | "auto";
   autoUpdateEnabled: boolean;
+  betaUpdatesEnabled: boolean;
   // Superseded by tourSeen; no longer written or read.
   hasSeenOnboarding: boolean;
   performanceMode: boolean;

@@ -17,6 +17,7 @@ export function SettingsModal({ lumen }: { lumen: UseLumen }) {
     !state.autoUpdateEnabled ? "Won't check for updates automatically"
     : updateStatus.status === "downloaded" ? "Update " + updateStatus.version + " ready — restart to install"
     : updateStatus.status === "downloading" ? "Downloading update… " + Math.round(updateStatus.percent) + "%"
+    : updateStatus.status === "available" && updateStatus.isBeta ? "Beta " + updateStatus.version + " available — download it from Updates"
     : updateStatus.status === "available" ? "Update " + updateStatus.version + " available"
     : updateStatus.status === "checking" ? "Checking for updates…"
     : updateStatus.status === "error" ? "Last update check failed"
@@ -54,6 +55,21 @@ export function SettingsModal({ lumen }: { lumen: UseLumen }) {
             <button
               onClick={() => patch((previousState) => ({ autoUpdateEnabled: !previousState.autoUpdateEnabled }))}
               className={cx("w-11 h-6.5 rounded-5 border-none cursor-pointer p-0.75 flex", state.autoUpdateEnabled ? "justify-end bg-accent" : "justify-start bg-border2")}
+            >
+              <span className="w-5 h-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.3)]" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between p-[12px_14px] border border-border rounded-xl bg-panel2">
+            <div>
+              <div className="text-[13px] font-medium">Receive beta updates</div>
+              <div className="text-[12px] text-muted mt-0.5">
+                Get early versions before they&apos;re released to everyone. Betas never download without asking.
+              </div>
+            </div>
+            <button
+              onClick={() => patch((previousState) => ({ betaUpdatesEnabled: !previousState.betaUpdatesEnabled }))}
+              className={cx("w-11 h-6.5 rounded-5 border-none cursor-pointer p-0.75 flex", state.betaUpdatesEnabled ? "justify-end bg-accent" : "justify-start bg-border2")}
             >
               <span className="w-5 h-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,.3)]" />
             </button>

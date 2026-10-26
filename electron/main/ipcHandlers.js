@@ -44,6 +44,9 @@ function registerIpcHandlers({ db, getOperatorWindow, gpuCompatFlagPath, gpuAcce
   // Installs the downloaded update and restarts the app.
   ipcMain.handle("update:install", () => updater.install());
   ipcMain.handle("update:setAutoUpdateEnabled", (_event, enabled) => updater.setAutoUpdateEnabled(enabled));
+  ipcMain.handle("update:setBetaUpdatesEnabled", (_event, enabled) => updater.setBetaUpdatesEnabled(enabled === true));
+  // Starts downloading an available update the user chose to get (used for betas).
+  ipcMain.handle("update:download", () => updater.downloadUpdate());
 
   ipcMain.handle("output:open", (_event, displayId) => outputWindowManager.open(displayId));
   ipcMain.handle("output:close", () => outputWindowManager.close());

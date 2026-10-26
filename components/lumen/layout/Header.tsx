@@ -23,6 +23,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
     secondaryDisplayAvailable,
     updateStatus,
     installUpdate,
+    downloadUpdate,
     startPresenting,
     stopPresenting,
     presentCountdown,
@@ -111,7 +112,7 @@ export function Header({ lumen, breakpoint }: { lumen: UseLumen; breakpoint: Bre
         {/* Updates and output-status controls hidden below desktop width. */}
         {isDesktop && (
           <>
-            <HeaderUpdatePanel updateStatus={updateStatus} installUpdate={installUpdate} />
+            <HeaderUpdatePanel updateStatus={updateStatus} installUpdate={installUpdate} downloadUpdate={downloadUpdate} />
 
             <HeaderOutputButton
               outputStatus={outputStatus}

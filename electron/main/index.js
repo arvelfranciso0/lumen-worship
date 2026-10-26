@@ -48,8 +48,9 @@ async function createWindow() {
 
 app.whenReady().then(() => {
   db = createDb(path.join(app.getPath("userData"), "lumen.db"));
-  const persistedAutoUpdatePref = db.loadAll().prefs.autoUpdateEnabled;
-  if (typeof persistedAutoUpdatePref === "boolean") updater.setPersistedAutoUpdateEnabled(persistedAutoUpdatePref);
+  const persistedPrefs = db.loadAll().prefs;
+  if (typeof persistedPrefs.autoUpdateEnabled === "boolean") updater.setPersistedAutoUpdateEnabled(persistedPrefs.autoUpdateEnabled);
+  if (typeof persistedPrefs.betaUpdatesEnabled === "boolean") updater.setPersistedBetaUpdatesEnabled(persistedPrefs.betaUpdatesEnabled);
 
   const backgroundsDir = path.join(app.getPath("userData"), "backgrounds");
   registerMediaProtocolHandler(backgroundsDir);
